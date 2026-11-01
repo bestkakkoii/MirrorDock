@@ -203,6 +203,7 @@ namespace uxplay
         std::array<video_pipeline, media_source_count> video;
         std::array<audio_pipeline, media_source_count> audio_pipelines;
         std::atomic<int> displayed_source{-1};
+        std::atomic<bool> airplay_over_usb{false};
         std::atomic<bool> stopping{false};
         std::thread statistics_thread;
         std::mutex statistics_mutex;
@@ -227,13 +228,19 @@ namespace uxplay
             return;
         }
         displayed_source.store(static_cast<int>(stream->source));
-        window->set_status(std::format(L"{} — {} 鏡像中 {}x{}", settings.window_title,
-                                       stream->source == media_source::usb ? L"USB" : L"Wi-Fi", stream->width,
+        // AirPlay can arrive over Wi-Fi or over the iPhone USB link; label the
+        // transport the client actually used.
+        bool const over_usb = stream->source == media_source::usb || airplay_over_usb.load();
+        std::wstring const short_label = over_usb ? L"USB" : L"Wi-Fi";
+        std::wstring const full_label = stream->source == media_source::usb ? L"USB"
+                                        : (airplay_over_usb.load() ? L"USB AirPlay" : L"Wi-Fi AirPlay");
+        window->set_status(std::format(L"{} — {} 鏡像中 {}x{}", settings.window_title, short_label, stream->width,
                                        stream->height));
-        window->set_title(std::format(L"{} — {} — {}x{}", settings.window_title,
-                                      utf8_to_utf16(media_source_name(stream->source)), stream->width, stream->height));
+        window->set_title(std::format(L"{} — {} — {}x{}", settings.window_title, full_label, stream->width,
+                                      stream->height));
         window->show_for_video(stream->width, stream->height);
-        log::info("displaying {} video {}x{}", media_source_name(stream->source), stream->width, stream->height);
+        log::info("displaying {} video {}x{} ({})", media_source_name(stream->source), stream->width, stream->height,
+                  over_usb ? "USB transport" : "Wi-Fi transport");
     }
 
     void media_engine::state::decode_loop(media_source source)
@@ -681,6 +688,11 @@ namespace uxplay
     void media_engine::set_usb_enabled(bool enabled)
     {
         impl->window->set_usb_enabled(enabled);
+    }
+
+    void media_engine::set_airplay_over_usb(bool over_usb)
+    {
+        impl->airplay_over_usb.store(over_usb, std::memory_order_relaxed);
     }
 
     void media_engine::notify(std::wstring title, std::wstring text)

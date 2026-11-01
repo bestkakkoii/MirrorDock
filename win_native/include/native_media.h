@@ -87,6 +87,10 @@ void native_media_airplay_audio_stop(void);
 /* linear gain in [0, 10]; applies to the AirPlay source */
 void native_media_set_volume(double linear_gain);
 
+/* 1 if the current AirPlay client connected over the iPhone USB link (the
+ * window then shows "USB" instead of "Wi-Fi"); 0 for Wi-Fi. */
+void native_media_set_airplay_transport(int over_usb);
+
 /* balloon notification from the notification-area icon (e.g. AirPlay PIN) */
 void native_media_notify(const char *title, const char *text);
 

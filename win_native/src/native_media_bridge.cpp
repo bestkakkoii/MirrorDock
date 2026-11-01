@@ -400,6 +400,14 @@ extern "C" void native_media_set_volume(double linear_gain)
     }
 }
 
+extern "C" void native_media_set_airplay_transport(int over_usb)
+{
+    if (uxplay::media_engine *const ready = engine(); ready != nullptr)
+    {
+        ready->set_airplay_over_usb(over_usb != 0);
+    }
+}
+
 extern "C" void native_media_notify(const char *title, const char *text)
 {
     if (uxplay::media_engine *const ready = engine(); ready != nullptr && title != nullptr && text != nullptr)

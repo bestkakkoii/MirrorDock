@@ -2773,6 +2773,16 @@ extern "C" void conn_init (void *cls) {
     //video_renderer_update_background(1);
 }
 
+extern "C" void conn_transport (void *cls, int over_usb) {
+    (void) cls;
+#if UXPLAY_WIN_NATIVE
+    /* label the window "USB" when the AirPlay client is on the iPhone USB link */
+    native_media_set_airplay_transport(over_usb);
+#else
+    (void) over_usb;
+#endif
+}
+
 extern "C" void conn_destroy (void *cls) {
     //video_renderer_update_background(-1);
     open_connections--;
@@ -3335,6 +3345,7 @@ static int start_raop_server (unsigned short display[5], unsigned short tcp[3], 
     memset(&raop_cbs, 0, sizeof(raop_cbs));
     raop_cbs.conn_init = conn_init;
     raop_cbs.conn_destroy = conn_destroy;
+    raop_cbs.conn_transport = conn_transport;
     raop_cbs.conn_reset = conn_reset;
     raop_cbs.conn_feedback = conn_feedback;
     raop_cbs.audio_process = audio_process;

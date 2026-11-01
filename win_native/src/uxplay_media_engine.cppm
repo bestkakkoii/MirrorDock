@@ -86,6 +86,10 @@ export namespace uxplay
 
         // notification-area integration
         void set_usb_enabled(bool enabled);
+
+        // Whether the current AirPlay client is connected over the iPhone USB
+        // link (so the window shows "USB" rather than "Wi-Fi").
+        void set_airplay_over_usb(bool over_usb);
         void notify(std::wstring title, std::wstring text);
 
     private:

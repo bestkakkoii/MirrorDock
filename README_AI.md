@@ -99,9 +99,13 @@ opt-in `-usb`):
    hotspot before launching. The mirror is local USB (no cellular); keep PC
    internet on Wi-Fi (raise the Apple-Ethernet interface metric) for ~zero
    data. `install_apple_usb_support.cmd` winget-installs the Apple driver.
-   Status: USB link and address-preference verified; full end-to-end mirror
-   over the cable is the last live check (needs the owner's hotspot on; the
-   owner had it off for the Wi-Fi runs). `-usb` does not control this path.
+   **Verified end-to-end (2026-11-02):** with Personal Hotspot on, UxPlay
+   advertised `UxPlay.local → 172.20.10.9` (confirmed via `dns-sd`) and the
+   iPhone mirrored over the cable — `Local 172.20.10.9 / Remote 172.20.10.1`,
+   H.265 hardware decode, 0 drops, sync delay 14.7 ms — while both PC and phone
+   kept Wi-Fi and the PC's default route stayed on Wi-Fi (no cellular data).
+   Launch UxPlay *after* the hotspot link is up: the advertised address is
+   chosen once at mDNS start (`mdnsd_start`). `-usb` does not control this path.
 
 The target device was moved off the Zadig `libusb0` binding back to Apple's
 `appleusb.inf` on 2026-11-02 (normal state; iTunes/Finder work again).

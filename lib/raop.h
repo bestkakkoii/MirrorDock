@@ -95,6 +95,9 @@ struct raop_callbacks_s {
     /* Optional but recommended callback functions (probably not optional, check this)*/
     void  (*conn_init)(void *cls);
     void  (*conn_destroy)(void *cls);
+    /* Optional: reports the transport the client connected over (over_usb != 0
+       when the server-side local address is the iPhone USB link 172.20.10.x). */
+    void  (*conn_transport)(void *cls, int over_usb);
     void  (*audio_flush)(void *cls);
     void  (*video_flush)(void *cls);
     double (*audio_set_client_volume)(void *cls);

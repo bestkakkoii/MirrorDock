@@ -369,23 +369,36 @@ static uint32_t mdns_get_default_ipv4(void)
     
     if (dwRetVal == NO_ERROR) {
         PIP_ADAPTER_ADDRESSES pCurr = pAddresses;
+        uint32_t fallback = 0;
         while (pCurr) {
             // Precise target filters to bypass the Hyper-V virtual adapter loopback capture
-            if (pCurr->OperStatus == IfOperStatusUp && 
+            if (pCurr->OperStatus == IfOperStatusUp &&
                 pCurr->IfType != IF_TYPE_SOFTWARE_LOOPBACK &&
-                pCurr->FirstGatewayAddress != NULL && 
                 wcsstr(pCurr->Description, L"Hyper-V") == NULL &&
                 wcsstr(pCurr->Description, L"Virtual") == NULL &&
                 wcsstr(pCurr->Description, L"WSL") == NULL &&
-                wcsstr(pCurr->Description, L"vEthernet") == NULL) {
-                
-                if (pCurr->FirstUnicastAddress != NULL) {
-                    struct sockaddr_in *sockaddr_ipv4 = (struct sockaddr_in *)pCurr->FirstUnicastAddress->Address.lpSockaddr;
-                    addr = sockaddr_ipv4->sin_addr.s_addr;
-                    break; 
+                wcsstr(pCurr->Description, L"vEthernet") == NULL &&
+                pCurr->FirstUnicastAddress != NULL) {
+
+                struct sockaddr_in *sockaddr_ipv4 = (struct sockaddr_in *)pCurr->FirstUnicastAddress->Address.lpSockaddr;
+                uint32_t candidate = sockaddr_ipv4->sin_addr.s_addr;
+
+                // The iPhone's wired link (Personal Hotspot over USB) is always
+                // in 172.20.10.0/24.  Prefer it so AirPlay rides the cable
+                // (USB first, Wi-Fi second) whenever it is present.
+                if ((candidate & 0xFF) == 172 && ((candidate >> 8) & 0xFF) == 20 && ((candidate >> 16) & 0xFF) == 10) {
+                    addr = candidate;
+                    break;
+                }
+                // otherwise the first up, non-virtual, internet-facing adapter
+                if (fallback == 0 && pCurr->FirstGatewayAddress != NULL) {
+                    fallback = candidate;
                 }
             }
             pCurr = pCurr->Next;
+        }
+        if (addr == 0) {
+            addr = fallback;
         }
     }
     free(pAddresses);

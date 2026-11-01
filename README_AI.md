@@ -89,14 +89,19 @@ opt-in `-usb`):
    Conclusion: dead on iOS 26; kept as best-effort for older devices only. The
    retry loop no longer runs by default (it was cycling the phone's config).
 
-2. **AirPlay over the USB network link** (no UxPlay code; OS-level). With the
+2. **AirPlay over the USB network link** (the working USB path). With the
    iPhone on Apple's driver (not libusb0) and Personal Hotspot on, Windows
-   exposes an "Apple Mobile Device Ethernet" NIC (172.20.10.x). UxPlay, binding
-   all interfaces, is then reachable over the cable (ping <1 ms) and the mirror
-   rides USB. The mirror itself uses no cellular, but it requires the hotspot
-   to stay on, which the owner declined for data reasons. `-usb` does **not**
-   control this path; it is pure OS setup (`install_apple_usb_support.cmd`
-   winget-installs Apple Mobile Device Support).
+   exposes an "Apple Mobile Device Ethernet" NIC (172.20.10.x; iPhone at .1,
+   ping <1 ms). The embedded mDNS responder (`lib/mdnsd/mdnsd.c`,
+   `mdns_get_default_ipv4`) now **prefers a 172.20.10.0/24 address** when one
+   is present, so UxPlay advertises only the USB link and the phone mirrors
+   over the cable (USB first, Wi-Fi second) — automatic, no flag; enable the
+   hotspot before launching. The mirror is local USB (no cellular); keep PC
+   internet on Wi-Fi (raise the Apple-Ethernet interface metric) for ~zero
+   data. `install_apple_usb_support.cmd` winget-installs the Apple driver.
+   Status: USB link and address-preference verified; full end-to-end mirror
+   over the cable is the last live check (needs the owner's hotspot on; the
+   owner had it off for the Wi-Fi runs). `-usb` does not control this path.
 
 The target device was moved off the Zadig `libusb0` binding back to Apple's
 `appleusb.inf` on 2026-11-02 (normal state; iTunes/Finder work again).

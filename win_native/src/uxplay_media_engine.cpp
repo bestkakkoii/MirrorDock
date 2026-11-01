@@ -483,11 +483,16 @@ namespace uxplay
             // a monitor was attached/detached or changed resolution/refresh:
             // re-pace presentation to the new composition clock (keeps motion
             // smooth without a restart)
-            if (auto mode = gpu_device::primary_display_mode(); mode && engine->presenter)
+            auto mode = gpu_device::primary_display_mode();
+            if (mode && engine->presenter)
             {
                 engine->presenter->set_refresh_period(mode->refresh_period_ns());
-                log::info("display changed: {}x{}, composition clock {:.3f} Hz", mode->width, mode->height,
+                log::info("display changed: re-paced to {}x{}, composition clock {:.3f} Hz", mode->width, mode->height,
                           mode->refresh_hz());
+            }
+            else
+            {
+                log::warning("display changed: re-query {}", mode ? "ok but presenter not ready" : "failed");
             }
         };
         auto window = video_window::create(created->settings.window_title, std::move(window_events),

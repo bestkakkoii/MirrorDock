@@ -21,6 +21,15 @@ int netutils_init_socket(unsigned short *port, int use_ipv6, int use_udp);
 unsigned char *netutils_get_address(void *sockaddr, int *length, unsigned int *zone_id, unsigned short *port);
 int netutils_parse_address(int family, const char *src, void *dst, int dstlen);
 
+/* Loopback UDP "wakeup" socket: a thread blocked in select() on a set that
+ * includes this socket returns immediately when another thread calls
+ * netutils_wakeup_signal(). Used to stop server threads without waiting for
+ * their select() timeouts (which made shutdown take ~1 s). */
+int netutils_wakeup_open(void);
+void netutils_wakeup_signal(int wakeup_fd);
+void netutils_wakeup_drain(int wakeup_fd);
+void netutils_wakeup_close(int wakeup_fd);
+
 /* for p2p support (macOS only ) */
 #if defined(__APPLE__) && defined(UXPLAY_HAVE_APPLE_P2P)
 void netutils_set_peer_to_peer(int enabled);

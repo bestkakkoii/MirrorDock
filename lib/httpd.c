@@ -65,6 +65,9 @@ struct httpd_s {
     /* Server fds for accepting connections */
     int server_fd4;
     int server_fd6;
+
+    /* loopback socket used by httpd_stop() to interrupt select() */
+    int wakeup_fd;
 };
 
 const char *
@@ -192,6 +195,7 @@ httpd_init(logger_t *logger, httpd_callbacks_t *callbacks, int nohold)
     /* Initial status joined */
     httpd->running = 0;
     httpd->joined = 1;
+    httpd->wakeup_fd = -1;
 
     return httpd;
 }
@@ -383,12 +387,19 @@ httpd_thread(void *arg)
         }
         MUTEX_UNLOCK(httpd->run_mutex);
 
-        /* Set timeout value to 5ms */
+        /* select() is interrupted by httpd_stop() through wakeup_fd, so this
+         * timeout only paces the idle-connection housekeeping */
         tv.tv_sec = 1;
         tv.tv_usec = 5000;
 
         /* Get the correct nfds value and set rfds */
         FD_ZERO(&rfds);
+        if (httpd->wakeup_fd != -1) {
+            FD_SET(httpd->wakeup_fd, &rfds);
+            if (nfds <= httpd->wakeup_fd) {
+                nfds = httpd->wakeup_fd + 1;
+            }
+        }
         if (httpd->open_connections < httpd->max_connections) {
             if (httpd->server_fd4 != -1) {
                 FD_SET(httpd->server_fd4, &rfds);
@@ -436,6 +447,11 @@ httpd_thread(void *arg)
             logger_log(httpd->logger, LOGGER_ERR,
                        "httpd error in select: %d %s", sock_err, SOCKET_ERROR_STRING(sock_err));
             break;
+        }
+        if (httpd->wakeup_fd != -1 && FD_ISSET(httpd->wakeup_fd, &rfds)) {
+            /* stop request (or spurious wakeup): re-check httpd->running */
+            netutils_wakeup_drain(httpd->wakeup_fd);
+            continue;
         }
 
         if (httpd->open_connections < httpd->max_connections &&
@@ -700,6 +716,11 @@ httpd_start(httpd_t *httpd, unsigned short *port)
         MUTEX_UNLOCK(httpd->run_mutex);
         return -2;
     }
+    httpd->wakeup_fd = netutils_wakeup_open();
+    if (httpd->wakeup_fd == -1) {
+        logger_log(httpd->logger, LOGGER_WARNING, "httpd: could not open wakeup socket (error %d): "
+                   "shutdown will wait for the select() timeout", SOCKET_GET_ERROR());
+    }
     logger_log(httpd->logger, LOGGER_INFO, "Initialized server socket(s)");
 
     /* Set values correctly and create new thread */
@@ -738,9 +759,12 @@ httpd_stop(httpd_t *httpd)
     httpd->running = 0;
     MUTEX_UNLOCK(httpd->run_mutex);
 
+    netutils_wakeup_signal(httpd->wakeup_fd);
     THREAD_JOIN(httpd->thread);
 
     MUTEX_LOCK(httpd->run_mutex);
     httpd->joined = 1;
+    netutils_wakeup_close(httpd->wakeup_fd);
+    httpd->wakeup_fd = -1;
     MUTEX_UNLOCK(httpd->run_mutex);
 }

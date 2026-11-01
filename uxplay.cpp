@@ -73,6 +73,11 @@
 #include "renderers/video_renderer.h"
 #include "renderers/audio_renderer.h"
 #include "renderers/mux_renderer.h"
+#if UXPLAY_WIN_NATIVE
+/* Windows-native media engine (D3D11 + FFmpeg D3D11VA + WASAPI + USB mirroring)
+ * replaces the GStreamer renderers; see win_native/README_AI.md */
+#include "win_native/include/native_media.h"
+#endif
 #ifdef DBUS
 #include <dbus/dbus.h>
 #endif
@@ -216,6 +221,12 @@ static bool mux_to_file = false;
 static std::string mux_filename = "recording";
 static bool raspberry_pi_hls_support = false;
 static std::string custom_profile_string = "";
+#if UXPLAY_WIN_NATIVE
+static bool usb_mirroring = false;      /* opt-in "-usb": legacy QuickTime USB capture (see README_AI.md; broken on iOS 16+) */
+static bool force_h264_only = false;    /* "-h264": do not offer H.265 to the client */
+static int gpu_preference = 0;          /* "-gpu auto|intel|nvidia" */
+static HANDLE shutdown_complete_event = NULL;
+#endif
 
 //Support for D-Bus-based screensaver inhibition (org.freedesktop.ScreenSaver) 
 static unsigned int scrsv = 0;
@@ -716,6 +727,14 @@ static BOOL WINAPI CtrlHandler(DWORD signal) {
     case CTRL_SHUTDOWN_EVENT:
         if (gmainloop) {
             g_idle_add(handle_signal, NULL);
+#if UXPLAY_WIN_NATIVE
+            /* Windows terminates the process as soon as this handler returns
+             * for CTRL_CLOSE_EVENT/CTRL_SHUTDOWN_EVENT: wait (bounded) for the
+             * main thread's orderly shutdown so clients and mDNS are told. */
+            if (signal != CTRL_C_EVENT && shutdown_complete_event) {
+                WaitForSingleObject(shutdown_complete_event, 4000);
+            }
+#endif
             return TRUE;
         } else {  
             cleanup();
@@ -1106,6 +1125,11 @@ static void print_info (char *name) {
     printf("-n name   Specify network name of the AirPlay server (UTF-8/ascii)\n");
     printf("-nh       Do not add \"@hostname\" at the end of AirPlay server name\n");
     printf("-h265     Support h265 (4K) video (with h265 versions of h264 plugins)\n");
+#if UXPLAY_WIN_NATIVE
+    printf("-h264     Offer only H.264 to the client (Windows-native build offers H.265 too)\n");
+    printf("-usb      Legacy QuickTime USB capture (default: off; does not stream on iOS 16+)\n");
+    printf("-gpu g    GPU for decode/present: auto (display owner), intel, nvidia\n");
+#endif
     printf("-mp4 [fn] Record (non-HLS)audio/video to mp4 file \"fn.[n].[format].mp4\"\n");
     printf("          n=1,2,.. format = H264/5, ALAC/AAC. Default fn=\"recording\"\n");
     printf("-hls [v]  Support HTTP Live Streaming (HLS), Youtube app video only: \n");
@@ -2222,6 +2246,31 @@ static void parse_arguments (int argc, char *argv[]) {
             lang_subtitles.erase(std::remove(lang_subtitles.begin(), lang_subtitles.end(), ' '), lang_subtitles.end()); 
         } else if (arg == "-h265") {
             h265_support = true;
+#if UXPLAY_WIN_NATIVE
+            force_h264_only = false;
+        } else if (arg == "-h264") {
+            force_h264_only = true;
+            h265_support = false;
+        } else if (arg == "-gpu") {
+            if (!option_has_value(i, argc, arg, argv[i+1])) exit(1);
+            std::string choice(argv[++i]);
+            if (choice == "auto") {
+                gpu_preference = 0;
+            } else if (choice == "intel" || choice == "integrated") {
+                gpu_preference = 1;
+            } else if (choice == "nvidia" || choice == "discrete") {
+                gpu_preference = 2;
+            } else {
+                fprintf(stderr, "invalid \"-gpu %s\": choices are auto, intel, nvidia\n", choice.c_str());
+                exit(1);
+            }
+        } else if (arg == "-usb") {
+            usb_mirroring = true;
+            if (i < argc - 1 && strlen(argv[i+1]) == 2 && strncmp(argv[i+1], "no", 2) == 0) {
+                usb_mirroring = false;
+                i++;
+            }
+#endif
         } else if (arg == "-nofreeze") {
             nofreeze = true;
         } else {
@@ -2685,9 +2734,13 @@ extern "C" void display_pin(void *cls, char *pin) {
     if (!image) {
         LOGE("create_pin_display could not create pin image, pin = %s", pin);
     } else {
-        LOGI("%s\n",image);     
+        LOGI("%s\n",image);
         free (image);
     }
+#if UXPLAY_WIN_NATIVE
+    /* no console window in the native build: show the PIN as a notification */
+    native_media_notify("AirPlay PIN", pin);
+#endif
 }
 
 extern "C" const char *passwd(void *cls, int *len){
@@ -2791,6 +2844,18 @@ extern "C" void audio_process (void *cls, raop_ntp_t *ntp, audio_decode_struct *
     if (mux_to_file) {
         mux_renderer_push_audio(data->data, data->data_len, data->ntp_time_remote);
     }
+#if UXPLAY_WIN_NATIVE
+    if (use_audio) {
+        if (data->ct == 2) {
+            rtptime = data->rtp_time;   /* ALAC progress monitor */
+        } else if (data->ct == 4 || data->ct == 8) {
+            monitor_progress = false;
+        }
+        /* -vsync/-async delays are applied by the engine (native_media_airplay_audio_configure) */
+        native_media_airplay_audio_packet(data->data, data->data_len, data->ntp_time_local, data->ntp_time_remote);
+    }
+    return;
+#endif
     if (use_audio) {
         if (!remote_clock_offset) {
             uint64_t local_time = (data->ntp_time_local ? data->ntp_time_local : get_local_time());
@@ -2826,6 +2891,12 @@ extern "C" void video_process (void *cls, raop_ntp_t *ntp, video_decode_struct *
     if (mux_to_file) {
         mux_renderer_push_video(data->data, data->data_len, data->ntp_time_remote);
     }
+#if UXPLAY_WIN_NATIVE
+    if (use_video) {
+        native_media_airplay_video_frame(data->data, data->data_len, data->ntp_time_local, data->ntp_time_remote);
+    }
+    return;
+#endif
     if (use_video) {
         if (!remote_clock_offset) {
             uint64_t local_time = (data->ntp_time_local ? data->ntp_time_local : get_local_time());
@@ -2954,7 +3025,13 @@ extern "C" void audio_get_format (void *cls, unsigned char *ct, unsigned short *
     audio_type = type;
     
     if (use_audio) {
+#if UXPLAY_WIN_NATIVE
+        bool const alac = (*ct == 2);
+        native_media_airplay_audio_configure(*ct, alac ? audio_sync : video_sync,
+                                             (double) (alac ? audio_delay_alac : audio_delay_aac) / 1e6);
+#else
       audio_renderer_start(ct);
+#endif
     }
 
     if (mux_to_file) {
@@ -3177,6 +3254,82 @@ extern "C" void log_callback (void *cls, int level, const char *msg) {
     }
 }
 
+#if UXPLAY_WIN_NATIVE
+static std::string native_log_path;
+
+/* The native build is a GUI-subsystem program (a console window costs ~1.2 s
+ * to appear on Windows 11).  When started from a terminal the log goes to that
+ * terminal; otherwise to %LOCALAPPDATA%\UxPlay\uxplay.log ("Open log" in the
+ * notification-area menu). */
+static void native_setup_output(void) {
+    /* output redirected by the parent (uxplay.exe > file, pipes): keep it */
+    HANDLE inherited = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (inherited != NULL && inherited != INVALID_HANDLE_VALUE && _fileno(stdout) >= 0) {
+        DWORD type = GetFileType(inherited);
+        if (type == FILE_TYPE_DISK || type == FILE_TYPE_PIPE) {
+            setvbuf(stdout, NULL, _IONBF, 0);
+            setvbuf(stderr, NULL, _IONBF, 0);
+            return;
+        }
+    }
+    if (AttachConsole(ATTACH_PARENT_PROCESS)) {
+        FILE *stream = NULL;
+        freopen_s(&stream, "CONOUT$", "w", stdout);
+        freopen_s(&stream, "CONOUT$", "w", stderr);
+        return;
+    }
+    const char *local_app_data = getenv("LOCALAPPDATA");
+    if (!local_app_data) {
+        return;
+    }
+    std::string directory = std::string(local_app_data) + "\\UxPlay";
+    CreateDirectoryA(directory.c_str(), NULL);
+    native_log_path = directory + "\\uxplay.log";
+    /* plain freopen opens the file shared (freopen_s denies other readers),
+     * so "Open log" can show it while UxPlay runs */
+    if (freopen(native_log_path.c_str(), "w", stdout) != NULL) {
+        setvbuf(stdout, NULL, _IONBF, 0);
+        _dup2(_fileno(stdout), _fileno(stderr));
+    }
+}
+
+static void native_log_callback(int level, const char *message) {
+    log(level, "%s", message);
+}
+
+/* the user closed the video window while Wi-Fi AirPlay was shown: same
+ * handling as GStreamer's "Output window was closed" (drop the client) */
+static gboolean native_window_closed_idle(gpointer data) {
+    (void) data;
+    LOGI("video window closed: disconnecting the AirPlay client");
+    if (gmainloop) {
+        g_main_loop_quit(gmainloop);
+    }
+    return G_SOURCE_REMOVE;
+}
+
+static void native_event_callback(native_media_event event, void *user_data) {
+    (void) user_data;
+    switch (event) {
+    case NATIVE_MEDIA_EVENT_WINDOW_CLOSED:
+        g_idle_add(native_window_closed_idle, NULL);
+        break;
+    case NATIVE_MEDIA_EVENT_USB_STARTED:
+        LOGI("USB mirroring is active: it has priority over Wi-Fi AirPlay");
+        break;
+    case NATIVE_MEDIA_EVENT_USB_STOPPED:
+        LOGI("USB mirroring stopped (Wi-Fi AirPlay remains available)");
+        break;
+    case NATIVE_MEDIA_EVENT_EXIT_REQUESTED:
+        LOGI("exit requested from the notification-area menu");
+        g_idle_add(handle_signal, NULL);
+        break;
+    default:
+        break;
+    }
+}
+#endif
+
 static int start_raop_server (unsigned short display[5], unsigned short tcp[3], unsigned short udp[3], bool debug_log) {
     raop_callbacks_t raop_cbs;
     memset(&raop_cbs, 0, sizeof(raop_cbs));
@@ -3379,6 +3532,9 @@ int main (int argc, char *argv[]) {
 #ifdef _WIN32
     /* initialise Windows kernel qpc frequency for recv timestamping */
     ntp_global_init();
+#endif
+#if UXPLAY_WIN_NATIVE
+    native_setup_output();
 #endif
 
 #ifdef _WIN32
@@ -3655,6 +3811,73 @@ int main (int argc, char *argv[]) {
         append_hostname(server_name);
     }
 
+#if UXPLAY_WIN_NATIVE
+    /* options that only exist on top of GStreamer playbin/muxers */
+    if (hls_support) {
+        LOGW("-hls (HLS video playback) is not available in the Windows-native build: ignored");
+        hls_support = false;
+    }
+    if (mux_to_file) {
+        LOGW("-mp4 recording is not available in the Windows-native build: ignored");
+        mux_to_file = false;
+    }
+    if (render_coverart) {
+        LOGW("-ca (on-screen cover art) is not available in the Windows-native build: ignored");
+        render_coverart = false;
+    }
+    if (!rtp_pipeline.empty() || !audio_rtp_pipeline.empty()) {
+        LOGW("-vrtp/-artp re-streaming is not available in the Windows-native build: ignored");
+        rtp_pipeline.erase();
+        audio_rtp_pipeline.erase();
+    }
+    if (use_video && videosink != "autovideosink") {
+        LOGW("-vs %s ignored: video is presented by the native Direct3D 11 presenter", videosink.c_str());
+    }
+    if (use_audio && audiosink != "autoaudiosink") {
+        LOGW("-as %s ignored: audio is played through WASAPI (default Windows output)", audiosink.c_str());
+    }
+    if (!force_h264_only) {
+        h265_support = true;   /* Intel HD 530 decodes HEVC Main in hardware: allow >1080p mirroring */
+    }
+    shutdown_complete_event = CreateEventW(NULL, TRUE, FALSE, NULL);
+
+    native_media_settings native_settings;
+    memset(&native_settings, 0, sizeof(native_settings));
+    native_settings.window_title = server_name.c_str();
+    native_settings.start_fullscreen = fullscreen;
+    native_settings.timestamp_sync = video_sync;
+    native_settings.audio_offset_ms = (double) audio_delay_aac / 1e6;
+    native_settings.usb_mirroring = usb_mirroring && use_video;
+    native_settings.keep_window_on_stop = !new_window_closing_behavior;
+    native_settings.log_level = log_level;
+    native_settings.gpu_preference = gpu_preference;
+    native_settings.tray_icon = true;
+    native_settings.log_path = native_log_path.empty() ? NULL : native_log_path.c_str();
+    native_settings.log_callback = native_log_callback;
+    native_settings.event_callback = native_event_callback;
+    if (native_media_start(&native_settings) != 0) {
+        LOGE("the Windows-native media engine could not start (see messages above)");
+        exit(1);
+    }
+    LOGI("Windows-native engine ready: fullscreen toggle = double-click / F / F11 / Alt+Enter, Esc leaves fullscreen");
+    native_media_display_info native_display;
+    if (native_media_query_display(&native_display)) {
+        /* ask the iPhone for exactly this monitor's geometry and refresh rate */
+        if (!display[0] && !display[1]) {
+            display[0] = (unsigned short) native_display.width;
+            display[1] = (unsigned short) native_display.height;
+            if (!display[2]) {
+                display[2] = (unsigned short) std::min(native_display.refresh_hz, 255);
+            }
+        }
+        if (!display[3]) {
+            display[3] = (unsigned short) std::min(native_display.refresh_hz, 60);
+        }
+        LOGI("advertising display %ux%u @ %u Hz, max %u fps, codecs %s", display[0], display[1], display[2],
+             display[3], h265_support ? "H.265 + H.264" : "H.264");
+    }
+#endif
+
     if (!gstreamer_init()) {
         LOGE ("stopping");
         exit (1);
@@ -3760,6 +3983,22 @@ int main (int argc, char *argv[]) {
         stop_dnssd();
         cleanup();
     }
+#if UXPLAY_WIN_NATIVE
+    {
+        /* startup time as the user perceives it: process creation -> advertised */
+        FILETIME creation, exited, kernel, user, now;
+        if (GetProcessTimes(GetCurrentProcess(), &creation, &exited, &kernel, &user)) {
+            GetSystemTimePreciseAsFileTime(&now);
+            ULARGE_INTEGER created_at, now_at;
+            created_at.LowPart = creation.dwLowDateTime;
+            created_at.HighPart = creation.dwHighDateTime;
+            now_at.LowPart = now.dwLowDateTime;
+            now_at.HighPart = now.dwHighDateTime;
+            LOGI("AirPlay server \"%s\" is advertised and ready, %.0f ms after launch", server_name.c_str(),
+                 (double) (now_at.QuadPart - created_at.QuadPart) / 1e4);
+        }
+    }
+#endif
     reconnect:
     compression_type = 0;
     close_window = new_window_closing_behavior;
@@ -3838,6 +4077,12 @@ static void cleanup() {
             dbus_pending_call_unref(dbus_pending);
         }
         dbus_connection_unref(dbus_connection);
+    }
+#endif
+#if UXPLAY_WIN_NATIVE
+    native_media_stop();
+    if (shutdown_complete_event) {
+        SetEvent(shutdown_complete_event);
     }
 #endif
     exit(0);

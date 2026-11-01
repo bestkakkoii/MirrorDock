@@ -60,6 +60,11 @@ add_library( airplay  STATIC
              ${DIR_SRCS}
            )
 
+if ( UXPLAY_WIN_NATIVE )
+  # the Windows-native build links libplist/OpenSSL statically (one executable)
+  target_compile_definitions( airplay PUBLIC LIBPLIST_STATIC )
+endif()
+
 if ( APPLE )
   target_link_libraries( airplay 
                          pthread

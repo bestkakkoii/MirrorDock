@@ -21,6 +21,9 @@
 #include <stdio.h>
 
 #include "compat.h"
+#ifndef _WIN32
+#include <fcntl.h>
+#endif
 
 #if defined(__APPLE__) && defined(UXPLAY_HAVE_APPLE_P2P)
 #ifndef SO_RECV_ANYIF
@@ -69,6 +72,65 @@ netutils_set_peer_to_peer(int enabled)
     peer_to_peer = enabled ? 1 : 0;
 }
 #endif
+
+int
+netutils_wakeup_open(void)
+{
+    struct sockaddr_in loopback;
+    socklen_t loopback_len = sizeof(loopback);
+    int wakeup_fd = (int) socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (wakeup_fd == -1) {
+        return -1;
+    }
+    memset(&loopback, 0, sizeof(loopback));
+    loopback.sin_family = AF_INET;
+    loopback.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    loopback.sin_port = 0;
+    /* bind to an ephemeral loopback port, then connect to ourselves so that
+     * send() needs no destination and only our own datagrams are accepted */
+    if (bind(wakeup_fd, (struct sockaddr *) &loopback, sizeof(loopback)) == -1 ||
+        getsockname(wakeup_fd, (struct sockaddr *) &loopback, &loopback_len) == -1 ||
+        connect(wakeup_fd, (struct sockaddr *) &loopback, loopback_len) == -1) {
+        CLOSESOCKET(wakeup_fd);
+        return -1;
+    }
+#ifdef _WIN32
+    u_long non_blocking = 1;
+    ioctlsocket(wakeup_fd, FIONBIO, &non_blocking);
+#else
+    int flags = fcntl(wakeup_fd, F_GETFL, 0);
+    fcntl(wakeup_fd, F_SETFL, flags | O_NONBLOCK);
+#endif
+    return wakeup_fd;
+}
+
+void
+netutils_wakeup_signal(int wakeup_fd)
+{
+    const char token = 1;
+    if (wakeup_fd != -1) {
+        send(wakeup_fd, &token, 1, 0);
+    }
+}
+
+void
+netutils_wakeup_drain(int wakeup_fd)
+{
+    char sink[16];
+    if (wakeup_fd == -1) {
+        return;
+    }
+    while (recv(wakeup_fd, sink, sizeof(sink), 0) > 0) {
+    }
+}
+
+void
+netutils_wakeup_close(int wakeup_fd)
+{
+    if (wakeup_fd != -1) {
+        CLOSESOCKET(wakeup_fd);
+    }
+}
 
 unsigned char *
 netutils_get_address(void *sockaddr, int *length, unsigned int *zone_id, unsigned short *port)

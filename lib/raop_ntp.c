@@ -66,6 +66,9 @@ struct raop_ntp_s {
     mutex_handle_t run_mutex;
     mutex_handle_t wait_mutex;
     cond_handle_t wait_cond;
+    /* set (under wait_mutex) by raop_ntp_stop(); prevents a lost wakeup when the
+     * stop signal arrives while the thread is not yet waiting on wait_cond */
+    int stop_requested;
 
     raop_ntp_data_t data[RAOP_NTP_DATA_COUNT];
     int data_index;
@@ -129,6 +132,23 @@ void raop_ntp_global_init(void) {
     QueryPerformanceFrequency(&g_system_qpc_frequency);
 #endif
 }
+
+#ifdef _WIN32
+/* On Windows the server "local time" is the QueryPerformanceCounter timeline
+ * in nanoseconds.  It is monotonic (unaffected by wall-clock/NTP adjustments
+ * of the host) and is the same clock used by DXGI frame statistics and WASAPI
+ * IAudioClock QPC positions, so media presentation times computed from it need
+ * no further conversion.  Only differences of local times are ever used. */
+static uint64_t qpc_ticks_to_ns(int64_t ticks) {
+    if (g_system_qpc_frequency.QuadPart == 0) {
+        QueryPerformanceFrequency(&g_system_qpc_frequency);
+    }
+    const int64_t frequency = g_system_qpc_frequency.QuadPart;
+    const int64_t whole_seconds = ticks / frequency;
+    const int64_t remainder = ticks % frequency;
+    return (uint64_t) whole_seconds * SECOND_IN_NSECS + (uint64_t) ((remainder * (int64_t) SECOND_IN_NSECS) / frequency);
+}
+#endif
 
 
 kernel_timestamp_session_t* kernel_timestamp_session_create(raop_ntp_t *raop_ntp, int sock_fd) {
@@ -247,14 +267,14 @@ ssize_t kernel_timestamp_session_recv(kernel_timestamp_session_t *session, char 
 
                     QueryPerformanceCounter(&qpc_now);
                     default_elapsed_ticks  = qpc_now.QuadPart - session->base_qpc_ticks;
-                    *recv_time_clock = (session->base_system_time_us + ((default_elapsed_ticks * 1000000LL) / session->qpc_frequency)) * USEC_IN_NSECS ;
+                    (void) default_elapsed_ticks;
+                    *recv_time_clock = qpc_ticks_to_ns(qpc_now.QuadPart);
 
                     for (cmsg = WSA_CMSG_FIRSTHDR(&wsa_msg); cmsg != NULL; cmsg = WSA_CMSG_NXTHDR(&wsa_msg, cmsg)) {
                         if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SO_TIMESTAMP) {
                             UINT64 packet_qpc_ticks = *(UINT64*) WSA_CMSG_DATA(cmsg);
                             if (packet_qpc_ticks > (UINT64) session->base_qpc_ticks) {
-                                int64_t packet_elapsed_ticks = (int64_t) packet_qpc_ticks - session->base_qpc_ticks;
-                                *recv_time_kernel = (session->base_system_time_us + ((packet_elapsed_ticks * 1000000LL) / session->qpc_frequency)) * USEC_IN_NSECS;
+                                *recv_time_kernel = qpc_ticks_to_ns((int64_t) packet_qpc_ticks);
                             }
                         } else if (cmsg->cmsg_level == IPPROTO_IP && cmsg->cmsg_type== IP_PKTINFO) {
                             interface_index = ((IN_PKTINFO *) WSA_CMSG_DATA(cmsg))->ipi_ifindex;
@@ -521,7 +541,9 @@ raop_ntp_init_socket(raop_ntp_t *raop_ntp, int use_ipv6)
     }
     
     // We're calling recvfrom without knowing whether there is any data, so we need a timeout
-    uint32_t recv_timeout_msec = 300; 
+    /* responses normally arrive within a few ms; a short timeout also bounds
+     * how long raop_ntp_stop() can wait for this thread */
+    uint32_t recv_timeout_msec = 150; 
 #ifdef _WIN32
     DWORD tv  = recv_timeout_msec;
 #define CAST (char *)    
@@ -849,7 +871,9 @@ raop_ntp_thread(void *arg) {
                 wait_time.tv_nsec -= 1000000000LL;
             }
         }
-        pthread_cond_timedwait(&raop_ntp->wait_cond, &raop_ntp->wait_mutex, &wait_time);
+        if (!raop_ntp->stop_requested) {
+            pthread_cond_timedwait(&raop_ntp->wait_cond, &raop_ntp->wait_mutex, &wait_time);
+        }
         MUTEX_UNLOCK(raop_ntp->wait_mutex);
         ntpcount = ntpcount > NTP_BURST_LIMIT ? NTP_BURST_LIMIT : ntpcount;
     }
@@ -895,6 +919,9 @@ raop_ntp_start(raop_ntp_t *raop_ntp, unsigned short *timing_lport)
     /* Create the thread and initialize running values */
     raop_ntp->running = 1;
     raop_ntp->joined = 0;
+    MUTEX_LOCK(raop_ntp->wait_mutex);
+    raop_ntp->stop_requested = 0;
+    MUTEX_UNLOCK(raop_ntp->wait_mutex);
     
     THREAD_CREATE(raop_ntp->thread, raop_ntp_thread, raop_ntp);
     MUTEX_UNLOCK(raop_ntp->run_mutex);
@@ -918,6 +945,7 @@ raop_ntp_stop(raop_ntp_t *raop_ntp)
     logger_log(raop_ntp->logger, LOGGER_DEBUG, "raop_ntp stopping time thread");
 
     MUTEX_LOCK(raop_ntp->wait_mutex);
+    raop_ntp->stop_requested = 1;
     COND_SIGNAL(raop_ntp->wait_cond);
     MUTEX_UNLOCK(raop_ntp->wait_mutex);
 
@@ -972,9 +1000,15 @@ uint64_t raop_ntp_timestamp_to_nano_seconds(raop_ntp_t *raop_ntp, uint64_t times
  * The system Unix time is used as the local wall clock.
  */
 uint64_t raop_ntp_get_local_time() {
+#ifdef _WIN32
+    LARGE_INTEGER now;
+    QueryPerformanceCounter(&now);
+    return qpc_ticks_to_ns(now.QuadPart);
+#else
     struct timespec time;
     clock_gettime(CLOCK_REALTIME, &time);
     return ((uint64_t) time.tv_nsec) + (uint64_t) time.tv_sec * SECOND_IN_NSECS;
+#endif
 }
 
 /**

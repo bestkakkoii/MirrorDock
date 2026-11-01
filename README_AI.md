@@ -1,0 +1,148 @@
+# README_AI — UxPlay Windows-native build (authority entry)
+
+This file is the entry point for maintainers and agents working on this
+tree. Upstream UxPlay documentation (README.md / README.txt / README.html)
+is unchanged and still describes the generic (GStreamer) build.
+
+## What this tree is
+
+UxPlay 1.74 (AirPlay mirroring / audio receiver, GPL-3.0) specialised for one
+host and one sender:
+
+* Host: ASUS laptop, i7-6700HQ (Skylake), Intel HD Graphics 530 (drives the
+  displays: MSI MP341CQ 3440x1440 over HDMI at 50 Hz, cloned with the 60.02 Hz
+  built-in panel), GTX 960M (no outputs; Optimus), 16 GB, Windows 11 26200,
+  Intel AC 7265 Wi-Fi.
+* Sender: iPhone 16 Pro Max (A18 Pro, USB-C), Wi-Fi AirPlay and USB.
+
+On Windows (`UXPLAY_WIN_NATIVE`, default ON when the host is Windows) the
+GStreamer renderers are replaced by `win_native/`, a media engine written as
+C++26 named modules (`import std;`, clang 23 + libc++ module support):
+
+| module | role |
+|---|---|
+| `uxplay_status`, `uxplay_log`, `uxplay_clock` | explicit failure outcomes, log sink, QPC-ns timeline |
+| `uxplay_system_tuning` | EcoQoS/power-throttling opt-out, MMCSS, priority, DPI |
+| `uxplay_gpu_device` | D3D11 device on the GPU that physically scans out the monitor (QueryDisplayConfig LUID), DWM composition clock |
+| `uxplay_video_window` | Win32 window + UI thread, borderless fullscreen toggle (double-click/F/F11/Alt+Enter, Esc), tray icon/menu, USB arrival notifications |
+| `uxplay_video_decoder`, `uxplay_video_frame` | FFmpeg H.264/HEVC, D3D11VA, shader-readable decoder textures (zero copy) |
+| `uxplay_video_presenter` | flip-model swap chain, frame-latency waitable (max latency 1), timestamp-scheduled presentation, source arbitration |
+| `uxplay_audio_decoder`, `uxplay_audio_output` | AAC-ELD/ALAC/AAC-LC/LPCM -> float32 at device rate; WASAPI IAudioClient3 low-latency period, per-sample scheduling with ≤0.3 % cubic-resampling drift correction |
+| `uxplay_media_engine` | per-source pipelines and the shared presentation timeline |
+| `uxplay_qt_protocol`, `uxplay_usb_mirror` | QuickTime screen-capture protocol over the hidden USB configuration (libusb) |
+| `native_media_bridge.cpp`, `renderer_compat.c` | C API (`win_native/include/native_media.h`) used by `uxplay.cpp`; old renderer API mapped onto it |
+
+## Invariants
+
+* **Timeline:** every local time is `raop_ntp_get_local_time()` = QPC in ns
+  (changed from CLOCK_REALTIME on Windows in `lib/raop_ntp.c`); DXGI and
+  WASAPI QPC positions are on the same timeline.
+* **Sync:** `present_time = media_time + delay(source)`; audio and video of a
+  source share one media-time mapping and one delay, so lip sync holds by
+  construction. The delay tracks the 95th percentile of **video** lateness
+  (decode completion) plus a margin, with a fixed audio buffering floor; it is
+  clamped to ≤220 ms and eases back toward target (~1/8 of the gap per 100 ms,
+  recovers in ~1–2 s). Audio lateness does **not** drive the delay: a
+  mid-stream audio cold-start would otherwise spike the shared delay toward the
+  cap and (with the old 1 ms/250 ms decay) never recover in-session; audio
+  stays in sync because it is scheduled against the same delay and the audio
+  output re-anchors its own queue. Verified on device (see below).
+* **Priority:** `media_source::usb` (0) beats `media_source::airplay` (1) for
+  both picture and sound; AirPlay keeps decoding in the background so losing
+  USB falls back without waiting for a key frame.
+* **GPU:** decode + present on the display-owning adapter (Intel). Measured on
+  this host (2868x1320@60, synthetic streams): Intel H.264 37 ms / HEVC 28 ms
+  sync delay, 0–4 drops; GTX 960M H.264 70 ms, HEVC 122 ms with 70 drops
+  (`-gpu nvidia` keeps it selectable).
+* **Verified on device (2026-11-02):** iPhone 16 Pro Max, **iOS 26.6**, Wi-Fi
+  AirPlay mirroring, HEVC 664×1440 decoded by Intel HD 530 (D3D11VA). Sync
+  delay stabilised at ~14.7 ms over 8000+ presented frames with ~0 new drops;
+  audio (AAC 44.1 kHz) stayed in sync and no longer disrupts video on start;
+  lock/unlock recovers cleanly. Startup-to-advertised ~0.2 s, exit ~0.05 s.
+* **Threads:** UI thread (window, tray), render thread (MMCSS "Playback"),
+  one decode thread per source, WASAPI thread (MMCSS "Pro Audio"), USB worker,
+  engine start thread. The D3D11 immediate context is guarded by one recursive
+  mutex shared with FFmpeg's D3D11VA lock callbacks.
+* **Shutdown:** server threads are woken through a loopback socket
+  (`netutils_wakeup_*`, used by httpd) and a lost-wakeup-free NTP stop; Ctrl+C
+  to exit measured ~51 ms (upstream ~1000 ms). On console close the handler
+  waits (≤4 s) for the orderly shutdown so mDNS goodbyes are sent.
+* **Failures** are explicit `uxplay::outcome` values with stage, original
+  code and system/library message; nothing fails silently.
+
+## USB mirroring (status: not viable on iOS 26 via QuickTime)
+
+Two USB paths exist; **neither is the shipped default** (`usb_mirroring` is off,
+opt-in `-usb`):
+
+1. **QuickTime hidden-config capture** (`uxplay_qt_protocol`,
+   `uxplay_usb_mirror`, libusb). The hidden config is enabled with vendor
+   request 0x52 (wIndex 2); its bulk endpoints carry the AV stream; HPD1/HPA1
+   are byte-identical to macOS QuickTime (unit-tested). **Apple disabled this
+   from iOS 16 onward.** Verified against the target device (iPhone 16 Pro Max,
+   iOS 26.6): enabling the config, usbmux VERSION/SETUP, lockdown QueryType +
+   StartSession, and the **TLS 1.2 session upgrade using the host pair record**
+   (`C:\ProgramData\Apple\Lockdown\<udid>.plist`) all succeed, yet the device
+   sends **zero** bytes on the capture endpoint — even with the vendor "kick"
+   (0x40/0x6400) + host ping and a separate concurrently-serviced usbmux
+   session. Standalone validation probes: `D:\TMP\probe\usbmux_probe2.c`.
+   Conclusion: dead on iOS 26; kept as best-effort for older devices only. The
+   retry loop no longer runs by default (it was cycling the phone's config).
+
+2. **AirPlay over the USB network link** (no UxPlay code; OS-level). With the
+   iPhone on Apple's driver (not libusb0) and Personal Hotspot on, Windows
+   exposes an "Apple Mobile Device Ethernet" NIC (172.20.10.x). UxPlay, binding
+   all interfaces, is then reachable over the cable (ping <1 ms) and the mirror
+   rides USB. The mirror itself uses no cellular, but it requires the hotspot
+   to stay on, which the owner declined for data reasons. `-usb` does **not**
+   control this path; it is pure OS setup (`install_apple_usb_support.cmd`
+   winget-installs Apple Mobile Device Support).
+
+The target device was moved off the Zadig `libusb0` binding back to Apple's
+`appleusb.inf` on 2026-11-02 (normal state; iTunes/Finder work again).
+
+## Build (MSYS2 CLANG64)
+
+```sh
+# dependencies (pinned main-branch commits, static, -march=skylake)
+MSYSTEM=CLANG64 bash -lc 'bash win_native/build_scripts/build_deps.sh <src_root> <prefix> libusb libplist openssl ffmpeg'
+# UxPlay
+MSYSTEM=CLANG64 bash -lc 'bash win_native/build_scripts/build_uxplay_native.sh <uxplay_src> <build_dir> <prefix> Release'
+# tests
+<build_dir>/win_native/qt_protocol_tests.exe win_native/tests/qt_fixtures
+<build_dir>/win_native/engine_smoke_test.exe <annexb stream> h264|h265 60 [auto|intel|nvidia]
+```
+
+Pinned inputs (observed 2026-11-02):
+
+| input | source | branch | commit / version |
+|---|---|---|---|
+| FFmpeg | github.com/FFmpeg/FFmpeg | master | a88838af482100fa22dd22c94be592c35642de46 (libavcodec 63) |
+| OpenSSL | github.com/openssl/openssl | master | aad00a888ccb47ec49afeb7545f2dddf9397fbb5 (4.2.0-dev) |
+| libplist | github.com/libimobiledevice/libplist | master | fe3dc34dc3484006e12b403f7ceb06f0ad40b6f4 |
+| libusb | github.com/libusb/libusb | master | 987c1170d0018ba82557823a98ae443e8335e11b |
+| clang / libc++ / lld | MSYS2 CLANG64 | — | 23.1.4 |
+| CMake / Ninja | MSYS2 CLANG64 | — | 4.4.5 / 1.13.2 |
+| fxc | Windows SDK | — | 10.0.28000.0 |
+
+FFmpeg options: `--disable-everything` plus decoders h264, hevc, aac, alac,
+pcm_s16le, pcm_f32le; parsers h264, hevc, aac; hwaccels h264/hevc d3d11va
+(+va2); swresample; w32threads.
+
+**Exception (recorded):** GLib 2.90.1 and its runtime DLLs (libintl
+gettext-runtime 1.0, libiconv 1.19, pcre2 10.49, libwinpthread 14.0.0) are
+MSYS2 binary packages, not main-branch builds. GLib is only used for
+uxplay.cpp's main loop; rebuilding it from main (meson + its dependency chain)
+was not done in this delivery.
+
+## Removed in this build (not available without GStreamer)
+
+`-hls`, `-mp4`, on-screen `-ca`, `-vrtp`, `-artp`, `-vs`/`-as` sink choice:
+the options are accepted and reported as ignored at startup.
+
+## New options
+
+`-usb` (off by default; legacy QuickTime capture, does not stream on iOS 16+),
+`-gpu auto|intel|nvidia`, `-h264` (H.265 is offered by default).
+Display geometry/refresh are advertised from the monitor unless `-s`/`-fps`
+are given.

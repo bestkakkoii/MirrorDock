@@ -120,6 +120,8 @@ namespace uxplay
                 return "integrated (forced)";
             case gpu_preference::discrete:
                 return "discrete (forced)";
+            case gpu_preference::software:
+                return "software (WARP, forced)";
             case gpu_preference::automatic:
                 break;
             }
@@ -172,33 +174,73 @@ namespace uxplay
         {
             return std::unexpected(make_hresult_failure("CreateDXGIFactory2", result));
         }
-        created->adapter = select_adapter(created->factory.Get(), preference);
-        if (!created->adapter)
-        {
-            return std::unexpected(make_failure("select GPU adapter", 0, "no DXGI adapter found"));
-        }
-
-        DXGI_ADAPTER_DESC1 description{};
-        created->adapter->GetDesc1(&description);
-        created->info.description = utf16_to_utf8(description.Description);
-        created->info.vendor_id = description.VendorId;
-        created->info.device_id = description.DeviceId;
-        created->info.dedicated_video_memory = description.DedicatedVideoMemory;
-        for (ComPtr<IDXGIOutput> output; created->adapter->EnumOutputs(created->info.output_count, &output) !=
-                                         DXGI_ERROR_NOT_FOUND;
-             output.Reset())
-        {
-            ++created->info.output_count;
-        }
-
         D3D_FEATURE_LEVEL const levels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0};
         UINT const flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_VIDEO_SUPPORT;
-        result = D3D11CreateDevice(created->adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, flags, levels,
-                                   static_cast<UINT>(std::size(levels)), D3D11_SDK_VERSION, &created->device, nullptr,
-                                   &created->context);
-        if (FAILED(result))
+        bool software = preference == gpu_preference::software;
+
+        // Prefer a hardware adapter; fall back to the WARP software renderer so
+        // the app still runs on a PC with no usable D3D11 GPU/driver.
+        if (!software)
         {
-            return std::unexpected(make_hresult_failure("D3D11CreateDevice", result));
+            created->adapter = select_adapter(created->factory.Get(), preference);
+            if (created->adapter)
+            {
+                result = D3D11CreateDevice(created->adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, flags, levels,
+                                           static_cast<UINT>(std::size(levels)), D3D11_SDK_VERSION, &created->device,
+                                           nullptr, &created->context);
+                if (FAILED(result))
+                {
+                    log::warning("hardware D3D11 device failed ({}); falling back to the software renderer (WARP)",
+                                 make_hresult_failure("D3D11CreateDevice", result).describe());
+                    created->adapter.Reset();
+                    created->device.Reset();
+                    created->context.Reset();
+                    software = true;
+                }
+            }
+            else
+            {
+                log::warning("no hardware GPU adapter found; using the software renderer (WARP)");
+                software = true;
+            }
+        }
+
+        if (software)
+        {
+            result = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, flags, levels,
+                                       static_cast<UINT>(std::size(levels)), D3D11_SDK_VERSION, &created->device,
+                                       nullptr, &created->context);
+            if (FAILED(result))
+            {
+                // some WARP builds reject the video flag: retry without it
+                result = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+                                           levels, static_cast<UINT>(std::size(levels)), D3D11_SDK_VERSION,
+                                           &created->device, nullptr, &created->context);
+            }
+            if (FAILED(result))
+            {
+                return std::unexpected(make_hresult_failure("D3D11CreateDevice (WARP)", result));
+            }
+        }
+
+        if (created->adapter)
+        {
+            DXGI_ADAPTER_DESC1 description{};
+            created->adapter->GetDesc1(&description);
+            created->info.description = utf16_to_utf8(description.Description);
+            created->info.vendor_id = description.VendorId;
+            created->info.device_id = description.DeviceId;
+            created->info.dedicated_video_memory = description.DedicatedVideoMemory;
+            for (ComPtr<IDXGIOutput> output; created->adapter->EnumOutputs(created->info.output_count, &output) !=
+                                             DXGI_ERROR_NOT_FOUND;
+                 output.Reset())
+            {
+                ++created->info.output_count;
+            }
+        }
+        else
+        {
+            created->info.description = "Microsoft Basic Render Driver (WARP software)";
         }
 
         // FFmpeg's D3D11VA decoder and the presenter run on different threads.

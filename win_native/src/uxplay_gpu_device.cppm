@@ -27,7 +27,8 @@ export namespace uxplay
     {
         automatic,
         integrated,
-        discrete
+        discrete,
+        software // force the WARP software renderer (no hardware decode)
     };
 
     struct gpu_adapter_info

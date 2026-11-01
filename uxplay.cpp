@@ -1129,7 +1129,7 @@ static void print_info (char *name) {
 #if UXPLAY_WIN_NATIVE
     printf("-h264     Offer only H.264 to the client (Windows-native build offers H.265 too)\n");
     printf("-usb      Legacy QuickTime USB capture (default: off; does not stream on iOS 16+)\n");
-    printf("-gpu g    GPU for decode/present: auto (display owner), intel, nvidia\n");
+    printf("-gpu g    GPU for decode/present: auto (display owner), intel, nvidia, software\n");
 #endif
     printf("-mp4 [fn] Record (non-HLS)audio/video to mp4 file \"fn.[n].[format].mp4\"\n");
     printf("          n=1,2,.. format = H264/5, ALAC/AAC. Default fn=\"recording\"\n");
@@ -2262,8 +2262,10 @@ static void parse_arguments (int argc, char *argv[]) {
                 gpu_preference = 1;
             } else if (choice == "nvidia" || choice == "discrete") {
                 gpu_preference = 2;
+            } else if (choice == "software" || choice == "warp") {
+                gpu_preference = 3;
             } else {
-                fprintf(stderr, "invalid \"-gpu %s\": choices are auto, intel, nvidia\n", choice.c_str());
+                fprintf(stderr, "invalid \"-gpu %s\": choices are auto, intel, nvidia, software\n", choice.c_str());
                 exit(1);
             }
         } else if (arg == "-usb") {

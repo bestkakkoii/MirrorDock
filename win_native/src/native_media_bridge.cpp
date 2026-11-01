@@ -261,6 +261,7 @@ extern "C" int native_media_start(const native_media_settings *settings)
     engine_settings.tray_icon = settings->tray_icon;
     engine_settings.gpu = settings->gpu_preference == 1   ? uxplay::gpu_preference::integrated
                           : settings->gpu_preference == 2 ? uxplay::gpu_preference::discrete
+                          : settings->gpu_preference == 3 ? uxplay::gpu_preference::software
                                                           : uxplay::gpu_preference::automatic;
     bool const usb_mirroring = settings->usb_mirroring;
     state.start_finished.store(false);

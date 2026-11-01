@@ -17,8 +17,8 @@ export LANG=C
 cmake -S "$source_dir" -B "$build_dir" -G Ninja \
     -DCMAKE_BUILD_TYPE="$build_type" \
     -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
-    -DCMAKE_C_FLAGS="-march=native -ffile-prefix-map=$(cygpath -m "$source_dir")=uxplay" \
-    -DCMAKE_CXX_FLAGS="-march=native -ffile-prefix-map=$(cygpath -m "$source_dir")=uxplay" \
+    -DCMAKE_C_FLAGS="-march=x86-64-v2 -mtune=generic -ffile-prefix-map=$(cygpath -m "$source_dir")=uxplay" \
+    -DCMAKE_CXX_FLAGS="-march=x86-64-v2 -mtune=generic -ffile-prefix-map=$(cygpath -m "$source_dir")=uxplay" \
     -DOPENSSL_ROOT_DIR="$deps_prefix" -DOPENSSL_USE_STATIC_LIBS=TRUE \
     -DLIBPLIST="$deps_prefix/lib/libplist-2.0.a" \
     -DCMAKE_PREFIX_PATH="$deps_prefix;/clang64" \

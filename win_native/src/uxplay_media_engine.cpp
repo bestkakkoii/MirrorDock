@@ -239,8 +239,9 @@ namespace uxplay
         window->set_title(std::format(L"{} — {} — {}x{}", settings.window_title, full_label, stream->width,
                                       stream->height));
         window->show_for_video(stream->width, stream->height);
-        log::info("displaying {} video {}x{} ({})", media_source_name(stream->source), stream->width, stream->height,
-                  over_usb ? "USB transport" : "Wi-Fi transport");
+        char const *const path = stream->source == media_source::usb ? "USB (QuickTime)"
+                                 : (airplay_over_usb.load() ? "AirPlay over USB cable" : "AirPlay over Wi-Fi");
+        log::info("displaying {} {}x{}", path, stream->width, stream->height);
     }
 
     void media_engine::state::decode_loop(media_source source)
@@ -477,6 +478,18 @@ namespace uxplay
                 engine->callbacks.on_tray_command(command);
             }
         };
+        window_events.on_display_changed = [engine]
+        {
+            // a monitor was attached/detached or changed resolution/refresh:
+            // re-pace presentation to the new composition clock (keeps motion
+            // smooth without a restart)
+            if (auto mode = gpu_device::primary_display_mode(); mode && engine->presenter)
+            {
+                engine->presenter->set_refresh_period(mode->refresh_period_ns());
+                log::info("display changed: {}x{}, composition clock {:.3f} Hz", mode->width, mode->height,
+                          mode->refresh_hz());
+            }
+        };
         auto window = video_window::create(created->settings.window_title, std::move(window_events),
                                            created->settings.start_fullscreen, created->settings.tray_icon);
         if (!window)
@@ -533,6 +546,11 @@ namespace uxplay
     display_summary media_engine::display() const
     {
         return display_summary{impl->display_mode.width, impl->display_mode.height, impl->display_mode.refresh_hz()};
+    }
+
+    bool media_engine::hevc_hardware() const
+    {
+        return impl->gpu && impl->gpu->adapter_info().hevc_main_decode;
     }
 
     void media_engine::video_configure(media_source source, video_codec codec, int width, int height)

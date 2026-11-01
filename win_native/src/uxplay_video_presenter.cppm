@@ -66,6 +66,9 @@ export namespace uxplay
         void release_source(media_source source, bool keep_last_frame);
 
         [[nodiscard]] std::int64_t refresh_period_ns() const;
+
+        // Update the vblank pacing period after a monitor/mode change.
+        void set_refresh_period(std::int64_t refresh_period_ns);
         [[nodiscard]] presenter_statistics statistics() const;
 
     private:

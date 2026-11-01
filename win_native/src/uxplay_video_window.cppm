@@ -30,6 +30,8 @@ export namespace uxplay
         std::function<void()> on_usb_device_change;
         std::function<void(bool fullscreen)> on_fullscreen_changed;
         std::function<void(tray_command command)> on_tray_command;
+        // a monitor was attached/detached or its mode changed (WM_DISPLAYCHANGE)
+        std::function<void()> on_display_changed;
     };
 
     class video_window

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Build pinned main-branch dependencies as static libraries for the
-# UxPlay Windows-native build (MSYS2 CLANG64, Skylake-tuned).
+# UxPlay Windows-native build (MSYS2 CLANG64, portable x86-64-v2 baseline:
+# runs on any SSE4.2/POPCNT CPU — every Win10/11 x64 machine — while FFmpeg
+# and OpenSSL still pick AVX2/etc. hot paths at runtime via CPU dispatch).
 # Usage: build_deps.sh <source_root> <install_prefix> <step...>
 set -euo pipefail
 
@@ -13,7 +15,7 @@ export CC=clang CXX=clang++ AR=llvm-ar RANLIB=llvm-ranlib NM=llvm-nm STRIP=llvm-
 export PKG_CONFIG_PATH="$install_prefix/lib/pkgconfig"
 # libtool.m4 ships with the CLANG64 libtool package, not the MSYS one.
 export ACLOCAL_PATH=/clang64/share/aclocal:/usr/share/aclocal
-tuning_flags="-O3 -march=skylake -mtune=skylake"
+tuning_flags="-O3 -march=x86-64-v2 -mtune=generic"
 jobs=8
 mkdir -p "$install_prefix"
 

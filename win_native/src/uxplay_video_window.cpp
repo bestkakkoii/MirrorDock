@@ -567,6 +567,14 @@ namespace uxplay
                 callbacks.on_usb_device_change();
             }
             return TRUE;
+        case WM_DISPLAYCHANGE:
+            // a monitor was plugged in/out or changed resolution/refresh:
+            // let the engine re-detect the display and re-pace presentation
+            if (callbacks.on_display_changed)
+            {
+                callbacks.on_display_changed();
+            }
+            return 0;
         default:
             break;
         }

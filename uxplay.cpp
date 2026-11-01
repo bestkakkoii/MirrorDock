@@ -187,6 +187,7 @@ static bool taper_volume = false;
 static double initial_volume = 0.0;
 static double current_volume = 0.0;
 static bool h265_support = false;
+static bool h265_user_requested = false;  /* explicit "-h265": offer H.265 even if the GPU lacks HEVC hardware decode */
 static int n_video_renderers = 0;
 static int n_audio_renderers = 0;
 static bool hls_support = false;
@@ -2246,6 +2247,7 @@ static void parse_arguments (int argc, char *argv[]) {
             lang_subtitles.erase(std::remove(lang_subtitles.begin(), lang_subtitles.end(), ' '), lang_subtitles.end()); 
         } else if (arg == "-h265") {
             h265_support = true;
+            h265_user_requested = true;
 #if UXPLAY_WIN_NATIVE
             force_h264_only = false;
         } else if (arg == "-h264") {
@@ -3847,8 +3849,10 @@ int main (int argc, char *argv[]) {
     if (use_audio && audiosink != "autoaudiosink") {
         LOGW("-as %s ignored: audio is played through WASAPI (default Windows output)", audiosink.c_str());
     }
+    /* fallback if the GPU query below fails; refined from real GPU HEVC
+       capability once the engine has started */
     if (!force_h264_only) {
-        h265_support = true;   /* Intel HD 530 decodes HEVC Main in hardware: allow >1080p mirroring */
+        h265_support = true;
     }
     shutdown_complete_event = CreateEventW(NULL, TRUE, FALSE, NULL);
 
@@ -3883,6 +3887,17 @@ int main (int argc, char *argv[]) {
         }
         if (!display[3]) {
             display[3] = (unsigned short) std::min(native_display.refresh_hz, 60);
+        }
+        /* adapt the offered codec to whatever GPU drives this machine's display:
+           offer H.265 only if that GPU decodes HEVC in hardware (unless the user
+           forced it with -h265, or disabled it with -h264) */
+        if (force_h264_only) {
+            h265_support = false;
+        } else if (!h265_user_requested) {
+            h265_support = (native_display.hevc_hardware != 0);
+        }
+        if (h265_support && !native_display.hevc_hardware) {
+            LOGW("H.265 enabled but this GPU has no HEVC hardware decoder; HEVC will use the software fallback");
         }
         LOGI("advertising display %ux%u @ %u Hz, max %u fps, codecs %s", display[0], display[1], display[2],
              display[3], h265_support ? "H.265 + H.264" : "H.264");

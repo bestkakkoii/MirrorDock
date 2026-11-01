@@ -6,14 +6,39 @@ is unchanged and still describes the generic (GStreamer) build.
 
 ## What this tree is
 
-UxPlay 1.74 (AirPlay mirroring / audio receiver, GPL-3.0) specialised for one
-host and one sender:
+UxPlay 1.74 (AirPlay mirroring / audio receiver, GPL-3.0) specialised for the
+iPhone → Windows AirPlay use case. It is **runtime-adaptive to any Windows
+x64 PC** (see "Adaptivity & portability" below), and tuned/verified on:
 
 * Host: ASUS laptop, i7-6700HQ (Skylake), Intel HD Graphics 530 (drives the
   displays: MSI MP341CQ 3440x1440 over HDMI at 50 Hz, cloned with the 60.02 Hz
   built-in panel), GTX 960M (no outputs; Optimus), 16 GB, Windows 11 26200,
   Intel AC 7265 Wi-Fi.
 * Sender: iPhone 16 Pro Max (A18 Pro, USB-C), Wi-Fi AirPlay and USB.
+
+## Adaptivity & portability
+
+Nothing about the target hardware is hard-coded; the engine inspects the host
+at startup (and on change) and configures itself:
+
+* **GPU:** `gpu_device` selects the D3D11 adapter that physically scans out the
+  display (QueryDisplayConfig LUID) — integrated-only, discrete, Intel, AMD or
+  NVIDIA alike; `-gpu auto|intel|nvidia|amd` overrides. No hardware decoder for
+  a codec → automatic software-decode fallback.
+* **Codec offer:** H.265 is advertised to the iPhone only if the selected GPU
+  decodes HEVC Main in hardware (probed via `CheckVideoDecoderFormat`);
+  otherwise H.264 only, so a weak/old GPU still mirrors smoothly. `-h265`
+  forces it on (software HEVC), `-h264` off.
+* **Display:** monitor geometry and the DWM composition clock are queried at
+  startup and **re-queried live on `WM_DISPLAYCHANGE`** (attach/detach a
+  monitor, change resolution/refresh) → the presenter is re-paced without a
+  restart (`video_presenter::set_refresh_period`).
+* **Audio:** the default WASAPI endpoint's own minimum IAudioClient3 period is
+  used (fallback 10 ms IAudioClient); endpoint changes are followed live.
+* **CPU:** binary and dependencies are built for the portable `x86-64-v2`
+  baseline (SSE4.2/POPCNT — every Win10/11 x64 machine, Intel or AMD), with
+  FFmpeg/OpenSSL still pick AVX2 hot paths at runtime via CPU dispatch. (Earlier
+  builds used `-march=native`/`skylake`, which could fault on other CPUs.)
 
 On Windows (`UXPLAY_WIN_NATIVE`, default ON when the host is Windows) the
 GStreamer renderers are replaced by `win_native/`, a media engine written as
@@ -113,7 +138,7 @@ The target device was moved off the Zadig `libusb0` binding back to Apple's
 ## Build (MSYS2 CLANG64)
 
 ```sh
-# dependencies (pinned main-branch commits, static, -march=skylake)
+# dependencies (pinned main-branch commits, static, portable -march=x86-64-v2)
 MSYSTEM=CLANG64 bash -lc 'bash win_native/build_scripts/build_deps.sh <src_root> <prefix> libusb libplist openssl ffmpeg'
 # UxPlay
 MSYSTEM=CLANG64 bash -lc 'bash win_native/build_scripts/build_uxplay_native.sh <uxplay_src> <build_dir> <prefix> Release'

@@ -57,6 +57,7 @@ typedef struct native_media_display_info {
     int width;
     int height;
     int refresh_hz;
+    int hevc_hardware; /* 1 if the selected GPU decodes HEVC Main in hardware */
 } native_media_display_info;
 
 /* returns 0 on success; on failure the reason has been logged */

@@ -296,6 +296,8 @@ extern "C" bool native_media_query_display(native_media_display_info *info)
     info->width = state.display->width;
     info->height = state.display->height;
     info->refresh_hz = static_cast<int>(std::lround(state.display->refresh_hz()));
+    uxplay::media_engine *const ready = engine();
+    info->hevc_hardware = (ready != nullptr && ready->hevc_hardware()) ? 1 : 0;
     return true;
 }
 

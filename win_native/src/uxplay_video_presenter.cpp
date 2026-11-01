@@ -126,7 +126,7 @@ namespace uxplay
     {
         gpu_device *gpu = nullptr;
         HWND window = nullptr;
-        std::int64_t refresh_period = 16'666'667;
+        std::atomic<std::int64_t> refresh_period{16'666'667};
         display_change_listener listener;
 
         // GPU objects (render thread only, under gpu->context_mutex())
@@ -524,12 +524,13 @@ namespace uxplay
     void video_presenter::state::render_loop()
     {
         system_tuning::mmcss_scope const mmcss{L"Playback"};
-        std::int64_t const lead = refresh_period / 2;
         double lateness_average = 0.0;
 
         for (;;)
         {
             std::unique_lock lock{mutex};
+            // recomputed each cycle so a monitor/refresh change takes effect live
+            std::int64_t const lead = refresh_period.load(std::memory_order_relaxed) / 2;
             // wait until a frame is due, a redraw is needed, or we stop
             for (;;)
             {
@@ -750,7 +751,15 @@ namespace uxplay
 
     std::int64_t video_presenter::refresh_period_ns() const
     {
-        return impl->refresh_period;
+        return impl->refresh_period.load(std::memory_order_relaxed);
+    }
+
+    void video_presenter::set_refresh_period(std::int64_t refresh_period_ns)
+    {
+        if (refresh_period_ns > 0)
+        {
+            impl->refresh_period.store(refresh_period_ns, std::memory_order_relaxed);
+        }
     }
 
     presenter_statistics video_presenter::statistics() const

@@ -66,6 +66,10 @@ export namespace uxplay
 
         [[nodiscard]] display_summary display() const;
 
+        // Whether the selected GPU decodes HEVC Main in hardware (so H.265 is
+        // worth offering to the client; otherwise H.264 gives a better result).
+        [[nodiscard]] bool hevc_hardware() const;
+
         void video_configure(media_source source, video_codec codec, int width, int height);
         // Annex-B access unit; media_time_ns is on the local clock.
         void video_access_unit(media_source source, std::span<std::uint8_t const> access_unit,

@@ -929,6 +929,7 @@ static void mdns_handle_query(mdnsd_t *mdnsd, const unsigned char *bytes,
 static THREAD_RETVAL mdns_thread(void *arg)
 {
     mdnsd_t *mdnsd = arg;
+    int ticks = 0;
 
     for (;;) {
         fd_set rfds;
@@ -985,6 +986,25 @@ static THREAD_RETVAL mdns_thread(void *arg)
                 mdns_handle_query(mdnsd, buffer, (size_t) received,
                                   MDNS_FAMILY_IPV6, &from, from.sin6_port);
             }
+        }
+
+        /* Live-follow the preferred address: if the iPhone USB (Personal
+         * Hotspot) link appears or disappears while running, re-advertise on
+         * the right interface so USB is used without a restart (USB first,
+         * Wi-Fi second). mdns_get_default_ipv4() prefers the 172.20.10.0/24
+         * wired link when present. */
+        if (++ticks >= 8) { /* ~2 s (250 ms select timeout x 8) */
+            ticks = 0;
+            uint32_t const current = mdns_get_default_ipv4();
+            MUTEX_LOCK(mdnsd->mutex);
+            if (current != 0 && current != mdnsd->ipv4_addr && mdnsd->sock_fd4 != -1) {
+                struct in_addr iface;
+                mdnsd->ipv4_addr = current;
+                iface.s_addr = current;
+                setsockopt(mdnsd->sock_fd4, IPPROTO_IP, IP_MULTICAST_IF, (const char *) &iface, sizeof(iface));
+                mdns_announce_locked(mdnsd, MDNSD_TTL_SERVICE);
+            }
+            MUTEX_UNLOCK(mdnsd->mutex);
         }
     }
 

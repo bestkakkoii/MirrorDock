@@ -47,6 +47,9 @@ void mdnsd_stop(mdnsd_t *mdnsd);
 void mdnsd_set_services(mdnsd_t *mdnsd, const mdnsd_service_t *airplay,
                         const mdnsd_service_t *raop);
 void mdnsd_announce(mdnsd_t *mdnsd, uint32_t ttl);
+/* active != 0 while an AirPlay session is open: the advertisement then stays
+ * on the session's link instead of moving to a newly preferred one. */
+void mdnsd_set_session_active(mdnsd_t *mdnsd, int active);
 void mdnsd_goodbye(mdnsd_t *mdnsd, const mdnsd_service_t *service);
 
 #endif

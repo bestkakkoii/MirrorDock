@@ -485,6 +485,14 @@ dnssd_process_service(dnssd_t *dnssd_public, int service)
     return (int) dnssd->DNSServiceProcessResult(ref);
 }
 
+void
+dnssd_set_session_active(dnssd_t *dnssd_public, int active)
+{
+    /* the system responder manages interfaces itself */
+    (void) dnssd_public;
+    (void) active;
+}
+
 void dnssd_error_text(int *dnssd_error, const char *appname) {
     printf("*** dnssd_implementation: external, dns_sd.h\n");
     if (*dnssd_error == -65537) {

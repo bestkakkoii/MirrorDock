@@ -20,6 +20,7 @@
 #ifndef WIN32
 #include <ifaddrs.h>
 #include <net/if.h>
+#include <time.h>
 #endif
 
 #include "../compat.h"
@@ -65,9 +66,27 @@ struct mdnsd_s {
     int sock_fd4;
     int sock_fd6;
     int running;
+    /* an AirPlay session is open: keep advertising on its link */
+    int session_active;
     thread_handle_t thread;
     mutex_handle_t mutex;
 };
+
+/* how often the advertised link is re-evaluated (USB plugged in / removed) */
+#define MDNS_LINK_CHECK_MS 2000
+/* RFC 6762 section 8.3: repeat an announcement once, one second later */
+#define MDNS_REANNOUNCE_MS 1000
+
+static uint64_t mdns_now_ms(void)
+{
+#ifdef _WIN32
+    return (uint64_t) GetTickCount64();
+#else
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return (uint64_t) now.tv_sec * 1000u + (uint64_t) (now.tv_nsec / 1000000);
+#endif
+}
 
 static int mdns_put_u8(mdns_packet_t *packet, unsigned int value)
 {
@@ -345,68 +364,95 @@ static int mdns_query_type_matches(uint16_t query_type, uint16_t record_type)
     return query_type == record_type || query_type == DNS_TYPE_ANY;
 }
 
-static uint32_t mdns_get_default_ipv4(void)
+/* The iPhone's wired link (Personal Hotspot over the USB cable) always uses
+ * 172.20.10.0/24 (addresses in network byte order). */
+static int mdns_is_usb_link(uint32_t addr)
+{
+    return (ntohl(addr) >> 8) == 0xAC140Au;
+}
+
+static int mdns_is_link_local(uint32_t addr)
+{
+    return (ntohl(addr) >> 16) == 0xA9FEu;
+}
+
+/*
+ * Picks the IPv4 address to advertise.  The iPhone USB link wins whenever it
+ * is up, so AirPlay rides the cable (USB first, Wi-Fi second); otherwise the
+ * internet-facing LAN adapter that Windows itself prefers (lowest interface
+ * metric).  Only real LAN links (Ethernet, Wi-Fi) carry mDNS to the phone:
+ * loopback, Hyper-V/WSL switches, VM adapters and tunnels (Tailscale, VPN)
+ * are skipped.  *held_present reports whether `held` (the address in use) is
+ * still configured on any adapter.
+ */
+static uint32_t mdns_pick_ipv4(uint32_t held, int *held_present)
 {
     uint32_t addr = 0;
+    *held_present = 0;
 #ifdef _WIN32
+    ULONG const flags = GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_SKIP_ANYCAST |
+                        GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER;
     ULONG buflen = 15000;
     PIP_ADAPTER_ADDRESSES pAddresses = NULL;
-    DWORD dwRetVal = 0;
+    DWORD dwRetVal = ERROR_BUFFER_OVERFLOW;
 
-    pAddresses = (IP_ADAPTER_ADDRESSES *) malloc(buflen);
-    if (!pAddresses) {
-        return 0;
-    }
-    dwRetVal = GetAdaptersAddresses(AF_INET, GAA_FLAG_INCLUDE_GATEWAYS, NULL, pAddresses, &buflen);
-    if (dwRetVal == ERROR_BUFFER_OVERFLOW) {
+    /* the adapter list can grow between the two calls: retry a few times */
+    for (int attempt = 0; attempt < 3 && dwRetVal == ERROR_BUFFER_OVERFLOW; attempt++) {
         free(pAddresses);
-        pAddresses = (IP_ADAPTER_ADDRESSES *) malloc(buflen); 
+        pAddresses = (IP_ADAPTER_ADDRESSES *) malloc(buflen);
         if (!pAddresses) {
             return 0;
         }
-        dwRetVal = GetAdaptersAddresses(AF_INET, GAA_FLAG_INCLUDE_GATEWAYS, NULL, pAddresses, &buflen);
+        dwRetVal = GetAdaptersAddresses(AF_INET, flags, NULL, pAddresses, &buflen);
     }
-    
+
     if (dwRetVal == NO_ERROR) {
-        PIP_ADAPTER_ADDRESSES pCurr = pAddresses;
+        uint32_t usb_link = 0;
         uint32_t fallback = 0;
-        while (pCurr) {
-            // Precise target filters to bypass the Hyper-V virtual adapter loopback capture
-            if (pCurr->OperStatus == IfOperStatusUp &&
-                pCurr->IfType != IF_TYPE_SOFTWARE_LOOPBACK &&
+        ULONG fallback_metric = 0xFFFFFFFFu;
+        for (PIP_ADAPTER_ADDRESSES pCurr = pAddresses; pCurr != NULL; pCurr = pCurr->Next) {
+            if (pCurr->OperStatus != IfOperStatusUp) {
+                continue;
+            }
+            int const lan_link =
+                (pCurr->IfType == IF_TYPE_ETHERNET_CSMACD || pCurr->IfType == IF_TYPE_IEEE80211) &&
+                (pCurr->Flags & IP_ADAPTER_NO_MULTICAST) == 0 &&
                 wcsstr(pCurr->Description, L"Hyper-V") == NULL &&
                 wcsstr(pCurr->Description, L"Virtual") == NULL &&
                 wcsstr(pCurr->Description, L"WSL") == NULL &&
-                wcsstr(pCurr->Description, L"vEthernet") == NULL &&
-                pCurr->FirstUnicastAddress != NULL) {
-
-                struct sockaddr_in *sockaddr_ipv4 = (struct sockaddr_in *)pCurr->FirstUnicastAddress->Address.lpSockaddr;
-                uint32_t candidate = sockaddr_ipv4->sin_addr.s_addr;
-
-                // The iPhone's wired link (Personal Hotspot over USB) is always
-                // in 172.20.10.0/24.  Prefer it so AirPlay rides the cable
-                // (USB first, Wi-Fi second) whenever it is present.
-                if ((candidate & 0xFF) == 172 && ((candidate >> 8) & 0xFF) == 20 && ((candidate >> 16) & 0xFF) == 10) {
-                    addr = candidate;
-                    break;
+                wcsstr(pCurr->Description, L"vEthernet") == NULL;
+            for (PIP_ADAPTER_UNICAST_ADDRESS ua = pCurr->FirstUnicastAddress; ua != NULL; ua = ua->Next) {
+                if (ua->Address.lpSockaddr == NULL || ua->Address.lpSockaddr->sa_family != AF_INET) {
+                    continue;
                 }
-                // otherwise the first up, non-virtual, internet-facing adapter
-                if (fallback == 0 && pCurr->FirstGatewayAddress != NULL) {
+                uint32_t const candidate = ((struct sockaddr_in *) ua->Address.lpSockaddr)->sin_addr.s_addr;
+                if (held != 0 && candidate == held) {
+                    *held_present = 1;
+                }
+                /* skip addresses still in duplicate-address detection */
+                if (!lan_link || ua->DadState != IpDadStatePreferred) {
+                    continue;
+                }
+                if (mdns_is_usb_link(candidate)) {
+                    if (usb_link == 0) {
+                        usb_link = candidate;
+                    }
+                } else if (pCurr->FirstGatewayAddress != NULL && !mdns_is_link_local(candidate) &&
+                           pCurr->Ipv4Metric < fallback_metric) {
                     fallback = candidate;
+                    fallback_metric = pCurr->Ipv4Metric;
                 }
             }
-            pCurr = pCurr->Next;
         }
-        if (addr == 0) {
-            addr = fallback;
-        }
+        addr = usb_link != 0 ? usb_link : fallback;
     }
     free(pAddresses);
-#else    
+#else
     int fd;
     struct sockaddr_in remote;
     struct sockaddr_in local;
     socklen_t local_len = sizeof(local);
+    struct ifaddrs *ifaddr = NULL;
 
     fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (fd == -1) {
@@ -424,11 +470,25 @@ static uint32_t mdns_get_default_ipv4(void)
     }
 
     CLOSESOCKET(fd);
+
+    if (held != 0 && getifaddrs(&ifaddr) == 0) {
+        for (struct ifaddrs *ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+            if (ifa->ifa_addr != NULL && ifa->ifa_addr->sa_family == AF_INET &&
+                ((struct sockaddr_in *) ifa->ifa_addr)->sin_addr.s_addr == held) {
+                *held_present = 1;
+                break;
+            }
+        }
+        freeifaddrs(ifaddr);
+    }
 #endif
-    //printf("local ipv4 address %d.%d.%d.%d\n",  (addr & 0xff), ((addr >> 8) & 0xff),
-    //       ((addr >> 16) & 0xff),((addr >> 24) & 0xff));
-    
     return addr;
+}
+
+static uint32_t mdns_get_default_ipv4(void)
+{
+    int unused = 0;
+    return mdns_pick_ipv4(0, &unused);
 }
 
 static int mdns_get_default_ipv6(unsigned char addr[16], unsigned int *scope_id)
@@ -926,10 +986,103 @@ static void mdns_handle_query(mdnsd_t *mdnsd, const unsigned char *bytes,
     MUTEX_UNLOCK(mdnsd->mutex);
 }
 
+/* Joins the IPv4 mDNS group on the link of `iface_addr`.  Returns 1 when a
+ * membership was newly established (the OS had dropped it, e.g. the link
+ * went down and up or the PC resumed from sleep), 0 when it was already in
+ * place or the link is unavailable. */
+static int mdns_join_group4_locked(mdnsd_t *mdnsd, uint32_t iface_addr)
+{
+    struct ip_mreq mreq;
+
+    if (mdnsd->sock_fd4 == -1 || iface_addr == 0) {
+        return 0;
+    }
+    memset(&mreq, 0, sizeof(mreq));
+    inet_pton(AF_INET, MDNS_ADDR4, &mreq.imr_multiaddr);
+    mreq.imr_interface.s_addr = iface_addr;
+    return setsockopt(mdnsd->sock_fd4, IPPROTO_IP, IP_ADD_MEMBERSHIP,
+                      (const char *) &mreq, sizeof(mreq)) == 0;
+}
+
+static void mdns_leave_group4_locked(mdnsd_t *mdnsd, uint32_t iface_addr)
+{
+    struct ip_mreq mreq;
+
+    if (mdnsd->sock_fd4 == -1 || iface_addr == 0) {
+        return;
+    }
+    memset(&mreq, 0, sizeof(mreq));
+    inet_pton(AF_INET, MDNS_ADDR4, &mreq.imr_multiaddr);
+    mreq.imr_interface.s_addr = iface_addr;
+    /* fails harmlessly when that link has already vanished */
+    setsockopt(mdnsd->sock_fd4, IPPROTO_IP, IP_DROP_MEMBERSHIP,
+               (const char *) &mreq, sizeof(mreq));
+}
+
+/*
+ * Moves the IPv4 advertisement to another link (the iPhone USB link was
+ * plugged in or removed while running): a goodbye on the old link makes the
+ * phone forget the address it learned there (so its next connection uses the
+ * new link), the multicast group follows so the phone's queries on the new
+ * link are answered, then the services are announced there.
+ */
+static void mdns_move_ipv4_locked(mdnsd_t *mdnsd, uint32_t new_addr)
+{
+    struct in_addr iface;
+    uint32_t const old_addr = mdnsd->ipv4_addr;
+
+    if (old_addr != 0) {
+        mdns_send_response_locked(mdnsd, 1, 1, 1, 0, MDNS_FAMILY_IPV4, NULL);
+        mdns_leave_group4_locked(mdnsd, old_addr);
+    }
+    mdnsd->ipv4_addr = new_addr;
+    iface.s_addr = new_addr;
+    setsockopt(mdnsd->sock_fd4, IPPROTO_IP, IP_MULTICAST_IF, (const char *) &iface, sizeof(iface));
+    mdns_join_group4_locked(mdnsd, new_addr);
+    mdns_send_response_locked(mdnsd, 1, 1, 1, MDNSD_TTL_SERVICE, MDNS_FAMILY_IPV4, NULL);
+}
+
+/*
+ * Live-follows the preferred link (USB first, Wi-Fi second): when the iPhone
+ * USB link appears or disappears while running, the advertisement moves to
+ * it without a restart.  An open AirPlay session pins the advertisement to
+ * its link until the session ends (moving mid-session could make the phone
+ * drop it), unless that link is gone.  Also re-asserts the multicast
+ * membership, which the OS drops when a link goes down and up.  Returns 1
+ * when the services were (re)announced.
+ */
+static int mdns_follow_link(mdnsd_t *mdnsd)
+{
+    uint32_t held;
+    uint32_t preferred;
+    int held_present = 0;
+    int announced = 0;
+
+    MUTEX_LOCK(mdnsd->mutex);
+    held = mdnsd->ipv4_addr;
+    MUTEX_UNLOCK(mdnsd->mutex);
+
+    preferred = mdns_pick_ipv4(held, &held_present);
+
+    MUTEX_LOCK(mdnsd->mutex);
+    if (mdnsd->sock_fd4 != -1 && mdnsd->ipv4_addr == held) {
+        if (preferred != 0 && preferred != held && !(mdnsd->session_active && held_present)) {
+            mdns_move_ipv4_locked(mdnsd, preferred);
+            announced = 1;
+        } else if (held_present && mdns_join_group4_locked(mdnsd, held)) {
+            mdns_send_response_locked(mdnsd, 1, 1, 1, MDNSD_TTL_SERVICE, MDNS_FAMILY_IPV4, NULL);
+            announced = 1;
+        }
+    }
+    MUTEX_UNLOCK(mdnsd->mutex);
+    return announced;
+}
+
 static THREAD_RETVAL mdns_thread(void *arg)
 {
     mdnsd_t *mdnsd = arg;
-    int ticks = 0;
+    uint64_t next_link_check = mdns_now_ms() + MDNS_LINK_CHECK_MS;
+    uint64_t reannounce_at = 0;
 
     for (;;) {
         fd_set rfds;
@@ -988,23 +1141,19 @@ static THREAD_RETVAL mdns_thread(void *arg)
             }
         }
 
-        /* Live-follow the preferred address: if the iPhone USB (Personal
-         * Hotspot) link appears or disappears while running, re-advertise on
-         * the right interface so USB is used without a restart (USB first,
-         * Wi-Fi second). mdns_get_default_ipv4() prefers the 172.20.10.0/24
-         * wired link when present. */
-        if (++ticks >= 8) { /* ~2 s (250 ms select timeout x 8) */
-            ticks = 0;
-            uint32_t const current = mdns_get_default_ipv4();
+        /* time-based (incoming packets wake select early on busy networks) */
+        uint64_t const now = mdns_now_ms();
+        if (reannounce_at != 0 && now >= reannounce_at) {
+            reannounce_at = 0;
             MUTEX_LOCK(mdnsd->mutex);
-            if (current != 0 && current != mdnsd->ipv4_addr && mdnsd->sock_fd4 != -1) {
-                struct in_addr iface;
-                mdnsd->ipv4_addr = current;
-                iface.s_addr = current;
-                setsockopt(mdnsd->sock_fd4, IPPROTO_IP, IP_MULTICAST_IF, (const char *) &iface, sizeof(iface));
-                mdns_announce_locked(mdnsd, MDNSD_TTL_SERVICE);
-            }
+            mdns_send_response_locked(mdnsd, 1, 1, 1, MDNSD_TTL_SERVICE, MDNS_FAMILY_IPV4, NULL);
             MUTEX_UNLOCK(mdnsd->mutex);
+        }
+        if (now >= next_link_check) {
+            next_link_check = now + MDNS_LINK_CHECK_MS;
+            if (mdns_follow_link(mdnsd)) {
+                reannounce_at = now + MDNS_REANNOUNCE_MS;
+            }
         }
     }
 
@@ -1170,6 +1319,17 @@ void mdnsd_announce(mdnsd_t *mdnsd, uint32_t ttl)
 
     MUTEX_LOCK(mdnsd->mutex);
     mdns_announce_locked(mdnsd, ttl);
+    MUTEX_UNLOCK(mdnsd->mutex);
+}
+
+void mdnsd_set_session_active(mdnsd_t *mdnsd, int active)
+{
+    if (!mdnsd) {
+        return;
+    }
+
+    MUTEX_LOCK(mdnsd->mutex);
+    mdnsd->session_active = active ? 1 : 0;
     MUTEX_UNLOCK(mdnsd->mutex);
 }
 

@@ -23,8 +23,9 @@ at startup (and on change) and configures itself:
 
 * **GPU:** `gpu_device` selects the D3D11 adapter that physically scans out the
   display (QueryDisplayConfig LUID) — integrated-only, discrete, Intel, AMD or
-  NVIDIA alike; `-gpu auto|intel|nvidia|amd` overrides. No hardware decoder for
-  a codec → automatic software-decode fallback.
+  NVIDIA alike; `-gpu auto|integrated|discrete|software` overrides
+  (vendor-neutral DXGI GPU preference; `intel`/`nvidia`/`warp` are aliases).
+  No hardware decoder for a codec → automatic software-decode fallback.
 * **Codec offer:** H.265 is advertised to the iPhone only if the selected GPU
   decodes HEVC Main in hardware (probed via `CheckVideoDecoderFormat`);
   otherwise H.264 only, so a weak/old GPU still mirrors smoothly. `-h265`
@@ -54,7 +55,8 @@ C++26 named modules (`import std;`, clang 23 + libc++ module support):
 | `uxplay_video_presenter` | flip-model swap chain, frame-latency waitable (max latency 1), timestamp-scheduled presentation, source arbitration |
 | `uxplay_audio_decoder`, `uxplay_audio_output` | AAC-ELD/ALAC/AAC-LC/LPCM -> float32 at device rate; WASAPI IAudioClient3 low-latency period, per-sample scheduling with ≤0.3 % cubic-resampling drift correction |
 | `uxplay_media_engine` | per-source pipelines and the shared presentation timeline |
-| `uxplay_qt_protocol`, `uxplay_usb_mirror` | QuickTime screen-capture protocol over the hidden USB configuration (libusb) |
+| `uxplay_qt_protocol`, `uxplay_usb_mirror` | legacy QuickTime screen-capture protocol over the hidden USB configuration (libusb; iOS ≤15, `-usb`) |
+| `uxplay_usb_link` | iPhone USB network link (AirPlay over the Personal Hotspot cable): attach/link detection, tray status and hints, link classification for the window label, cellular-data guard |
 | `native_media_bridge.cpp`, `renderer_compat.c` | C API (`win_native/include/native_media.h`) used by `uxplay.cpp`; old renderer API mapped onto it |
 
 ## Invariants
@@ -113,24 +115,69 @@ opt-in `-usb`):
    session. Standalone validation probes: `D:\TMP\probe\usbmux_probe2.c`.
    Conclusion: dead on iOS 26; kept as best-effort for older devices only. The
    retry loop no longer runs by default (it was cycling the phone's config).
+   Its tray toggle is shown only when started with `-usb`; libusb's own
+   logging is off (it repeated every failed open on each rescan) and the
+   module reports a failure once with its libusb code. It no longer advises a
+   Zadig/libusb driver swap: that replaces Apple's driver and breaks path 2.
 
-2. **AirPlay over the USB network link** (the working USB path). With the
-   iPhone on Apple's driver (not libusb0) and Personal Hotspot on, Windows
-   exposes an "Apple Mobile Device Ethernet" NIC (172.20.10.x; iPhone at .1,
-   ping <1 ms). The embedded mDNS responder (`lib/mdnsd/mdnsd.c`,
-   `mdns_get_default_ipv4`) now **prefers a 172.20.10.0/24 address** when one
-   is present, so UxPlay advertises only the USB link and the phone mirrors
-   over the cable (USB first, Wi-Fi second) — automatic, no flag; enable the
-   hotspot before launching. The mirror is local USB (no cellular); keep PC
-   internet on Wi-Fi (raise the Apple-Ethernet interface metric) for ~zero
-   data. `install_apple_usb_support.cmd` winget-installs the Apple driver.
-   **Verified end-to-end (2026-11-02):** with Personal Hotspot on, UxPlay
-   advertised `UxPlay.local → 172.20.10.9` (confirmed via `dns-sd`) and the
-   iPhone mirrored over the cable — `Local 172.20.10.9 / Remote 172.20.10.1`,
-   H.265 hardware decode, 0 drops, sync delay 14.7 ms — while both PC and phone
-   kept Wi-Fi and the PC's default route stayed on Wi-Fi (no cellular data).
-   Launch UxPlay *after* the hotspot link is up: the advertised address is
-   chosen once at mDNS start (`mdnsd_start`). `-usb` does not control this path.
+2. **AirPlay over the USB network link** (the working USB path; automatic,
+   no flag; `-usb` does not control it). With the iPhone on Apple's driver
+   (not libusb0) and Personal Hotspot on, Windows exposes an "Apple Mobile
+   Device Ethernet" NIC (172.20.10.0/28; iPhone at .1, ping <1 ms). The mirror
+   is local USB traffic. `install_apple_usb_support.cmd` winget-installs the
+   Apple driver.
+   * **Advertising follows the cable live** (`lib/mdnsd/mdnsd.c`:
+     `mdns_pick_ipv4`, `mdns_follow_link`, every 2 s, time-based): a
+     preferred 172.20.10.x address wins (USB first), else the LAN adapter with
+     a gateway and the lowest interface metric (Ethernet/Wi-Fi only; Hyper-V,
+     WSL, VM adapters and tunnels such as Tailscale are skipped). On a switch
+     the responder sends a goodbye on the old link, moves its IPv4 multicast
+     membership (`IP_DROP/ADD_MEMBERSHIP`) and `IP_MULTICAST_IF`, announces on
+     the new link and repeats once after 1 s (RFC 6762 §8.3). Before this the
+     membership stayed on the startup link, so after plugging in (or
+     unplugging) the phone's queries on the new link went unanswered. An open
+     AirPlay session pins the advertisement (`dnssd_set_session_active`, from
+     `conn_init`/`conn_destroy`) until it ends, unless its link vanished. The
+     membership is re-asserted on every check: Windows answers a duplicate join
+     with WSAEINVAL (probed), so a successful re-join means the OS had dropped
+     it (link flap, resume) and triggers a re-announce.
+   * **Window label** comes from the adapter that owns the connection's local
+     address (`raop` `conn_transport(local_address)` →
+     `native_media_set_airplay_local_address` → `is_usb_link_address`):
+     172.20.10.x on a non-802.11 adapter is "USB"; a PC joined to the
+     hotspot over Wi-Fi is labelled Wi-Fi.
+   * **`uxplay_usb_link`** watches the iPhone (CM device list,
+     `USB\VID_05AC&PID_12*`) and its link (`NotifyIpInterfaceChange`,
+     `NotifyUnicastIpAddressChange`, `NotifyRouteChange2`, 5 s poll) and drives
+     the tray: a USB status line, a "turn on Personal Hotspot" balloon when the
+     iPhone is attached for 8 s without a link, and "USB connected".
+   * **Cellular-data guard.** The iPhone gives the PC global IPv6 (observed
+     `2001:b400:…/64`, carrier space) while this home Wi-Fi has **no IPv6**:
+     with only the IPv4 metric raised, every IPv6-capable connection of the PC
+     (Google, YouTube, Microsoft, CDNs) still went out through the phone's
+     mobile data. The monitor checks `GetBestRoute2` toward public IPv4/IPv6
+     addresses; when internet leaves through the iPhone link while another
+     network has a gateway, the tray item and a clickable balloon offer the
+     guard (the click gives the foreground, so UAC opens directly): one
+     elevated `cmd /c netsh …` (system32 paths, numeric arguments only) sets,
+     persistently, IPv4 `metric=9999 ignoredefaultroutes=enabled` and IPv6
+     `metric=9999 routerdiscovery=disabled ignoredefaultroutes=enabled` on that
+     interface, then re-checks the routes. The link keeps carrying the mirror
+     (on-link 172.20.10.0/28) but never internet, even if Wi-Fi drops; a
+     deliberate tether (no other network) is never guarded. To tether over USB
+     again: `netsh interface ipv4 set interface <idx> ignoredefaultroutes=disabled`,
+     `netsh interface ipv6 set interface <idx> routerdiscovery=enabled ignoredefaultroutes=disabled`,
+     `Set-NetIPInterface -InterfaceIndex <idx> -AutomaticMetric Enabled`.
+   * **Verified end-to-end (2026-11-02, before the live-follow and guard
+     work):** with Personal Hotspot on, UxPlay advertised
+     `UxPlay.local → 172.20.10.9` and the iPhone mirrored over the cable —
+     `Local 172.20.10.9 / Remote 172.20.10.1`, H.265 hardware decode, 0 drops,
+     sync delay 14.7 ms; the IPv4 default route stayed on Wi-Fi.
+     **Not yet verified on the device** (the iPhone was not attached while this
+     was built): plugging in while UxPlay runs (membership move), the hotspot
+     hint and the guard's UAC flow. Covered so far by `usb_link_tests`, the
+     duplicate-join probe and a live Wi-Fi run (advertised in 0.6 s, resolved
+     via `dns-sd`).
 
 The target device was moved off the Zadig `libusb0` binding back to Apple's
 `appleusb.inf` on 2026-11-02 (normal state; iTunes/Finder work again).
@@ -144,6 +191,7 @@ MSYSTEM=CLANG64 bash -lc 'bash win_native/build_scripts/build_deps.sh <src_root>
 MSYSTEM=CLANG64 bash -lc 'bash win_native/build_scripts/build_uxplay_native.sh <uxplay_src> <build_dir> <prefix> Release'
 # tests
 <build_dir>/win_native/qt_protocol_tests.exe win_native/tests/qt_fixtures
+<build_dir>/win_native/usb_link_tests.exe
 <build_dir>/win_native/engine_smoke_test.exe <annexb stream> h264|h265 60 [auto|intel|nvidia]
 ```
 
@@ -177,6 +225,7 @@ the options are accepted and reported as ignored at startup.
 ## New options
 
 `-usb` (off by default; legacy QuickTime capture, does not stream on iOS 16+),
-`-gpu auto|intel|nvidia`, `-h264` (H.265 is offered by default).
+`-gpu auto|integrated|discrete|software` (aliases `intel`, `nvidia`, `warp`),
+`-h264` / `-h265` (by default H.265 is offered only with HEVC hardware decode).
 Display geometry/refresh are advertised from the monitor unless `-s`/`-fps`
 are given.

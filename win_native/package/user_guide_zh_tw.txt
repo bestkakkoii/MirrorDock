@@ -15,7 +15,7 @@ UxPlay（本機特化版）使用說明
 一、啟動與結束
 --------------
 ‧ 雙擊 uxplay.exe 即可。不會跳出黑色主控台視窗，右下角系統匣會出現圖示。
-  約 0.2～0.3 秒內就能在 iPhone 的「螢幕鏡像輸出」清單看到本機。
+  約 0.5 秒內就能在 iPhone 的「螢幕鏡像輸出」清單看到本機。
 ‧ 第一次執行時 Windows 防火牆會詢問，請勾選「私人網路」並允許，否則
   iPhone 看不到這台電腦。
 ‧ 結束：在系統匣圖示按右鍵 →「結束 UxPlay」（約 0.05 秒完成，會通知
@@ -37,24 +37,38 @@ iPhone 與電腦連同一個 Wi-Fi → 控制中心 →「螢幕鏡像輸出」�
 ------------------------------------
 本版讓投影走 USB 線的方式是「在 USB 網段上跑 AirPlay」。只要那條 USB
 網段存在，UxPlay 會自動優先用它（USB 最優先、Wi-Fi 其次），手機畫面
-就走傳輸線。設定一次即可：
+就走傳輸線；拔掉線就自動回到 Wi-Fi。UxPlay 開著時插拔都會在約 2 秒內
+自動切換，不用重開（正在投影中則等這次投影結束才切換，不會打斷）。
 
   1. 安裝 Apple USB 驅動（只需第一次）：執行隨附的
      install_apple_usb_support.cmd（會用 winget 自動安裝 Apple Mobile
      Device Support）。本機已裝好。
-  2. iPhone：設定 → 個人熱點 → 打開「允許其他人加入」，USB 線保持連接。
+  2. iPhone：設定 → 個人熱點 → 打開「允許其他人加入」，接上 USB 線。
      Windows 會多出一張「Apple Mobile Device Ethernet」網路卡（172.20.10.x）。
-  3. 先確定上一步的網路卡出現了，再啟動（或重新啟動）uxplay.exe —— 它
-     會自動抓到 172.20.10.x 這條 USB 線並只在這條線上廣播。
-  4. iPhone 控制中心 →「螢幕鏡像輸出」→ 選 UxPlay。畫面即走 USB 傳輸線
+     iPhone 接上但熱點沒開時，UxPlay 約 8 秒後會跳通知提醒你開熱點。
+  3. iPhone 控制中心 →「螢幕鏡像輸出」→ 選 UxPlay。畫面即走 USB 傳輸線
      （本地鏈路，實測 ping <1 毫秒；比 Wi-Fi 更穩更低延遲）。
+     視窗標題與系統匣會依實際走的路顯示「USB」或「Wi-Fi」。
+  系統匣圖示按右鍵，第二行會顯示 USB 目前狀態（未接上／已接上但熱點沒開
+  ／已連線 172.20.10.x）。
 
-關於行動數據（重要）：投影畫面是手機→電腦的本地 USB 傳輸，不經電信、
-不耗行動數據。開著個人熱點時，只要電腦自己的上網仍走 Wi-Fi（本版會把
-這張 USB 網卡的路由優先度壓到最低；也可在「設定 > 網路 > 行動網路」
-確認電腦沒有改用手機網路），行動數據用量基本為零。若要 100% 保險，
-可在投影期間把手機的「行動數據」關掉——熱點的 USB 本地鏈路仍在，投影
-照走。
+關於行動數據（重要，請看）：
+‧ 投影畫面是手機→電腦的本地 USB 傳輸，不經電信、不耗行動數據。
+‧ 但開著個人熱點時，Windows 可能讓「電腦自己的上網」改走 iPhone 的行動
+  數據。實測這台電腦：家裡 Wi-Fi 沒有 IPv6，而 iPhone 會給電腦電信的
+  IPv6，所以 Google、YouTube、Microsoft 等支援 IPv6 的連線全都會走手機
+  流量（只壓 IPv4 優先度擋不住）。
+‧ 本版會自動偵測這個情況，跳出「保護手機流量」通知：點通知（或系統匣
+  右鍵「保護手機流量…」），在 Windows 的系統管理員視窗按「是」即可。只需
+  設定一次（之後重插、重開機都有效）。設定後這條 USB 線只用來投影，電腦
+  上網固定走 Wi-Fi；即使 Wi-Fi 斷線，電腦也不會改用手機流量。
+‧ 「行動數據」請保持開著：關掉它 iPhone 的個人熱點（含 USB 這條本地
+  鏈路）會一起斷，USB 投影就沒了。投影本身不耗流量。
+‧ 若日後想讓電腦用 USB 線分享手機網路上網，可用系統管理員命令列還原
+  （<編號> 是那張 Apple 網路卡的介面編號，可用 netsh interface ipv4
+  show interfaces 查）：
+    netsh interface ipv4 set interface <編號> ignoredefaultroutes=disabled
+    netsh interface ipv6 set interface <編號> routerdiscovery=enabled ignoredefaultroutes=disabled
 
 備註：iOS 16 起 Apple 已封鎖舊的「QuickTime 有線擷取」協定（不需熱點的
 那種），本版即使完成 USB 信任握手手機也不吐畫面，故不採用；上面的
@@ -86,13 +100,17 @@ USB 網段 AirPlay 是 iOS 26 唯一可行的有線投影方式。
   -n 名稱        iPhone 清單中顯示的名稱
   -nh            名稱後面不加 @電腦名稱
   -fs            一開始就全螢幕
-  -gpu auto      解碼/顯示用的 GPU：auto（預設，Intel HD 530）、intel、nvidia
-  -h264          只用 H.264（預設會讓 iPhone 用 H.265，畫質較好）
+  -gpu auto      解碼/顯示用的 GPU：auto（預設＝驅動螢幕的那張，這台是
+                 Intel HD 530）、integrated（內顯，別名 intel）、discrete
+                 （獨顯，別名 nvidia；AMD 也適用）、software（純軟體）
+  -h264          只用 H.264（預設：顯卡能硬體解 HEVC 時讓 iPhone 用 H.265）
   -vsync 20      讓聲音比畫面晚 20 毫秒（可為負數，用來微調嘴型）
   -vsync no      關閉影音時間戳同步（收到就播）
   -pin           需要輸入 PIN 碼才能連線（PIN 會用系統通知顯示）
   -nc            iPhone 停止鏡像時保留最後畫面不關視窗
-  -usb           （進階）嘗試舊版 QuickTime 有線擷取；iOS 16+ 無效，預設關閉
+  -usb           （進階）舊版 QuickTime 有線擷取，只適用 iOS 15 以前；iOS 16+
+                 無效，預設關閉（加了這個選項，系統匣才會出現它的開關）。
+                 USB 投影請用上面第三節的方式，不需要這個選項。
   -d             詳細除錯記錄
 其餘 UxPlay 原有選項大多照舊可用（uxplay.exe -h 會列出）。
 本特化版移除了需要 GStreamer 的功能：-hls、-mp4、畫面封面(-ca)、
@@ -134,6 +152,11 @@ USB 網段 AirPlay 是 iOS 26 唯一可行的有線投影方式。
 ------------
 ‧ iPhone 清單看不到 UxPlay：確認同一 Wi-Fi、防火牆已允許；重新開啟
   iPhone 的 Wi-Fi 一次。
+‧ 接了 USB 卻沒走 USB：看系統匣右鍵第二行的 USB 狀態。顯示「熱點沒開」
+  就到 iPhone 打開個人熱點；正在投影中時會等這次投影結束才切到 USB，
+  在 iPhone 停止鏡像再重新選 UxPlay 即可。
+‧ 不要用 Zadig 等工具把 iPhone 的驅動換成 libusb：那會取代 Apple 驅動，
+  USB 投影（熱點網卡）會失效。
 ‧ 聲音與嘴型不同步：用 -vsync 毫秒數微調（正數＝聲音延後）。
 ‧ 畫面會頓：多半是上面第八節的「同步顯示 50 Hz」造成，改成單一螢幕
   或讓兩螢幕同更新率即可。

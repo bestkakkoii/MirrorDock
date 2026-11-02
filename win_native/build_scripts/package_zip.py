@@ -12,7 +12,8 @@ import sys
 import tempfile
 import zipfile
 
-SOURCE_EXCLUDES = {".git", "build", "dist", "__pycache__"}
+# local tool state (.claude, .vs, .vscode) is not part of the corresponding source
+SOURCE_EXCLUDES = {".git", ".claude", ".vs", ".vscode", "build", "dist", "__pycache__"}
 
 
 def run(command):

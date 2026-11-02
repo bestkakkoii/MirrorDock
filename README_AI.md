@@ -88,8 +88,17 @@ C++26 named modules (`import std;`, clang 23 + libc++ module support):
   lock/unlock recovers cleanly. Startup-to-advertised ~0.2 s, exit ~0.05 s.
 * **Threads:** UI thread (window, tray), render thread (MMCSS "Playback"),
   one decode thread per source, WASAPI thread (MMCSS "Pro Audio"), USB worker,
-  engine start thread. The D3D11 immediate context is guarded by one recursive
-  mutex shared with FFmpeg's D3D11VA lock callbacks.
+  engine start thread, USB link monitor thread (`uxplay_usb_link`: IP Helper
+  change callbacks only mark it dirty; it evaluates, publishes state to the
+  tray and runs the elevated netsh guard, so a pending UAC prompt never blocks
+  the UI), mDNS responder thread (`mdns_thread`: queries + 2 s link check). The
+  D3D11 immediate context is guarded by one recursive mutex shared with
+  FFmpeg's D3D11VA lock callbacks.
+* **System side effects:** the only persistent change UxPlay makes to the PC
+  is the opt-in cellular-data guard (UAC-confirmed netsh on the iPhone link's
+  interface; see USB section for the exact values and how to undo). A declined
+  prompt or a failed netsh is logged with its code and reported in a balloon;
+  the tray item stays available to retry.
 * **Shutdown:** server threads are woken through a loopback socket
   (`netutils_wakeup_*`, used by httpd) and a lost-wakeup-free NTP stop; Ctrl+C
   to exit measured ~51 ms (upstream ~1000 ms). On console close the handler

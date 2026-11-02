@@ -187,7 +187,21 @@ namespace uxplay
             std::int64_t offset_ns = 0;
             bool configured = false;
             std::uint64_t failures = 0;
+            // flow since the last statistics line
+            std::uint64_t packets = 0;
+            std::uint64_t empty_outputs = 0; // decoder accepted the packet but produced nothing
+            std::uint64_t decoded_frames = 0;
+            float peak = 0.0F; // largest |sample| decoded
         };
+
+        std::string level_text(float peak)
+        {
+            if (peak <= 0.0F)
+            {
+                return "all zero";
+            }
+            return std::format("{:.1f} dBFS", 20.0 * std::log10(static_cast<double>(peak)));
+        }
     }
 
     struct media_engine::state
@@ -370,9 +384,29 @@ namespace uxplay
             }
             auto const source = static_cast<media_source>(shown);
             presenter_statistics const stats = presenter->statistics();
-            log::info("{}: presented {} dropped {} | sync delay {:.1f} ms | audio device latency {:.1f} ms",
+            std::uint64_t packets = 0;
+            std::uint64_t empty_outputs = 0;
+            std::uint64_t failures = 0;
+            std::uint64_t decoded_frames = 0;
+            float peak = 0.0F;
+            {
+                audio_pipeline &flow = audio_pipelines[source_index(source)];
+                std::scoped_lock pipeline_lock{flow.mutex};
+                packets = std::exchange(flow.packets, 0);
+                empty_outputs = std::exchange(flow.empty_outputs, 0);
+                decoded_frames = std::exchange(flow.decoded_frames, 0);
+                peak = std::exchange(flow.peak, 0.0F);
+                failures = flow.failures;
+            }
+            audio_flow const played = audio->take_flow(source);
+            // audio: where a silent session loses its sound (no packets, decoder
+            // output empty or all zero, nothing played, or volume 0)
+            log::info("{}: presented {} dropped {} | sync delay {:.1f} ms | audio {} packets ({} empty, {} failed "
+                      "total), decoded {} frames peak {}, played {} frames, volume x{:.2f} | audio device latency "
+                      "{:.1f} ms",
                       media_source_name(source), stats.presented, stats.dropped,
-                      static_cast<double>(timelines[source_index(source)].delay()) / 1e6,
+                      static_cast<double>(timelines[source_index(source)].delay()) / 1e6, packets, empty_outputs,
+                      failures, decoded_frames, level_text(peak), played.played_frames, played.gain,
                       static_cast<double>(audio->device_latency_ns()) / 1e6);
         }
     }
@@ -659,6 +693,7 @@ namespace uxplay
     {
         audio_pipeline &pipeline = impl->audio_pipelines[source_index(source)];
         std::scoped_lock lock{pipeline.mutex};
+        ++pipeline.packets;
         if (!pipeline.decoder)
         {
             return;
@@ -674,7 +709,13 @@ namespace uxplay
         }
         if (decoded->stereo_samples.empty())
         {
+            ++pipeline.empty_outputs;
             return;
+        }
+        pipeline.decoded_frames += decoded->stereo_samples.size() / 2;
+        for (float const sample : decoded->stereo_samples)
+        {
+            pipeline.peak = std::max(pipeline.peak, std::abs(sample));
         }
         if (pipeline.timestamp_sync)
         {

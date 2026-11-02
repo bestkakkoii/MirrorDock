@@ -175,6 +175,7 @@ namespace uxplay
         std::array<std::atomic<std::int64_t>, media_source_count> delays{};
         audio_device_format device_format{};
         std::array<float, media_source_count> target_gains{1.0F, 1.0F};
+        std::array<std::uint64_t, media_source_count> frames_played_since_report{}; // reset by take_flow()
         std::int64_t latency_ns = 0;
 
         // audio-thread-only
@@ -461,6 +462,7 @@ namespace uxplay
                             scratch[static_cast<std::size_t>(produced) * 2 + channel] = value;
                         }
                         timeline.read_position += step;
+                        ++frames_played_since_report[source_index(*source)];
                         // re-evaluate the error every 256 frames
                         if ((produced & 255U) == 255U)
                         {
@@ -719,5 +721,14 @@ namespace uxplay
     {
         std::scoped_lock lock{impl->mutex};
         return impl->latency_ns;
+    }
+
+    audio_flow audio_output::take_flow(media_source source)
+    {
+        std::scoped_lock lock{impl->mutex};
+        audio_flow flow;
+        flow.played_frames = std::exchange(impl->frames_played_since_report[source_index(source)], 0);
+        flow.gain = impl->target_gains[source_index(source)];
+        return flow;
     }
 }

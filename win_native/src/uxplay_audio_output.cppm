@@ -36,6 +36,13 @@ export namespace uxplay
     // Invoked on the audio thread after the endpoint (re)opened with a new format.
     using audio_format_listener = std::function<void(audio_device_format)>;
 
+    // What the output actually did with a source since the last query.
+    struct audio_flow
+    {
+        std::uint64_t played_frames = 0; // frames taken from the source's queue
+        float gain = 1.0F;               // current per-source volume
+    };
+
     class audio_output
     {
     public:
@@ -68,6 +75,9 @@ export namespace uxplay
 
         // Engine period + device stream latency of the open endpoint.
         [[nodiscard]] std::int64_t device_latency_ns() const;
+
+        // played frames since the previous call (counter is reset) and gain
+        [[nodiscard]] audio_flow take_flow(media_source source);
 
     private:
         struct state;

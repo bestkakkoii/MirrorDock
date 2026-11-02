@@ -66,7 +66,7 @@ int main(int argc, char **argv)
 {
     if (argc < 4)
     {
-        std::println(std::cerr, "usage: engine_smoke_test <stream> <h264|h265> <fps> [auto|intel|nvidia] [usb|airplay]");
+        std::println(std::cerr, "usage: engine_smoke_test <stream> <h264|h265> <fps> [auto|intel|nvidia] [usb|airplay] [quiet]");
         return 2;
     }
     uxplay::log::install_sink(print_line, uxplay::log::level::info);
@@ -77,6 +77,9 @@ int main(int argc, char **argv)
     uxplay::media_source const source = (argc > 5 && std::string_view{argv[5]} == "airplay")
                                             ? uxplay::media_source::airplay
                                             : uxplay::media_source::usb;
+    // quiet: test tone at about -61 dBFS (inaudible) for runs on a machine someone is using
+    bool const quiet = argc > 6 && std::string_view{argv[6]} == "quiet";
+    double const tone_amplitude = quiet ? 30.0 : 3000.0;
 
     std::ifstream file{path, std::ios::binary};
     std::vector<std::uint8_t> const stream{std::istreambuf_iterator<char>{file}, std::istreambuf_iterator<char>{}};
@@ -122,7 +125,7 @@ int main(int argc, char **argv)
             for (int frame = 0; frame < audio_chunk_frames; ++frame)
             {
                 double const phase = 2.0 * std::numbers::pi * 440.0 * static_cast<double>(audio_frames_sent + frame) / 48000.0;
-                auto const sample = static_cast<std::int16_t>(std::sin(phase) * 3000.0);
+                auto const sample = static_cast<std::int16_t>(std::sin(phase) * tone_amplitude);
                 for (int channel = 0; channel < 2; ++channel)
                 {
                     pcm[static_cast<std::size_t>(frame) * 4 + static_cast<std::size_t>(channel) * 2] =

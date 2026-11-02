@@ -36,7 +36,8 @@ namespace uxplay
         enum menu_identifier : UINT
         {
             menu_fullscreen = 100,
-            menu_usb,
+            menu_legacy_usb,
+            menu_data_guard,
             menu_open_log,
             menu_exit
         };
@@ -85,13 +86,18 @@ namespace uxplay
         std::wstring status_text = L"UxPlay";
         std::wstring notify_title;
         std::wstring notify_text;
+        std::optional<tray_command> notify_action;
+        std::optional<tray_command> balloon_action; // UI thread only
+        std::wstring usb_link_text = L"USB：檢查中…";
         std::mutex text_mutex;
         HWND window = nullptr;
         HDEVNOTIFY device_notification = nullptr;
         std::thread ui_thread;
         std::atomic<bool> is_visible{false};
         std::atomic<bool> is_fullscreen{false};
-        std::atomic<bool> usb_enabled{true};
+        std::atomic<bool> legacy_usb_available{false};
+        std::atomic<bool> legacy_usb_enabled{false};
+        std::atomic<bool> data_guard_offer{false};
         bool fullscreen_on_first_show = false;
         bool shown_once = false;
         bool cursor_hidden = false;
@@ -299,16 +305,26 @@ namespace uxplay
             return;
         }
         std::wstring status;
+        std::wstring usb_line;
         {
             std::scoped_lock lock{text_mutex};
             status = status_text;
+            usb_line = usb_link_text;
         }
         AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, status.c_str());
+        AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, usb_line.c_str());
+        if (data_guard_offer.load())
+        {
+            AppendMenuW(menu, MF_STRING, menu_data_guard, L"保護手機流量：電腦上網只走 Wi-Fi（需系統管理員）…");
+        }
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(menu, MF_STRING | (is_visible.load() ? 0U : MF_GRAYED), menu_fullscreen,
                     L"全螢幕切換\tF11 / 雙擊畫面");
-        AppendMenuW(menu, MF_STRING | (usb_enabled.load() ? MF_CHECKED : 0U), menu_usb,
-                    L"USB 投影（插上 iPhone 自動開始）");
+        if (legacy_usb_available.load())
+        {
+            AppendMenuW(menu, MF_STRING | (legacy_usb_enabled.load() ? MF_CHECKED : 0U), menu_legacy_usb,
+                        L"舊版 QuickTime USB 擷取（僅 iOS 15 以前）");
+        }
         AppendMenuW(menu, MF_STRING, menu_open_log, L"開啟記錄檔");
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(menu, MF_STRING, menu_exit, L"結束 UxPlay");
@@ -324,8 +340,11 @@ namespace uxplay
         case menu_fullscreen:
             tray(tray_command::toggle_fullscreen);
             break;
-        case menu_usb:
+        case menu_legacy_usb:
             tray(tray_command::toggle_usb);
+            break;
+        case menu_data_guard:
+            tray(tray_command::apply_data_guard);
             break;
         case menu_open_log:
             tray(tray_command::open_log);
@@ -433,6 +452,7 @@ namespace uxplay
                     std::scoped_lock lock{text_mutex};
                     copy_text(data.szInfoTitle, notify_title);
                     copy_text(data.szInfo, notify_text);
+                    balloon_action = notify_action;
                 }
                 Shell_NotifyIconW(NIM_MODIFY, &data);
             }
@@ -451,6 +471,19 @@ namespace uxplay
                 {
                     bring_to_front(window);
                 }
+                return 0;
+            case NIN_BALLOONUSERCLICK:
+                // the click gives this process the foreground, so a UAC
+                // prompt started now opens directly instead of flashing
+                if (std::optional<tray_command> const action = std::exchange(balloon_action, std::nullopt); action)
+                {
+                    SetForegroundWindow(window);
+                    tray(*action);
+                }
+                return 0;
+            case NIN_BALLOONTIMEOUT:
+            case NIN_BALLOONHIDE:
+                balloon_action.reset();
                 return 0;
             default:
                 return 0;
@@ -699,17 +732,28 @@ namespace uxplay
         PostMessageW(impl->window, message_tray_update, 0, 0);
     }
 
-    void video_window::set_usb_enabled(bool enabled)
+    void video_window::set_usb_link(std::wstring text, bool offer_data_guard)
     {
-        impl->usb_enabled.store(enabled);
+        {
+            std::scoped_lock lock{impl->text_mutex};
+            impl->usb_link_text = std::move(text);
+        }
+        impl->data_guard_offer.store(offer_data_guard);
     }
 
-    void video_window::notify(std::wstring title, std::wstring text)
+    void video_window::set_legacy_usb(bool available, bool enabled)
+    {
+        impl->legacy_usb_available.store(available);
+        impl->legacy_usb_enabled.store(enabled);
+    }
+
+    void video_window::notify(std::wstring title, std::wstring text, std::optional<tray_command> on_click)
     {
         {
             std::scoped_lock lock{impl->text_mutex};
             impl->notify_title = std::move(title);
             impl->notify_text = std::move(text);
+            impl->notify_action = on_click;
         }
         PostMessageW(impl->window, message_tray_notify, 0, 0);
     }

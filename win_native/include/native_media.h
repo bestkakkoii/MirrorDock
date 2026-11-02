@@ -42,7 +42,7 @@ typedef struct native_media_settings {
     bool start_fullscreen;
     bool timestamp_sync;               /* false: present AirPlay mirror media on arrival ("-vsync no") */
     double audio_offset_ms;            /* "-vsync x": positive delays audio relative to video */
-    bool usb_mirroring;                /* auto-start QuickTime USB mirroring when an iPhone is plugged in */
+    bool usb_mirroring;                /* legacy QuickTime USB capture (-usb; iOS 15 and earlier) */
     bool keep_window_on_stop;          /* "-nc": keep the last frame visible after the client stops */
     int log_level;                     /* messages above this level are discarded */
     int gpu_preference;                /* 0 = display-owning GPU (default), 1 = integrated, 2 = discrete */
@@ -88,9 +88,9 @@ void native_media_airplay_audio_stop(void);
 /* linear gain in [0, 10]; applies to the AirPlay source */
 void native_media_set_volume(double linear_gain);
 
-/* 1 if the current AirPlay client connected over the iPhone USB link (the
- * window then shows "USB" instead of "Wi-Fi"); 0 for Wi-Fi. */
-void native_media_set_airplay_transport(int over_usb);
+/* Server-side local address the current AirPlay client connected to: the
+ * window shows "USB" when it is the iPhone USB link, "Wi-Fi" otherwise. */
+void native_media_set_airplay_local_address(const char *local_address);
 
 /* balloon notification from the notification-area icon (e.g. AirPlay PIN) */
 void native_media_notify(const char *title, const char *text);

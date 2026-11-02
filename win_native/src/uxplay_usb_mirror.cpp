@@ -355,8 +355,12 @@ namespace uxplay
                 static std::atomic<int> reported{0};
                 if (reported.fetch_add(1) < 3)
                 {
-                    log::warning("USB: iPhone detected but cannot be opened: {} — the device needs the libusb0/libusbK "
-                                 "driver (installed earlier with Zadig) for USB mirroring",
+                    // Do not advise a libusb driver swap: it replaces Apple's
+                    // driver and breaks AirPlay over the USB cable, and the
+                    // QuickTime capture does not stream on iOS 16+ anyway.
+                    log::warning("legacy QuickTime USB capture: the iPhone cannot be opened ({}): it uses Apple's "
+                                 "driver, which AirPlay over the USB cable needs; this capture streams only on "
+                                 "iOS 15 and earlier",
                                  usb_error(opened));
                 }
                 continue;
@@ -870,7 +874,10 @@ namespace uxplay
         {
             return std::unexpected(usb_failure("libusb_init_context", result));
         }
-        libusb_set_option(created->context, LIBUSB_OPTION_LOG_LEVEL, LIBUSB_LOG_LEVEL_ERROR);
+        // libusb's own logging repeats every failed open on each rescan
+        // (unbounded console spam); failures are reported once, with their
+        // libusb error code, by this module instead.
+        libusb_set_option(created->context, LIBUSB_OPTION_LOG_LEVEL, LIBUSB_LOG_LEVEL_NONE);
         state *const running = created.get();
         created->worker = std::thread{[running]
         {
@@ -919,7 +926,7 @@ namespace uxplay
             }
         }
         impl->wake.notify_all();
-        log::info("USB mirroring {}", enabled ? "enabled" : "disabled");
+        log::info("legacy QuickTime USB capture {}", enabled ? "enabled" : "disabled");
     }
 
     bool usb_mirror::enabled() const

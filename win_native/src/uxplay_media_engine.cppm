@@ -89,12 +89,16 @@ export namespace uxplay
         [[nodiscard]] source_statistics statistics(media_source source) const;
 
         // notification-area integration
-        void set_usb_enabled(bool enabled);
+        void set_legacy_usb(bool available, bool enabled);
+        void set_usb_link(std::wstring text, bool offer_data_guard);
 
         // Whether the current AirPlay client is connected over the iPhone USB
         // link (so the window shows "USB" rather than "Wi-Fi").
         void set_airplay_over_usb(bool over_usb);
-        void notify(std::wstring title, std::wstring text);
+        void notify(std::wstring title, std::wstring text, std::optional<tray_command> on_click = std::nullopt);
+
+        // HWND of the video window (owner for system prompts)
+        [[nodiscard]] void *window_handle() const;
 
     private:
         struct state;

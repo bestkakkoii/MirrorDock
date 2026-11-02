@@ -59,6 +59,7 @@ target_sources( uxplay_native
       src/uxplay_media_engine.cppm
       src/uxplay_qt_protocol.cppm
       src/uxplay_usb_mirror.cppm
+      src/uxplay_usb_link.cppm
   PRIVATE
     src/uxplay_status.cpp
     src/uxplay_log.cpp
@@ -74,6 +75,7 @@ target_sources( uxplay_native
     src/uxplay_media_engine.cpp
     src/uxplay_qt_protocol.cpp
     src/uxplay_usb_mirror.cpp
+    src/uxplay_usb_link.cpp
     src/native_media_bridge.cpp
     src/renderer_compat.c )
 add_dependencies( uxplay_native uxplay_shaders )
@@ -113,7 +115,7 @@ endforeach()
 target_link_directories( uxplay_native PUBLIC ${UXPLAY_FFMPEG_LIBRARY_DIRS} ${UXPLAY_LIBUSB_LIBRARY_DIRS} )
 target_link_libraries( uxplay_native PUBLIC
   avcodec swresample avutil usb-1.0
-  d3d11 dxgi dwmapi avrt ole32 uuid user32 gdi32 bcrypt ws2_32 crypt32 setupapi )
+  d3d11 dxgi dwmapi avrt ole32 uuid user32 gdi32 bcrypt ws2_32 crypt32 setupapi iphlpapi cfgmgr32 )
 
 # ---- tests (not part of the shipped program) -------------------------------
 option( UXPLAY_NATIVE_TESTS "Build the native engine tests" ON )
@@ -128,7 +130,12 @@ if ( UXPLAY_NATIVE_TESTS )
   target_link_libraries( engine_smoke_test PRIVATE uxplay_native )
   set_target_properties( engine_smoke_test PROPERTIES CXX_MODULE_STD ON )
 
-  foreach( test_source tests/qt_protocol_tests.cpp tests/engine_smoke_test.cpp )
+  add_executable( usb_link_tests tests/usb_link_tests.cpp )
+  target_link_libraries( usb_link_tests PRIVATE uxplay_native )
+  set_target_properties( usb_link_tests PROPERTIES CXX_MODULE_STD ON )
+  add_test( NAME usb_link_tests COMMAND usb_link_tests )
+
+  foreach( test_source tests/qt_protocol_tests.cpp tests/engine_smoke_test.cpp tests/usb_link_tests.cpp )
     set_property( SOURCE ${test_source} APPEND PROPERTY COMPILE_OPTIONS
       -Wall -Wextra -Wpedantic -Wshadow -Wold-style-cast -Werror )
   endforeach()

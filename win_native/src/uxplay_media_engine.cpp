@@ -708,9 +708,19 @@ namespace uxplay
         impl->audio->set_volume(source, static_cast<float>(linear_gain));
     }
 
-    void media_engine::set_usb_enabled(bool enabled)
+    void media_engine::set_legacy_usb(bool available, bool enabled)
     {
-        impl->window->set_usb_enabled(enabled);
+        impl->window->set_legacy_usb(available, enabled);
+    }
+
+    void media_engine::set_usb_link(std::wstring text, bool offer_data_guard)
+    {
+        impl->window->set_usb_link(std::move(text), offer_data_guard);
+    }
+
+    void *media_engine::window_handle() const
+    {
+        return impl->window->native_handle();
     }
 
     void media_engine::set_airplay_over_usb(bool over_usb)
@@ -718,9 +728,9 @@ namespace uxplay
         impl->airplay_over_usb.store(over_usb, std::memory_order_relaxed);
     }
 
-    void media_engine::notify(std::wstring title, std::wstring text)
+    void media_engine::notify(std::wstring title, std::wstring text, std::optional<tray_command> on_click)
     {
-        impl->window->notify(std::move(title), std::move(text));
+        impl->window->notify(std::move(title), std::move(text), on_click);
     }
 
     source_statistics media_engine::statistics(media_source source) const

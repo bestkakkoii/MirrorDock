@@ -21,6 +21,7 @@ import uxplay_clock;
 import uxplay_media_types;
 import uxplay_media_engine;
 import uxplay_usb_mirror;
+import uxplay_usb_link;
 import uxplay_video_decoder;
 import uxplay_audio_decoder;
 import uxplay_system_tuning;
@@ -43,8 +44,13 @@ namespace
         std::atomic<bool> start_finished{false};
         std::unique_ptr<uxplay::media_engine> engine_owner;
         std::unique_ptr<uxplay::usb_mirror> usb_owner;
+        std::unique_ptr<uxplay::usb_link_monitor> usb_link_owner;
         std::atomic<uxplay::media_engine *> engine{nullptr};
         std::atomic<uxplay::usb_mirror *> usb{nullptr};
+        std::atomic<uxplay::usb_link_monitor *> usb_link{nullptr};
+        // USB link monitor thread only
+        std::optional<uxplay::usb_link_state> last_usb_link;
+        bool hotspot_hint_shown = false;
         std::optional<uxplay::display_mode_info> display;
         native_media_event_callback event_callback = nullptr;
         void *event_user_data = nullptr;
@@ -105,6 +111,106 @@ namespace
         return static_cast<std::int64_t>(remote_time_ns) + *state.remote_to_local_offset;
     }
 
+    // ---- iPhone USB link (AirPlay over the Personal Hotspot cable) ----------
+
+    bool offer_data_guard(uxplay::usb_link_state const &link)
+    {
+        // never cut a deliberate tether: only when another network has internet
+        return link.link_up && link.other_internet && (!link.data_guard_applied || link.data_leak());
+    }
+
+    std::wstring usb_link_line(uxplay::usb_link_state const &link)
+    {
+        if (link.link_up)
+        {
+            return std::format(L"USB：已連線（{}）— 投影走傳輸線", uxplay::utf8_to_utf16(link.local_address));
+        }
+        if (link.iphone_attached)
+        {
+            return L"USB：iPhone 已接上，開啟「個人熱點」即走 USB";
+        }
+        return L"USB：未接上 iPhone（目前走 Wi-Fi）";
+    }
+
+    std::string describe_usb_link(uxplay::usb_link_state const &link)
+    {
+        if (link.link_up)
+        {
+            return std::format("up, PC address {}; PC internet through the iPhone (cellular data): IPv4 {}, IPv6 {}; "
+                               "other internet {}; data guard {}",
+                               link.local_address, link.ipv4_internet_via_link ? "YES" : "no",
+                               link.ipv6_internet_via_link ? "YES" : "no", link.other_internet ? "yes" : "no",
+                               link.data_guard_applied ? "applied" : "not applied");
+        }
+        if (link.link_missing)
+        {
+            return "iPhone attached but no network link: Personal Hotspot is off (AirPlay uses Wi-Fi)";
+        }
+        if (link.iphone_attached)
+        {
+            return "iPhone attached, waiting for its network link";
+        }
+        return "no iPhone attached (AirPlay uses Wi-Fi)";
+    }
+
+    void on_usb_link_change(uxplay::usb_link_state const &next)
+    {
+        bridge_state &state = bridge();
+        uxplay::usb_link_state const previous = state.last_usb_link.value_or(uxplay::usb_link_state{});
+        state.last_usb_link = next;
+        bool const offer = offer_data_guard(next);
+        uxplay::log::info("USB link: {}", describe_usb_link(next));
+        if (!next.iphone_attached)
+        {
+            state.hotspot_hint_shown = false;
+        }
+        uxplay::media_engine *const ready = state.engine.load(std::memory_order_acquire);
+        if (ready == nullptr)
+        {
+            return;
+        }
+        ready->set_usb_link(usb_link_line(next), offer);
+        if (offer && (!previous.link_up || !offer_data_guard(previous)))
+        {
+            ready->notify(L"保護手機流量",
+                          L"電腦正經由 iPhone 的行動數據上網。點這則通知並在系統視窗按「是」，電腦上網就固定走 "
+                          L"Wi-Fi（只需一次；投影本身不耗流量）。",
+                          uxplay::tray_command::apply_data_guard);
+        }
+        else if (next.link_up && !previous.link_up)
+        {
+            ready->notify(L"USB 已連線",
+                          L"在 iPhone「螢幕鏡像輸出」選 UxPlay，畫面就走 USB 傳輸線（不耗行動數據）。");
+        }
+        else if (next.link_missing && !previous.link_missing && !state.hotspot_hint_shown)
+        {
+            state.hotspot_hint_shown = true;
+            ready->notify(L"iPhone 已接上 USB",
+                          L"要走 USB 投影：在 iPhone 開「設定 › 個人熱點 › 允許其他人加入」。投影本身不耗行動數據。");
+        }
+    }
+
+    void on_data_guard_result(bool applied, std::string const &detail)
+    {
+        uxplay::media_engine *const ready = bridge().engine.load(std::memory_order_acquire);
+        if (ready == nullptr)
+        {
+            return;
+        }
+        if (applied)
+        {
+            ready->notify(L"已保護手機流量", L"電腦上網固定走 Wi-Fi，iPhone 傳輸線只用來投影（設定已保存）。");
+        }
+        else if (detail.contains("declined"))
+        {
+            ready->notify(L"未保護手機流量", L"系統視窗被按了「否」。可從通知區域選單的「保護手機流量」再試一次。");
+        }
+        else
+        {
+            ready->notify(L"未保護手機流量", L"設定沒有完成（原因見記錄檔）。可從通知區域選單再試一次。");
+        }
+    }
+
     uxplay::audio_codec audio_codec_for(unsigned char compression_type)
     {
         switch (compression_type)
@@ -140,6 +246,10 @@ namespace
         };
         callbacks.on_usb_device_change = []
         {
+            if (uxplay::usb_link_monitor *const link = bridge().usb_link.load(); link != nullptr)
+            {
+                link->refresh();
+            }
             if (uxplay::usb_mirror *const usb = bridge().usb.load(); usb != nullptr)
             {
                 usb->rescan();
@@ -157,8 +267,15 @@ namespace
                     usb->set_enabled(enable);
                     if (uxplay::media_engine *const ready = current.engine.load(); ready != nullptr)
                     {
-                        ready->set_usb_enabled(enable);
+                        ready->set_legacy_usb(true, enable);
                     }
+                }
+                break;
+            case uxplay::tray_command::apply_data_guard:
+                if (uxplay::usb_link_monitor *const link = current.usb_link.load(); link != nullptr)
+                {
+                    uxplay::media_engine *const ready = current.engine.load();
+                    link->apply_data_guard(ready != nullptr ? ready->window_handle() : nullptr);
                 }
                 break;
             case uxplay::tray_command::open_log:
@@ -198,19 +315,42 @@ namespace
                                                   display.height);
             if (!usb)
             {
-                uxplay::log::error("USB mirroring unavailable: {}", usb.error().describe());
-                state.engine_owner->set_usb_enabled(false);
+                uxplay::log::error("legacy QuickTime USB capture unavailable: {}", usb.error().describe());
+                state.engine_owner->set_legacy_usb(false, false);
             }
             else
             {
                 state.usb_owner = std::move(*usb);
                 state.usb_owner->set_enabled(usb_mirroring);
-                state.engine_owner->set_usb_enabled(usb_mirroring);
+                // the legacy toggle is offered only when asked for with -usb
+                state.engine_owner->set_legacy_usb(usb_mirroring, usb_mirroring);
                 state.usb.store(state.usb_owner.get(), std::memory_order_release);
                 if (usb_mirroring)
                 {
-                    uxplay::log::info("USB mirroring enabled: plug in the iPhone (unlocked) to mirror over the cable");
+                    uxplay::log::info("legacy QuickTime USB capture enabled (-usb): streams only on iOS 15 and "
+                                      "earlier; on iOS 16+ use AirPlay over the USB cable (Personal Hotspot)");
                 }
+            }
+
+            // AirPlay over the USB cable: status, hints and the cellular-data guard
+            uxplay::usb_link_events link_events;
+            link_events.on_change = [](uxplay::usb_link_state const &next)
+            {
+                on_usb_link_change(next);
+            };
+            link_events.on_guard_result = [](bool applied, std::string const &detail)
+            {
+                on_data_guard_result(applied, detail);
+            };
+            if (auto link = uxplay::usb_link_monitor::create(std::move(link_events)); !link)
+            {
+                // AirPlay over the cable still works; only its status/guard are missing
+                uxplay::log::warning("USB link monitor unavailable: {}", link.error().describe());
+            }
+            else
+            {
+                state.usb_link_owner = std::move(*link);
+                state.usb_link.store(state.usb_link_owner.get(), std::memory_order_release);
             }
             uxplay::log::info("media engine ready in {:.0f} ms (initialized in parallel with the AirPlay server)",
                               static_cast<double>(uxplay::clock::now_ns() - started) / 1e6);
@@ -281,6 +421,8 @@ extern "C" void native_media_stop(void)
     {
         state.start_thread.join();
     }
+    state.usb_link.store(nullptr);
+    state.usb_link_owner.reset();
     state.usb.store(nullptr);
     state.usb_owner.reset();
     state.engine.store(nullptr);
@@ -403,11 +545,14 @@ extern "C" void native_media_set_volume(double linear_gain)
     }
 }
 
-extern "C" void native_media_set_airplay_transport(int over_usb)
+extern "C" void native_media_set_airplay_local_address(const char *local_address)
 {
+    // by the adapter that owns the address: a PC on the iPhone hotspot over
+    // Wi-Fi also has 172.20.10.x, but that is Wi-Fi, not the cable
+    bool const over_usb = local_address != nullptr && uxplay::is_usb_link_address(local_address);
     if (uxplay::media_engine *const ready = engine(); ready != nullptr)
     {
-        ready->set_airplay_over_usb(over_usb != 0);
+        ready->set_airplay_over_usb(over_usb);
     }
 }
 

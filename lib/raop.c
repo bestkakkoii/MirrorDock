@@ -132,6 +132,7 @@ conn_init(void *opaque, unsigned char *local, int locallen, unsigned char *remot
     raop_t *raop = opaque;
     raop_conn_t *conn = NULL;
     char ip_address[40] = { '\0' };
+    char local_address[40] = { '\0' };
     assert(raop);
 
     conn = calloc(1, sizeof(raop_conn_t));
@@ -155,11 +156,8 @@ conn_init(void *opaque, unsigned char *local, int locallen, unsigned char *remot
         return NULL;
     }
 
-    utils_ipaddress_to_string(locallen, local, zone_id, ip_address, (int) sizeof(ip_address));
-    logger_log(raop->logger, LOGGER_INFO, "Local : %s", ip_address);
-    /* the iPhone wired link (Personal Hotspot over USB) is always 172.20.10.x:
-       a local server address in that range means the client is on the cable */
-    int conn_over_usb = (strncmp(ip_address, "172.20.10.", 10) == 0);
+    utils_ipaddress_to_string(locallen, local, zone_id, local_address, (int) sizeof(local_address));
+    logger_log(raop->logger, LOGGER_INFO, "Local : %s", local_address);
 
     utils_ipaddress_to_string(remotelen, remote, zone_id, ip_address, (int) sizeof(ip_address));
     logger_log(raop->logger, LOGGER_INFO, "Remote: %s", ip_address);
@@ -188,7 +186,7 @@ conn_init(void *opaque, unsigned char *local, int locallen, unsigned char *remot
         raop->callbacks.conn_init(raop->callbacks.cls);
     }
     if (raop->callbacks.conn_transport) {
-        raop->callbacks.conn_transport(raop->callbacks.cls, conn_over_usb);
+        raop->callbacks.conn_transport(raop->callbacks.cls, local_address);
     }
 
     return conn;

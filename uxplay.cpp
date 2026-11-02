@@ -1129,7 +1129,8 @@ static void print_info (char *name) {
 #if UXPLAY_WIN_NATIVE
     printf("-h264     Offer only H.264 to the client (Windows-native build offers H.265 too)\n");
     printf("-usb      Legacy QuickTime USB capture (default: off; does not stream on iOS 16+)\n");
-    printf("-gpu g    GPU for decode/present: auto (display owner), intel, nvidia, software\n");
+    printf("-gpu g    GPU for decode/present: auto (display owner), integrated|intel,\n");
+    printf("          discrete|nvidia (any vendor, AMD included), software|warp\n");
 #endif
     printf("-mp4 [fn] Record (non-HLS)audio/video to mp4 file \"fn.[n].[format].mp4\"\n");
     printf("          n=1,2,.. format = H264/5, ALAC/AAC. Default fn=\"recording\"\n");
@@ -2265,7 +2266,8 @@ static void parse_arguments (int argc, char *argv[]) {
             } else if (choice == "software" || choice == "warp") {
                 gpu_preference = 3;
             } else {
-                fprintf(stderr, "invalid \"-gpu %s\": choices are auto, intel, nvidia, software\n", choice.c_str());
+                fprintf(stderr, "invalid \"-gpu %s\": choices are auto, integrated (intel), discrete (nvidia), "
+                        "software (warp)\n", choice.c_str());
                 exit(1);
             }
         } else if (arg == "-usb") {
@@ -2774,16 +2776,20 @@ extern "C" void export_dacp(void *cls, const char *active_remote, const char *da
 extern "C" void conn_init (void *cls) {
     open_connections++;
     LOGD("Open connections: %i", open_connections);
+    if (dnssd) {
+        /* keep advertising on the session's link while it is open */
+        dnssd_set_session_active(dnssd, 1);
+    }
     //video_renderer_update_background(1);
 }
 
-extern "C" void conn_transport (void *cls, int over_usb) {
+extern "C" void conn_transport (void *cls, const char *local_address) {
     (void) cls;
 #if UXPLAY_WIN_NATIVE
-    /* label the window "USB" when the AirPlay client is on the iPhone USB link */
-    native_media_set_airplay_transport(over_usb);
+    /* label the window "USB" or "Wi-Fi" by the link the AirPlay client used */
+    native_media_set_airplay_local_address(local_address);
 #else
-    (void) over_usb;
+    (void) local_address;
 #endif
 }
 
@@ -2792,6 +2798,10 @@ extern "C" void conn_destroy (void *cls) {
     open_connections--;
     LOGD("Open connections: %i", open_connections);
     if (open_connections == 0) {
+        if (dnssd) {
+            /* free to move the advertisement to a newly preferred link */
+            dnssd_set_session_active(dnssd, 0);
+        }
         remote_clock_offset = 0;
         if (use_audio) {
             audio_renderer_stop();

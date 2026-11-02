@@ -18,7 +18,8 @@ export namespace uxplay
     enum class tray_command
     {
         toggle_fullscreen,
-        toggle_usb,
+        toggle_usb, // legacy QuickTime capture (only offered with -usb)
+        apply_data_guard,
         open_log,
         exit
     };
@@ -55,10 +56,15 @@ export namespace uxplay
         void set_title(std::wstring title);
         void toggle_fullscreen();
 
-        // tray tooltip / menu status line, USB menu check mark, balloon tips
+        // tray tooltip / menu status line, balloon tips
         void set_status(std::wstring status);
-        void set_usb_enabled(bool enabled);
-        void notify(std::wstring title, std::wstring text);
+        // menu line describing the iPhone USB link; offer_data_guard adds the
+        // "keep PC internet off the iPhone's cellular data" item
+        void set_usb_link(std::wstring text, bool offer_data_guard);
+        // legacy QuickTime capture toggle: shown only when available
+        void set_legacy_usb(bool available, bool enabled);
+        // on_click: command run when the user clicks the balloon
+        void notify(std::wstring title, std::wstring text, std::optional<tray_command> on_click = std::nullopt);
 
         [[nodiscard]] bool visible() const;
         [[nodiscard]] bool fullscreen() const;

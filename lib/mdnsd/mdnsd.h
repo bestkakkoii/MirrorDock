@@ -50,6 +50,10 @@ void mdnsd_announce(mdnsd_t *mdnsd, uint32_t ttl);
 /* active != 0 while an AirPlay session is open: the advertisement then stays
  * on the session's link instead of moving to a newly preferred one. */
 void mdnsd_set_session_active(mdnsd_t *mdnsd, int active);
+/* allowed == 0 ("Wi-Fi only"): never advertise on the iPhone USB link, so the
+ * cable can stay plugged in for charging.  A change is applied at once, even
+ * during a session (the host ends a session on the wrong link itself). */
+void mdnsd_set_usb_link_allowed(mdnsd_t *mdnsd, int allowed);
 void mdnsd_goodbye(mdnsd_t *mdnsd, const mdnsd_service_t *service);
 
 #endif

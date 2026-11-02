@@ -94,11 +94,15 @@ C++26 named modules (`import std;`, clang 23 + libc++ module support):
   the UI), mDNS responder thread (`mdns_thread`: queries + 2 s link check). The
   D3D11 immediate context is guarded by one recursive mutex shared with
   FFmpeg's D3D11VA lock callbacks.
-* **System side effects:** the only persistent change UxPlay makes to the PC
-  is the opt-in cellular-data guard (UAC-confirmed netsh on the iPhone link's
-  interface; see USB section for the exact values and how to undo). A declined
-  prompt or a failed netsh is logged with its code and reported in a balloon;
-  the tray item stays available to retry.
+* **System side effects:** UxPlay changes the PC only through two opt-in,
+  UAC-confirmed actions on the iPhone's network adapter — the cellular-data
+  guard (netsh) and re-enabling a disabled adapter (pnputil); see the USB
+  section for exact values and how to undo. It also stores one per-user
+  setting (`HKCU\Software\UxPlay\prefer_usb_link`). A declined prompt or a
+  failed tool is logged with its code and reported in a balloon; the tray
+  item stays available to retry. Test instances launched from an elevated
+  shell run these tools without a prompt: do not exercise them on the owner's
+  machine without asking.
 * **Shutdown:** server threads are woken through a loopback socket
   (`netutils_wakeup_*`, used by httpd) and a lost-wakeup-free NTP stop; Ctrl+C
   to exit measured ~51 ms (upstream ~1000 ms). On console close the handler
@@ -150,6 +154,23 @@ opt-in `-usb`):
      membership is re-asserted on every check: Windows answers a duplicate join
      with WSAEINVAL (probed), so a successful re-join means the OS had dropped
      it (link flap, resume) and triggers a re-announce.
+   * **Link preference** (tray radio items "USB first" / "Wi-Fi only",
+     persisted as `HKCU\Software\UxPlay\prefer_usb_link`, DWORD, default 1).
+     Leaving USB mode must not touch the USB device: on the owner's setup
+     (iPhone charged through an externally powered cable) disabling the
+     "Apple Mobile Device Ethernet" adapter to get back to Wi-Fi stopped the
+     charging until the power was replugged. "Wi-Fi only" therefore only
+     changes UxPlay's own choice: `dnssd_set_usb_link_allowed(0)` makes the
+     responder skip the USB link (applied within 250 ms, overriding the
+     session pin), and `native_link_preference_idle` in `uxplay.cpp` ends a
+     session that runs on the other link through the existing reset path
+     (`reset_httpd`), because the iPhone does not reconnect by itself. The
+     choice is applied before the first advertisement at startup.
+   * **Disabled adapter:** `uxplay_usb_link` reports an iPhone whose Net-class
+     function has `CM_PROB_DISABLED` (`link_adapter_disabled`); in "USB first"
+     the tray offers to re-enable it (choosing "USB first" offers it at once):
+     one elevated `pnputil /enable-device "<instance id>"`, the ID checked
+     against `[A-Za-z0-9&_\.-]`. pnputil enables exactly that function.
    * **Window label** comes from the adapter that owns the connection's local
      address (`raop` `conn_transport(local_address)` →
      `native_media_set_airplay_local_address` → `is_usb_link_address`):

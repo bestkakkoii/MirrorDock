@@ -20,6 +20,9 @@ export namespace uxplay
         toggle_fullscreen,
         toggle_usb, // legacy QuickTime capture (only offered with -usb)
         apply_data_guard,
+        enable_link_adapter, // re-enable a disabled "Apple Mobile Device Ethernet"
+        prefer_usb_link,     // AirPlay over the USB cable when it is up (default)
+        wifi_only,           // never use the USB link for AirPlay (cable only charges)
         open_log,
         exit
     };
@@ -59,8 +62,11 @@ export namespace uxplay
         // tray tooltip / menu status line, balloon tips
         void set_status(std::wstring status);
         // menu line describing the iPhone USB link; offer_data_guard adds the
-        // "keep PC internet off the iPhone's cellular data" item
-        void set_usb_link(std::wstring text, bool offer_data_guard);
+        // "keep PC internet off the iPhone's cellular data" item,
+        // offer_enable_adapter the "re-enable the Apple USB network adapter" item
+        void set_usb_link(std::wstring text, bool offer_data_guard, bool offer_enable_adapter);
+        // which link AirPlay uses: USB first (true) or Wi-Fi only (false)
+        void set_link_preference(bool prefer_usb_link);
         // legacy QuickTime capture toggle: shown only when available
         void set_legacy_usb(bool available, bool enabled);
         // on_click: command run when the user clicks the balloon

@@ -38,6 +38,9 @@ namespace uxplay
             menu_fullscreen = 100,
             menu_legacy_usb,
             menu_data_guard,
+            menu_enable_adapter,
+            menu_prefer_usb,
+            menu_wifi_only,
             menu_open_log,
             menu_exit
         };
@@ -98,6 +101,8 @@ namespace uxplay
         std::atomic<bool> legacy_usb_available{false};
         std::atomic<bool> legacy_usb_enabled{false};
         std::atomic<bool> data_guard_offer{false};
+        std::atomic<bool> enable_adapter_offer{false};
+        std::atomic<bool> prefer_usb_link{true};
         bool fullscreen_on_first_show = false;
         bool shown_once = false;
         bool cursor_hidden = false;
@@ -313,10 +318,20 @@ namespace uxplay
         }
         AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, status.c_str());
         AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, usb_line.c_str());
+        if (enable_adapter_offer.load())
+        {
+            AppendMenuW(menu, MF_STRING, menu_enable_adapter, L"重新啟用 Apple USB 網路卡（USB 投影需要，需系統管理員）…");
+        }
         if (data_guard_offer.load())
         {
             AppendMenuW(menu, MF_STRING, menu_data_guard, L"保護手機流量：電腦上網只走 Wi-Fi（需系統管理員）…");
         }
+        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+        // switching here never touches the USB device: the cable keeps charging
+        AppendMenuW(menu, MF_STRING, menu_prefer_usb, L"USB 優先：接著 iPhone 熱點線時走 USB");
+        AppendMenuW(menu, MF_STRING, menu_wifi_only, L"只用 Wi-Fi：USB 線只充電，不用來投影");
+        CheckMenuRadioItem(menu, menu_prefer_usb, menu_wifi_only,
+                           prefer_usb_link.load() ? menu_prefer_usb : menu_wifi_only, MF_BYCOMMAND);
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(menu, MF_STRING | (is_visible.load() ? 0U : MF_GRAYED), menu_fullscreen,
                     L"全螢幕切換\tF11 / 雙擊畫面");
@@ -345,6 +360,15 @@ namespace uxplay
             break;
         case menu_data_guard:
             tray(tray_command::apply_data_guard);
+            break;
+        case menu_enable_adapter:
+            tray(tray_command::enable_link_adapter);
+            break;
+        case menu_prefer_usb:
+            tray(tray_command::prefer_usb_link);
+            break;
+        case menu_wifi_only:
+            tray(tray_command::wifi_only);
             break;
         case menu_open_log:
             tray(tray_command::open_log);
@@ -732,13 +756,19 @@ namespace uxplay
         PostMessageW(impl->window, message_tray_update, 0, 0);
     }
 
-    void video_window::set_usb_link(std::wstring text, bool offer_data_guard)
+    void video_window::set_usb_link(std::wstring text, bool offer_data_guard, bool offer_enable_adapter)
     {
         {
             std::scoped_lock lock{impl->text_mutex};
             impl->usb_link_text = std::move(text);
         }
         impl->data_guard_offer.store(offer_data_guard);
+        impl->enable_adapter_offer.store(offer_enable_adapter);
+    }
+
+    void video_window::set_link_preference(bool prefer_usb_link)
+    {
+        impl->prefer_usb_link.store(prefer_usb_link);
     }
 
     void video_window::set_legacy_usb(bool available, bool enabled)

@@ -23,6 +23,7 @@ export namespace uxplay
         bool iphone_attached = false;    // an iPhone/iPad is attached by USB
         bool link_up = false;            // its network link (Personal Hotspot) is up
         bool link_missing = false;       // attached for a while, still no link: hotspot off
+        bool link_adapter_disabled = false; // its "Apple Mobile Device Ethernet" is disabled in Windows
         std::string local_address;       // PC side of the link, e.g. "172.20.10.9"
         bool other_internet = false;     // another adapter (Wi-Fi/LAN) has a default gateway
         bool data_guard_applied = false; // internet routing over the link is disabled
@@ -33,12 +34,19 @@ export namespace uxplay
         bool operator==(usb_link_state const &other) const = default;
     };
 
+    // administrator actions the monitor can run (each behind a UAC prompt)
+    enum class usb_link_action
+    {
+        data_guard,    // keep PC internet off the iPhone link
+        enable_adapter // re-enable a disabled "Apple Mobile Device Ethernet"
+    };
+
     struct usb_link_events
     {
         // the state changed (monitor thread; must not block)
         std::function<void(usb_link_state const &state)> on_change;
-        // a data-guard request finished: applied, or why not
-        std::function<void(bool applied, std::string const &detail)> on_guard_result;
+        // an administrator action finished: done, or why not
+        std::function<void(usb_link_action action, bool done, std::string const &detail)> on_admin_result;
     };
 
     // True when local_address (dotted IPv4, also IPv4-mapped IPv6) is the PC
@@ -64,6 +72,11 @@ export namespace uxplay
         // Needs administrator consent (UAC, owned by owner_window); runs on
         // the monitor thread.
         void apply_data_guard(void *owner_window);
+
+        // Re-enables the iPhone's network adapter after it was disabled in
+        // Windows (needed for AirPlay over the cable).  Needs administrator
+        // consent (UAC); runs on the monitor thread.
+        void enable_link_adapter(void *owner_window);
 
     private:
         struct state;

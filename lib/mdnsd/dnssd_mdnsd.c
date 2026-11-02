@@ -358,6 +358,16 @@ dnssd_set_session_active(dnssd_t *dnssd_public, int active)
     mdnsd_set_session_active(dnssd->mdnsd, active);
 }
 
+void
+dnssd_set_usb_link_allowed(dnssd_t *dnssd_public, int allowed)
+{
+    assert(dnssd_public);
+    assert(dnssd_public->dnssd_private);
+    dnssd_private_t *dnssd = (dnssd_private_t *) dnssd_public->dnssd_private;
+
+    mdnsd_set_usb_link_allowed(dnssd->mdnsd, allowed);
+}
+
 void dnssd_error_text(int *dnssd_error, const  char *appname) {
     printf("*** dnssd_implementation: internal, mdnsd\n");
     printf("setup or start of self-contained mDNSResponder (lib/mdnsd) failed; check UDP port 5353 and multicast access");

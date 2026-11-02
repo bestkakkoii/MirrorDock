@@ -94,6 +94,11 @@ DNSSD_API void dnssd_destroy(dnssd_t *dnssd);
    system Bonjour/Avahi backend. */
 DNSSD_API void dnssd_set_session_active(dnssd_t *dnssd, int active);
 
+/* allowed == 0 ("Wi-Fi only"): the internal responder never advertises on the
+   iPhone USB link (the cable can stay plugged in for charging); applied at
+   once. No-op for the system Bonjour/Avahi backend. */
+DNSSD_API void dnssd_set_usb_link_allowed(dnssd_t *dnssd, int allowed);
+
 /* p2p support (macOS only) */
 #if defined(__APPLE__) && defined(UXPLAY_HAVE_APPLE_P2P)
 DNSSD_API void dnssd_set_peer_to_peer(dnssd_t *dnssd, int enabled);

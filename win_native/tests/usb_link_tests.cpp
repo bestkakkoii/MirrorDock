@@ -63,12 +63,14 @@ int main()
     }
     uxplay::usb_link_state const state = (*monitor)->current();
     // environment-dependent facts: printed, not asserted
-    std::println("  iPhone attached {}, link up {} {}, other internet {}, guard {}, internet via iPhone: IPv4 {} "
-                 "IPv6 {}",
-                 yes_no(state.iphone_attached), yes_no(state.link_up), state.local_address,
-                 yes_no(state.other_internet), yes_no(state.data_guard_applied),
+    std::println("  iPhone attached {}, network adapter disabled {}, link up {} {}, other internet {}, guard {}, "
+                 "internet via iPhone: IPv4 {} IPv6 {}",
+                 yes_no(state.iphone_attached), yes_no(state.link_adapter_disabled), yes_no(state.link_up),
+                 state.local_address, yes_no(state.other_internet), yes_no(state.data_guard_applied),
                  yes_no(state.ipv4_internet_via_link), yes_no(state.ipv6_internet_via_link));
     check(!state.link_up || !state.local_address.empty(), "a link that is up reports its PC address");
+    check(!state.link_adapter_disabled || state.iphone_attached, "a disabled adapter is only reported for an attached iPhone");
+    check(!(state.link_adapter_disabled && state.link_up), "a disabled adapter cannot carry the link");
 
     auto const started = std::chrono::steady_clock::now();
     monitor->reset();

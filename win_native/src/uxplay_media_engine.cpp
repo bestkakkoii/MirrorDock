@@ -713,9 +713,14 @@ namespace uxplay
         impl->window->set_legacy_usb(available, enabled);
     }
 
-    void media_engine::set_usb_link(std::wstring text, bool offer_data_guard)
+    void media_engine::set_usb_link(std::wstring text, bool offer_data_guard, bool offer_enable_adapter)
     {
-        impl->window->set_usb_link(std::move(text), offer_data_guard);
+        impl->window->set_usb_link(std::move(text), offer_data_guard, offer_enable_adapter);
+    }
+
+    void media_engine::set_link_preference(bool prefer_usb_link)
+    {
+        impl->window->set_link_preference(prefer_usb_link);
     }
 
     void *media_engine::window_handle() const

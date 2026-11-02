@@ -68,6 +68,10 @@ struct mdnsd_s {
     int running;
     /* an AirPlay session is open: keep advertising on its link */
     int session_active;
+    /* 0 = "Wi-Fi only": never advertise on the iPhone USB link */
+    int usb_link_allowed;
+    /* the user changed the link preference: re-pick now, even mid-session */
+    int link_choice_changed;
     thread_handle_t thread;
     mutex_handle_t mutex;
 };
@@ -382,10 +386,12 @@ static int mdns_is_link_local(uint32_t addr)
  * internet-facing LAN adapter that Windows itself prefers (lowest interface
  * metric).  Only real LAN links (Ethernet, Wi-Fi) carry mDNS to the phone:
  * loopback, Hyper-V/WSL switches, VM adapters and tunnels (Tailscale, VPN)
- * are skipped.  *held_present reports whether `held` (the address in use) is
- * still configured on any adapter.
+ * are skipped.  With allow_usb_link == 0 ("Wi-Fi only") the USB link is never
+ * chosen, so the cable can stay plugged in for charging.  *held_present
+ * reports whether `held` (the address in use) is still configured on any
+ * adapter.
  */
-static uint32_t mdns_pick_ipv4(uint32_t held, int *held_present)
+static uint32_t mdns_pick_ipv4(uint32_t held, int *held_present, int allow_usb_link)
 {
     uint32_t addr = 0;
     *held_present = 0;
@@ -434,7 +440,7 @@ static uint32_t mdns_pick_ipv4(uint32_t held, int *held_present)
                     continue;
                 }
                 if (mdns_is_usb_link(candidate)) {
-                    if (usb_link == 0) {
+                    if (allow_usb_link && usb_link == 0) {
                         usb_link = candidate;
                     }
                 } else if (pCurr->FirstGatewayAddress != NULL && !mdns_is_link_local(candidate) &&
@@ -470,6 +476,7 @@ static uint32_t mdns_pick_ipv4(uint32_t held, int *held_present)
     }
 
     CLOSESOCKET(fd);
+    (void) allow_usb_link; /* no USB-link preference outside Windows */
 
     if (held != 0 && getifaddrs(&ifaddr) == 0) {
         for (struct ifaddrs *ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
@@ -485,10 +492,10 @@ static uint32_t mdns_pick_ipv4(uint32_t held, int *held_present)
     return addr;
 }
 
-static uint32_t mdns_get_default_ipv4(void)
+static uint32_t mdns_get_default_ipv4(int allow_usb_link)
 {
     int unused = 0;
-    return mdns_pick_ipv4(0, &unused);
+    return mdns_pick_ipv4(0, &unused, allow_usb_link);
 }
 
 static int mdns_get_default_ipv6(unsigned char addr[16], unsigned int *scope_id)
@@ -1047,9 +1054,10 @@ static void mdns_move_ipv4_locked(mdnsd_t *mdnsd, uint32_t new_addr)
  * USB link appears or disappears while running, the advertisement moves to
  * it without a restart.  An open AirPlay session pins the advertisement to
  * its link until the session ends (moving mid-session could make the phone
- * drop it), unless that link is gone.  Also re-asserts the multicast
- * membership, which the OS drops when a link goes down and up.  Returns 1
- * when the services were (re)announced.
+ * drop it), unless that link is gone or the user just changed the link
+ * preference (the host then ends the session itself).  Also re-asserts the
+ * multicast membership, which the OS drops when a link goes down and up.
+ * Returns 1 when the services were (re)announced.
  */
 static int mdns_follow_link(mdnsd_t *mdnsd)
 {
@@ -1057,16 +1065,22 @@ static int mdns_follow_link(mdnsd_t *mdnsd)
     uint32_t preferred;
     int held_present = 0;
     int announced = 0;
+    int allow_usb_link;
+    int user_choice;
 
     MUTEX_LOCK(mdnsd->mutex);
     held = mdnsd->ipv4_addr;
+    allow_usb_link = mdnsd->usb_link_allowed;
+    user_choice = mdnsd->link_choice_changed;
+    mdnsd->link_choice_changed = 0;
     MUTEX_UNLOCK(mdnsd->mutex);
 
-    preferred = mdns_pick_ipv4(held, &held_present);
+    preferred = mdns_pick_ipv4(held, &held_present, allow_usb_link);
 
     MUTEX_LOCK(mdnsd->mutex);
     if (mdnsd->sock_fd4 != -1 && mdnsd->ipv4_addr == held) {
-        if (preferred != 0 && preferred != held && !(mdnsd->session_active && held_present)) {
+        if (preferred != 0 && preferred != held &&
+            (user_choice || !(mdnsd->session_active && held_present))) {
             mdns_move_ipv4_locked(mdnsd, preferred);
             announced = 1;
         } else if (held_present && mdns_join_group4_locked(mdnsd, held)) {
@@ -1091,12 +1105,14 @@ static THREAD_RETVAL mdns_thread(void *arg)
         int fd6;
         int max_fd = -1;
         int running;
+        int check_now;
         int ret;
 
         MUTEX_LOCK(mdnsd->mutex);
         fd4 = mdnsd->sock_fd4;
         fd6 = mdnsd->sock_fd6;
         running = mdnsd->running;
+        check_now = mdnsd->link_choice_changed;
         MUTEX_UNLOCK(mdnsd->mutex);
 
         if (!running || (fd4 == -1 && fd6 == -1)) {
@@ -1149,7 +1165,7 @@ static THREAD_RETVAL mdns_thread(void *arg)
             mdns_send_response_locked(mdnsd, 1, 1, 1, MDNSD_TTL_SERVICE, MDNS_FAMILY_IPV4, NULL);
             MUTEX_UNLOCK(mdnsd->mutex);
         }
-        if (now >= next_link_check) {
+        if (check_now || now >= next_link_check) {
             next_link_check = now + MDNS_LINK_CHECK_MS;
             if (mdns_follow_link(mdnsd)) {
                 reannounce_at = now + MDNS_REANNOUNCE_MS;
@@ -1187,6 +1203,7 @@ mdnsd_t *mdnsd_init(const char *host_name)
              host_name && *host_name ? host_name : "UxPlay.local");
     mdnsd->sock_fd4 = -1;
     mdnsd->sock_fd6 = -1;
+    mdnsd->usb_link_allowed = 1;
     MUTEX_CREATE(mdnsd->mutex);
     return mdnsd;
 }
@@ -1217,7 +1234,7 @@ int mdnsd_start(mdnsd_t *mdnsd)
     int error4 = 0;
     int error6 = 0;
 
-    mdnsd->ipv4_addr = mdns_get_default_ipv4();
+    mdnsd->ipv4_addr = mdns_get_default_ipv4(mdnsd->usb_link_allowed);
     mdns_get_default_ipv6(mdnsd->ipv6_addr, &mdnsd->ipv6_scope_id);
 
     mdnsd->sock_fd4 = mdns_open_socket4(mdnsd->ipv4_addr);
@@ -1319,6 +1336,22 @@ void mdnsd_announce(mdnsd_t *mdnsd, uint32_t ttl)
 
     MUTEX_LOCK(mdnsd->mutex);
     mdns_announce_locked(mdnsd, ttl);
+    MUTEX_UNLOCK(mdnsd->mutex);
+}
+
+void mdnsd_set_usb_link_allowed(mdnsd_t *mdnsd, int allowed)
+{
+    if (!mdnsd) {
+        return;
+    }
+
+    MUTEX_LOCK(mdnsd->mutex);
+    allowed = allowed ? 1 : 0;
+    if (mdnsd->usb_link_allowed != allowed) {
+        mdnsd->usb_link_allowed = allowed;
+        /* picked up by mdns_thread within one select timeout (250 ms) */
+        mdnsd->link_choice_changed = 1;
+    }
     MUTEX_UNLOCK(mdnsd->mutex);
 }
 

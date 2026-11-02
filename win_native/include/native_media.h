@@ -31,7 +31,9 @@ typedef enum native_media_event {
     NATIVE_MEDIA_EVENT_WINDOW_CLOSED = 1, /* user closed the video window: drop the AirPlay client */
     NATIVE_MEDIA_EVENT_USB_STARTED = 2,   /* USB (QuickTime) mirroring became the active source */
     NATIVE_MEDIA_EVENT_USB_STOPPED = 3,   /* USB mirroring ended (unplugged, stopped, or failed) */
-    NATIVE_MEDIA_EVENT_EXIT_REQUESTED = 4 /* "Exit" chosen in the notification-area menu */
+    NATIVE_MEDIA_EVENT_EXIT_REQUESTED = 4, /* "Exit" chosen in the notification-area menu */
+    NATIVE_MEDIA_EVENT_LINK_PREFERENCE_CHANGED = 5 /* "USB first" / "Wi-Fi only" chosen: see
+                                                      native_media_prefer_usb_link() */
 } native_media_event;
 
 typedef void (*native_media_log_callback)(int level, const char *message);
@@ -89,8 +91,22 @@ void native_media_airplay_audio_stop(void);
 void native_media_set_volume(double linear_gain);
 
 /* Server-side local address the current AirPlay client connected to: the
- * window shows "USB" when it is the iPhone USB link, "Wi-Fi" otherwise. */
-void native_media_set_airplay_local_address(const char *local_address);
+ * window shows "USB" when it is the iPhone USB link, "Wi-Fi" otherwise.
+ * Returns 1 when the client is on the USB link. */
+int native_media_set_airplay_local_address(const char *local_address);
+
+/* Link preference, persisted per user (HKCU\Software\UxPlay\prefer_usb_link):
+ * true = AirPlay over the USB cable whenever the iPhone link is up (default),
+ * false = Wi-Fi only (the cable can stay plugged in to charge).  Valid from
+ * native_media_start() on. */
+bool native_media_prefer_usb_link(void);
+
+/* whether the iPhone USB network link is up right now */
+bool native_media_usb_link_up(void);
+
+/* the host applied a link-preference change; session_ended: it ended the
+ * current AirPlay session so the iPhone reconnects on the chosen link */
+void native_media_link_preference_applied(bool session_ended);
 
 /* balloon notification from the notification-area icon (e.g. AirPlay PIN) */
 void native_media_notify(const char *title, const char *text);

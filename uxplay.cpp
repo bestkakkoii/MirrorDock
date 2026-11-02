@@ -25,6 +25,7 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <string>
+#include <atomic>
 #include <algorithm>
 #include <vector>
 #include <array>
@@ -115,6 +116,9 @@ static int64_t audio_delay_aac = 0;
 static bool relaunch_video = false;
 static bool reset_loop = false;
 static unsigned int open_connections= 0;
+/* Windows: the current AirPlay client is on the iPhone USB link (written by
+   the RAOP connection thread, read by the main loop) */
+static std::atomic<bool> current_connection_over_usb{false};
 static std::string videosink = "autovideosink";
 static std::string videosink_options = "";
 static videoflip_t videoflip[2] = { NONE , NONE };
@@ -2524,7 +2528,17 @@ static int start_dnssd(std::vector<char> hw_addr, std::string name) {
     /* support for p2p (macOS only) */
     dnssd_set_peer_to_peer(dnssd, (int) peer_to_peer);
 #endif
-    
+#if UXPLAY_WIN_NATIVE
+    /* the user's saved "USB first" / "Wi-Fi only" choice applies from the
+       first advertisement on */
+    {
+        bool prefer_usb = native_media_prefer_usb_link();
+        dnssd_set_usb_link_allowed(dnssd, prefer_usb ? 1 : 0);
+        LOGI("AirPlay link preference: %s", prefer_usb ? "USB first (Wi-Fi when no USB link)"
+                                                       : "Wi-Fi only (the USB cable is not used for AirPlay)");
+    }
+#endif
+
     /* after dnssd starts, reset the default feature set here 
      * (overwrites features set in dnssdint.h)
      * default: FEATURES_1 = 0x5A7FFEE6, FEATURES_2 = 0 */
@@ -2787,7 +2801,7 @@ extern "C" void conn_transport (void *cls, const char *local_address) {
     (void) cls;
 #if UXPLAY_WIN_NATIVE
     /* label the window "USB" or "Wi-Fi" by the link the AirPlay client used */
-    native_media_set_airplay_local_address(local_address);
+    current_connection_over_usb = native_media_set_airplay_local_address(local_address) != 0;
 #else
     (void) local_address;
 #endif
@@ -3332,6 +3346,34 @@ static gboolean native_window_closed_idle(gpointer data) {
     return G_SOURCE_REMOVE;
 }
 
+/* "USB first" / "Wi-Fi only" chosen in the tray (main loop thread): move the
+ * mDNS advertisement, and end a session that runs on the other link so the
+ * iPhone reconnects on the chosen one (it does not reconnect by itself).
+ * The USB device is never touched, so a charging cable keeps charging. */
+static gboolean native_link_preference_idle(gpointer data) {
+    (void) data;
+    bool prefer_usb = native_media_prefer_usb_link();
+    if (dnssd) {
+        dnssd_set_usb_link_allowed(dnssd, prefer_usb ? 1 : 0);
+    }
+    bool wrong_link = false;
+    if (open_connections > 0) {
+        bool const over_usb = current_connection_over_usb.load();
+        wrong_link = prefer_usb ? (!over_usb && native_media_usb_link_up()) : over_usb;
+    }
+    if (wrong_link) {
+        LOGI("AirPlay link preference changed: ending the current %s session so the iPhone reconnects over %s",
+             prefer_usb ? "Wi-Fi" : "USB", prefer_usb ? "USB" : "Wi-Fi");
+    }
+    native_media_link_preference_applied(wrong_link);
+    if (wrong_link && gmainloop) {
+        reset_httpd = true;
+        relaunch_video = true;
+        g_main_loop_quit(gmainloop);
+    }
+    return G_SOURCE_REMOVE;
+}
+
 static void native_event_callback(native_media_event event, void *user_data) {
     (void) user_data;
     switch (event) {
@@ -3347,6 +3389,9 @@ static void native_event_callback(native_media_event event, void *user_data) {
     case NATIVE_MEDIA_EVENT_EXIT_REQUESTED:
         LOGI("exit requested from the notification-area menu");
         g_idle_add(handle_signal, NULL);
+        break;
+    case NATIVE_MEDIA_EVENT_LINK_PREFERENCE_CHANGED:
+        g_idle_add(native_link_preference_idle, NULL);
         break;
     default:
         break;

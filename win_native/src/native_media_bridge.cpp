@@ -51,6 +51,8 @@ namespace
         // USB link monitor thread only
         std::optional<uxplay::usb_link_state> last_usb_link;
         bool hotspot_hint_shown = false;
+        // AirPlay link preference (persisted in HKCU)
+        std::atomic<bool> prefer_usb_link{true};
         std::optional<uxplay::display_mode_info> display;
         native_media_event_callback event_callback = nullptr;
         void *event_user_data = nullptr;
@@ -111,6 +113,46 @@ namespace
         return static_cast<std::int64_t>(remote_time_ns) + *state.remote_to_local_offset;
     }
 
+    // ---- AirPlay link preference (USB first / Wi-Fi only) --------------------
+
+    constexpr wchar_t settings_key[] = L"Software\\UxPlay";
+    constexpr wchar_t prefer_usb_link_value[] = L"prefer_usb_link";
+
+    bool load_prefer_usb_link()
+    {
+        DWORD value = 1;
+        DWORD size = sizeof(value);
+        LSTATUS const result = RegGetValueW(HKEY_CURRENT_USER, settings_key, prefer_usb_link_value, RRF_RT_REG_DWORD,
+                                            nullptr, &value, &size);
+        if (result == ERROR_FILE_NOT_FOUND)
+        {
+            return true; // default: USB first
+        }
+        if (result != ERROR_SUCCESS)
+        {
+            uxplay::log::warning("settings: {} (using USB first)",
+                                 uxplay::make_win32_failure("RegGetValueW(prefer_usb_link)",
+                                                            static_cast<unsigned long>(result))
+                                     .describe());
+            return true;
+        }
+        return value != 0;
+    }
+
+    void save_prefer_usb_link(bool prefer_usb_link)
+    {
+        DWORD const value = prefer_usb_link ? 1 : 0;
+        LSTATUS const result = RegSetKeyValueW(HKEY_CURRENT_USER, settings_key, prefer_usb_link_value, REG_DWORD,
+                                               &value, sizeof(value));
+        if (result != ERROR_SUCCESS)
+        {
+            uxplay::log::warning("settings: link preference not saved: {}",
+                                 uxplay::make_win32_failure("RegSetKeyValueW(prefer_usb_link)",
+                                                            static_cast<unsigned long>(result))
+                                     .describe());
+        }
+    }
+
     // ---- iPhone USB link (AirPlay over the Personal Hotspot cable) ----------
 
     bool offer_data_guard(uxplay::usb_link_state const &link)
@@ -119,8 +161,29 @@ namespace
         return link.link_up && link.other_internet && (!link.data_guard_applied || link.data_leak());
     }
 
-    std::wstring usb_link_line(uxplay::usb_link_state const &link)
+    bool offer_enable_adapter(uxplay::usb_link_state const &link, bool prefer_usb_link)
     {
+        return prefer_usb_link && link.link_adapter_disabled;
+    }
+
+    std::wstring usb_link_line(uxplay::usb_link_state const &link, bool prefer_usb_link)
+    {
+        if (!prefer_usb_link)
+        {
+            if (link.link_up)
+            {
+                return L"USB：線路已連線，但目前只用 Wi-Fi 投影";
+            }
+            if (link.iphone_attached)
+            {
+                return L"USB：iPhone 已接上（只用 Wi-Fi 投影，USB 線只充電）";
+            }
+            return L"USB：未接上 iPhone（只用 Wi-Fi 投影）";
+        }
+        if (link.link_adapter_disabled)
+        {
+            return L"USB：Apple USB 網路卡已被停用，USB 投影無法使用";
+        }
         if (link.link_up)
         {
             return std::format(L"USB：已連線（{}）— 投影走傳輸線", uxplay::utf8_to_utf16(link.local_address));
@@ -132,6 +195,21 @@ namespace
         return L"USB：未接上 iPhone（目前走 Wi-Fi）";
     }
 
+    void refresh_usb_link_line()
+    {
+        bridge_state &state = bridge();
+        uxplay::media_engine *const ready = state.engine.load(std::memory_order_acquire);
+        uxplay::usb_link_monitor *const link = state.usb_link.load(std::memory_order_acquire);
+        if (ready == nullptr || link == nullptr)
+        {
+            return;
+        }
+        uxplay::usb_link_state const current = link->current();
+        bool const prefer = state.prefer_usb_link.load();
+        ready->set_usb_link(usb_link_line(current, prefer), offer_data_guard(current),
+                            offer_enable_adapter(current, prefer));
+    }
+
     std::string describe_usb_link(uxplay::usb_link_state const &link)
     {
         if (link.link_up)
@@ -141,6 +219,11 @@ namespace
                                link.local_address, link.ipv4_internet_via_link ? "YES" : "no",
                                link.ipv6_internet_via_link ? "YES" : "no", link.other_internet ? "yes" : "no",
                                link.data_guard_applied ? "applied" : "not applied");
+        }
+        if (link.link_adapter_disabled)
+        {
+            return "iPhone attached but its network adapter (Apple Mobile Device Ethernet) is disabled in Windows "
+                   "(AirPlay uses Wi-Fi)";
         }
         if (link.link_missing)
         {
@@ -169,7 +252,8 @@ namespace
         {
             return;
         }
-        ready->set_usb_link(usb_link_line(next), offer);
+        bool const prefer = state.prefer_usb_link.load();
+        ready->set_usb_link(usb_link_line(next, prefer), offer, offer_enable_adapter(next, prefer));
         if (offer && (!previous.link_up || !offer_data_guard(previous)))
         {
             ready->notify(L"保護手機流量",
@@ -177,12 +261,19 @@ namespace
                           L"Wi-Fi（只需一次；投影本身不耗流量）。",
                           uxplay::tray_command::apply_data_guard);
         }
-        else if (next.link_up && !previous.link_up)
+        else if (offer_enable_adapter(next, prefer) && !previous.link_adapter_disabled)
+        {
+            ready->notify(L"USB 投影的網路卡被停用了",
+                          L"點這則通知並在系統視窗按「是」即可重新啟用。之後想改走 Wi-Fi，請用系統匣的「只用 "
+                          L"Wi-Fi」，不必停用網路卡（停用可能讓 USB 充電中斷）。",
+                          uxplay::tray_command::enable_link_adapter);
+        }
+        else if (prefer && next.link_up && !previous.link_up)
         {
             ready->notify(L"USB 已連線",
                           L"在 iPhone「螢幕鏡像輸出」選 UxPlay，畫面就走 USB 傳輸線（不耗行動數據）。");
         }
-        else if (next.link_missing && !previous.link_missing && !state.hotspot_hint_shown)
+        else if (prefer && next.link_missing && !previous.link_missing && !state.hotspot_hint_shown)
         {
             state.hotspot_hint_shown = true;
             ready->notify(L"iPhone 已接上 USB",
@@ -190,18 +281,38 @@ namespace
         }
     }
 
-    void on_data_guard_result(bool applied, std::string const &detail)
+    void on_admin_result(uxplay::usb_link_action action, bool done, std::string const &detail)
     {
         uxplay::media_engine *const ready = bridge().engine.load(std::memory_order_acquire);
         if (ready == nullptr)
         {
             return;
         }
-        if (applied)
+        bool const declined = detail.contains("declined");
+        if (action == uxplay::usb_link_action::enable_adapter)
+        {
+            if (done)
+            {
+                ready->notify(L"已重新啟用 Apple USB 網路卡",
+                              L"iPhone 開著個人熱點時，USB 投影就能使用。");
+            }
+            else if (declined)
+            {
+                ready->notify(L"網路卡仍是停用狀態",
+                              L"系統視窗被按了「否」。可從通知區域選單的「重新啟用 Apple USB 網路卡」再試一次。");
+            }
+            else
+            {
+                ready->notify(L"網路卡仍是停用狀態", L"重新啟用沒有完成（原因見記錄檔）。可從通知區域選單再試一次。");
+            }
+            refresh_usb_link_line();
+            return;
+        }
+        if (done)
         {
             ready->notify(L"已保護手機流量", L"電腦上網固定走 Wi-Fi，iPhone 傳輸線只用來投影（設定已保存）。");
         }
-        else if (detail.contains("declined"))
+        else if (declined)
         {
             ready->notify(L"未保護手機流量", L"系統視窗被按了「否」。可從通知區域選單的「保護手機流量」再試一次。");
         }
@@ -209,6 +320,40 @@ namespace
         {
             ready->notify(L"未保護手機流量", L"設定沒有完成（原因見記錄檔）。可從通知區域選單再試一次。");
         }
+    }
+
+    // The user picked "USB first" or "Wi-Fi only" in the tray.  Only UxPlay's
+    // own choice of link changes: the USB device, the iPhone and charging are
+    // left alone.  uxplay.cpp moves the mDNS advertisement and ends a session
+    // that is on the other link.
+    void apply_link_preference(bool prefer_usb_link)
+    {
+        bridge_state &state = bridge();
+        bool const before = state.prefer_usb_link.exchange(prefer_usb_link);
+        uxplay::media_engine *const ready = state.engine.load(std::memory_order_acquire);
+        if (ready != nullptr)
+        {
+            ready->set_link_preference(prefer_usb_link);
+        }
+        if (prefer_usb_link)
+        {
+            // AirPlay over the cable needs the adapter: offer the fix right away
+            uxplay::usb_link_monitor *const link = state.usb_link.load(std::memory_order_acquire);
+            if (link != nullptr && link->current().link_adapter_disabled)
+            {
+                link->enable_link_adapter(ready != nullptr ? ready->window_handle() : nullptr);
+            }
+        }
+        if (before == prefer_usb_link)
+        {
+            return;
+        }
+        save_prefer_usb_link(prefer_usb_link);
+        uxplay::log::info("AirPlay link preference: {}", prefer_usb_link
+                                                             ? "USB first (Wi-Fi when no USB link)"
+                                                             : "Wi-Fi only (the USB cable is not used for AirPlay)");
+        refresh_usb_link_line();
+        emit(NATIVE_MEDIA_EVENT_LINK_PREFERENCE_CHANGED);
     }
 
     uxplay::audio_codec audio_codec_for(unsigned char compression_type)
@@ -278,6 +423,19 @@ namespace
                     link->apply_data_guard(ready != nullptr ? ready->window_handle() : nullptr);
                 }
                 break;
+            case uxplay::tray_command::enable_link_adapter:
+                if (uxplay::usb_link_monitor *const link = current.usb_link.load(); link != nullptr)
+                {
+                    uxplay::media_engine *const ready = current.engine.load();
+                    link->enable_link_adapter(ready != nullptr ? ready->window_handle() : nullptr);
+                }
+                break;
+            case uxplay::tray_command::prefer_usb_link:
+                apply_link_preference(true);
+                break;
+            case uxplay::tray_command::wifi_only:
+                apply_link_preference(false);
+                break;
             case uxplay::tray_command::open_log:
                 if (!current.log_path.empty())
                 {
@@ -338,10 +496,11 @@ namespace
             {
                 on_usb_link_change(next);
             };
-            link_events.on_guard_result = [](bool applied, std::string const &detail)
+            link_events.on_admin_result = [](uxplay::usb_link_action action, bool done, std::string const &detail)
             {
-                on_data_guard_result(applied, detail);
+                on_admin_result(action, done, detail);
             };
+            state.engine_owner->set_link_preference(state.prefer_usb_link.load());
             if (auto link = uxplay::usb_link_monitor::create(std::move(link_events)); !link)
             {
                 // AirPlay over the cable still works; only its status/guard are missing
@@ -375,6 +534,8 @@ extern "C" int native_media_start(const native_media_settings *settings)
     state.event_callback = settings->event_callback;
     state.event_user_data = settings->event_user_data;
     state.log_path = settings->log_path != nullptr ? uxplay::utf8_to_utf16(settings->log_path) : std::wstring{};
+    // synchronous: uxplay.cpp reads it before the mDNS advertisement starts
+    state.prefer_usb_link.store(load_prefer_usb_link());
 
     uxplay::system_tuning::process_tuning_report const tuning = uxplay::system_tuning::apply_process_tuning();
     uxplay::log::info("host tuning: power throttling off {}, timer resolution kept {}, priority above normal {}, "
@@ -545,7 +706,7 @@ extern "C" void native_media_set_volume(double linear_gain)
     }
 }
 
-extern "C" void native_media_set_airplay_local_address(const char *local_address)
+extern "C" int native_media_set_airplay_local_address(const char *local_address)
 {
     // by the adapter that owns the address: a PC on the iPhone hotspot over
     // Wi-Fi also has 172.20.10.x, but that is Wi-Fi, not the cable
@@ -554,6 +715,36 @@ extern "C" void native_media_set_airplay_local_address(const char *local_address
     {
         ready->set_airplay_over_usb(over_usb);
     }
+    return over_usb ? 1 : 0;
+}
+
+extern "C" bool native_media_prefer_usb_link(void)
+{
+    return bridge().prefer_usb_link.load();
+}
+
+extern "C" bool native_media_usb_link_up(void)
+{
+    uxplay::usb_link_monitor *const link = bridge().usb_link.load(std::memory_order_acquire);
+    return link != nullptr && link->current().link_up;
+}
+
+extern "C" void native_media_link_preference_applied(bool session_ended)
+{
+    uxplay::media_engine *const ready = engine();
+    if (ready == nullptr)
+    {
+        return;
+    }
+    bool const prefer = bridge().prefer_usb_link.load();
+    std::wstring const title = prefer ? L"已改為 USB 優先" : L"已改為只用 Wi-Fi";
+    std::wstring text = prefer ? L"iPhone 開著個人熱點並接上傳輸線時，投影走 USB。"
+                               : L"投影只走 Wi-Fi；USB 線可以繼續接著充電，不用停用任何裝置。";
+    if (session_ended)
+    {
+        text += L"目前這次投影已結束，請在 iPhone「螢幕鏡像輸出」重新選 UxPlay。";
+    }
+    ready->notify(title, std::move(text));
 }
 
 extern "C" void native_media_notify(const char *title, const char *text)

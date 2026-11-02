@@ -33,6 +33,31 @@ namespace uxplay
         constexpr auto link_grace = std::chrono::seconds{8};
         // USB\VID_05AC&PID_12xx: Apple iOS devices (iPhone, iPad, iPod touch)
         constexpr std::wstring_view ios_device_prefix = L"USB\\VID_05AC&PID_12";
+        // device setup class "Net" (network adapters)
+        constexpr std::wstring_view net_class_guid = L"{4d36e972-e325-11ce-bfc1-08002be10318}";
+        // pnputil success, or success that needs a restart
+        constexpr DWORD pnputil_reboot_required = 3010;
+
+        bool equal_ignoring_case(std::wstring_view left, std::wstring_view right)
+        {
+            return left.size() == right.size() &&
+                   std::ranges::equal(left, right,
+                                      [](wchar_t a, wchar_t b)
+                                      {
+                                          return std::towupper(a) == std::towupper(b);
+                                      });
+        }
+
+        // Device instance IDs are passed to an elevated pnputil: accept only
+        // the characters Windows itself uses in them (no quotes or spaces).
+        bool safe_instance_id(std::wstring_view id)
+        {
+            return !id.empty() && id.size() <= 200 && std::ranges::all_of(id, [](wchar_t c)
+            {
+                return (c >= L'A' && c <= L'Z') || (c >= L'a' && c <= L'z') || (c >= L'0' && c <= L'9') ||
+                       c == L'&' || c == L'_' || c == L'\\' || c == L'.' || c == L'-';
+            });
+        }
 
         bool in_usb_subnet(std::uint32_t host_order_address)
         {
@@ -144,15 +169,49 @@ namespace uxplay
             return buffer.empty() ? nullptr : reinterpret_cast<IP_ADAPTER_ADDRESSES const *>(buffer.data());
         }
 
-        bool ios_device_attached()
+        // A device function that the user disabled (Device Manager or
+        // "Disable" on the network adapter): problem CM_PROB_DISABLED.
+        bool disabled_network_function(std::wstring_view instance_id)
         {
+            std::wstring id{instance_id};
+            DEVINST node = 0;
+            if (CM_Locate_DevNodeW(&node, id.data(), CM_LOCATE_DEVNODE_NORMAL) != CR_SUCCESS)
+            {
+                return false;
+            }
+            ULONG status = 0;
+            ULONG problem = 0;
+            if (CM_Get_DevNode_Status(&status, &problem, node, 0) != CR_SUCCESS || (status & DN_HAS_PROBLEM) == 0 ||
+                problem != CM_PROB_DISABLED)
+            {
+                return false;
+            }
+            std::array<wchar_t, 64> class_guid{};
+            ULONG size = static_cast<ULONG>(class_guid.size() * sizeof(wchar_t));
+            if (CM_Get_DevNode_Registry_PropertyW(node, CM_DRP_CLASSGUID, nullptr, class_guid.data(), &size, 0) !=
+                CR_SUCCESS)
+            {
+                return false;
+            }
+            return equal_ignoring_case(std::wstring_view{class_guid.data()}, net_class_guid);
+        }
+
+        struct ios_device_scan
+        {
+            bool attached = false;
+            std::wstring disabled_network_function; // instance ID, empty when none
+        };
+
+        ios_device_scan scan_ios_devices()
+        {
+            ios_device_scan found;
             ULONG const flags = CM_GETIDLIST_FILTER_ENUMERATOR | CM_GETIDLIST_FILTER_PRESENT;
             for (int attempt = 0; attempt < 3; ++attempt)
             {
                 ULONG length = 0;
                 if (CM_Get_Device_ID_List_SizeW(&length, L"USB", flags) != CR_SUCCESS || length == 0)
                 {
-                    return false;
+                    return found;
                 }
                 std::vector<wchar_t> list(length);
                 CONFIGRET const result = CM_Get_Device_ID_ListW(L"USB", list.data(), length, flags);
@@ -162,24 +221,25 @@ namespace uxplay
                 }
                 if (result != CR_SUCCESS)
                 {
-                    return false;
+                    return found;
                 }
                 for (wchar_t const *entry = list.data(); *entry != L'\0'; entry += std::wcslen(entry) + 1)
                 {
                     std::wstring_view const id{entry};
-                    if (id.size() >= ios_device_prefix.size() &&
-                        std::ranges::equal(id.substr(0, ios_device_prefix.size()), ios_device_prefix,
-                                           [](wchar_t left, wchar_t right)
-                                           {
-                                               return std::towupper(left) == right;
-                                           }))
+                    if (id.size() < ios_device_prefix.size() ||
+                        !equal_ignoring_case(id.substr(0, ios_device_prefix.size()), ios_device_prefix))
                     {
-                        return true;
+                        continue;
+                    }
+                    found.attached = true;
+                    if (found.disabled_network_function.empty() && disabled_network_function(id))
+                    {
+                        found.disabled_network_function = std::wstring{id};
                     }
                 }
-                return false;
+                return found;
             }
-            return false;
+            return found;
         }
 
         std::optional<MIB_IPINTERFACE_ROW> interface_row(ADDRESS_FAMILY family, NET_LUID luid)
@@ -272,6 +332,47 @@ namespace uxplay
             }
             return std::format(L"{}\\{}", std::wstring_view{directory.data(), length}, name);
         }
+
+        // Runs a Microsoft-signed system tool elevated (UAC prompt owned by
+        // `owner`) and returns its exit code.  A declined prompt is a failure
+        // with code ERROR_CANCELLED.
+        outcome<DWORD> run_elevated(std::wstring const &file, std::wstring const &parameters, HWND owner)
+        {
+            com_scope const com;
+            SHELLEXECUTEINFOW request{};
+            request.cbSize = sizeof(request);
+            request.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+            request.hwnd = owner;
+            request.lpVerb = L"runas";
+            request.lpFile = file.c_str();
+            request.lpParameters = parameters.c_str();
+            request.nShow = SW_HIDE;
+            if (ShellExecuteExW(&request) == FALSE)
+            {
+                DWORD const error = GetLastError();
+                if (error == ERROR_CANCELLED)
+                {
+                    return std::unexpected(make_failure("administrator consent", ERROR_CANCELLED,
+                                                        "administrator consent was declined"));
+                }
+                return std::unexpected(make_win32_failure("ShellExecuteExW(runas)", error));
+            }
+            if (request.hProcess == nullptr)
+            {
+                return std::unexpected(make_failure("ShellExecuteExW(runas)", 0, "no process handle returned"));
+            }
+            DWORD exit_code = 0;
+            DWORD const waited = WaitForSingleObject(request.hProcess, guard_process_timeout_ms);
+            bool const got_code = waited == WAIT_OBJECT_0 && GetExitCodeProcess(request.hProcess, &exit_code) != FALSE;
+            DWORD const wait_error = got_code ? 0 : (waited == WAIT_TIMEOUT ? WAIT_TIMEOUT : GetLastError());
+            CloseHandle(request.hProcess);
+            if (!got_code)
+            {
+                return std::unexpected(make_failure("waiting for the elevated tool", wait_error,
+                                                    waited == WAIT_TIMEOUT ? "timed out" : "wait failed"));
+            }
+            return exit_code;
+        }
     }
 
     bool usb_link_state::data_leak() const
@@ -318,9 +419,11 @@ namespace uxplay
         NET_LUID link_luid{};
         NET_IFINDEX link_ipv4_index = 0;
         NET_IFINDEX link_ipv6_index = 0;
+        std::wstring disabled_adapter_id; // last scan: disabled network function of the iPhone
         bool dirty = true;
         bool guard_requested = false;
-        HWND guard_owner = nullptr;
+        bool enable_requested = false;
+        HWND action_owner = nullptr;
         std::optional<std::chrono::steady_clock::time_point> waiting_for_link_since; // worker only
         bool stopping = false;
         notification_handle interface_changes;
@@ -332,7 +435,9 @@ namespace uxplay
         void worker_loop();
         usb_link_state evaluate();
         void publish(usb_link_state const &next);
+        void report(usb_link_action action, bool done, std::string const &detail);
         void run_guard();
+        void run_enable_adapter();
 
         static void WINAPI on_interface_change(void *context, MIB_IPINTERFACE_ROW *row, MIB_NOTIFICATION_TYPE type);
         static void WINAPI on_address_change(void *context, MIB_UNICASTIPADDRESS_ROW *row,
@@ -369,7 +474,9 @@ namespace uxplay
     usb_link_state usb_link_monitor::state::evaluate()
     {
         usb_link_state next;
-        next.iphone_attached = ios_device_attached();
+        ios_device_scan const devices = scan_ios_devices();
+        next.iphone_attached = devices.attached;
+        next.link_adapter_disabled = !devices.disabled_network_function.empty();
         NET_LUID luid{};
         NET_IFINDEX ipv4_index = 0;
         NET_IFINDEX ipv6_index = 0;
@@ -414,7 +521,7 @@ namespace uxplay
             }
         }
 
-        if (next.iphone_attached && !next.link_up)
+        if (next.iphone_attached && !next.link_up && !next.link_adapter_disabled)
         {
             auto const now = std::chrono::steady_clock::now();
             if (!waiting_for_link_since)
@@ -444,7 +551,16 @@ namespace uxplay
         link_luid = luid;
         link_ipv4_index = ipv4_index;
         link_ipv6_index = ipv6_index;
+        disabled_adapter_id = devices.disabled_network_function;
         return next;
+    }
+
+    void usb_link_monitor::state::report(usb_link_action action, bool done, std::string const &detail)
+    {
+        if (events.on_admin_result)
+        {
+            events.on_admin_result(action, done, detail);
+        }
     }
 
     void usb_link_monitor::state::publish(usb_link_state const &next)
@@ -472,14 +588,11 @@ namespace uxplay
             std::scoped_lock lock{mutex};
             ipv4_index = link_ipv4_index;
             ipv6_index = link_ipv6_index;
-            owner = guard_owner;
+            owner = action_owner;
         }
         if (ipv4_index == 0)
         {
-            if (events.on_guard_result)
-            {
-                events.on_guard_result(false, "the iPhone USB link is not up");
-            }
+            report(usb_link_action::data_guard, false, "the iPhone USB link is not up");
             return;
         }
 
@@ -498,43 +611,19 @@ namespace uxplay
                                    netsh, ipv6_index, guarded_metric);
         }
         command += L"\"";
-        std::wstring const shell = system_tool(L"cmd.exe");
 
-        com_scope const com;
-        SHELLEXECUTEINFOW request{};
-        request.cbSize = sizeof(request);
-        request.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
-        request.hwnd = owner;
-        request.lpVerb = L"runas";
-        request.lpFile = shell.c_str();
-        request.lpParameters = command.c_str();
-        request.nShow = SW_HIDE;
         log::info("USB link: asking for administrator consent to keep PC internet off the iPhone's cellular data "
                   "(interface {})",
                   ipv4_index);
-        if (ShellExecuteExW(&request) == FALSE)
+        outcome<DWORD> const ran = run_elevated(system_tool(L"cmd.exe"), command, owner);
+        if (!ran)
         {
-            DWORD const error = GetLastError();
-            std::string const detail = error == ERROR_CANCELLED
-                                           ? std::string{"administrator consent was declined"}
-                                           : make_win32_failure("ShellExecuteExW(runas netsh)", error).describe();
+            std::string const detail = ran.error().describe();
             log::warning("USB link: data guard not applied: {}", detail);
-            if (events.on_guard_result)
-            {
-                events.on_guard_result(false, detail);
-            }
+            report(usb_link_action::data_guard, false, detail);
             return;
         }
-        DWORD exit_code = 0;
-        if (request.hProcess != nullptr)
-        {
-            DWORD const waited = WaitForSingleObject(request.hProcess, guard_process_timeout_ms);
-            if (waited != WAIT_OBJECT_0 || GetExitCodeProcess(request.hProcess, &exit_code) == FALSE)
-            {
-                exit_code = waited == WAIT_TIMEOUT ? WAIT_TIMEOUT : GetLastError();
-            }
-            CloseHandle(request.hProcess);
-        }
+        DWORD const exit_code = *ran;
 
         // the route table settles a moment after netsh returns
         usb_link_state after = evaluate();
@@ -557,10 +646,63 @@ namespace uxplay
         {
             log::warning("USB link: data guard incomplete ({})", detail);
         }
-        if (events.on_guard_result)
+        report(usb_link_action::data_guard, applied, detail);
+    }
+
+    void usb_link_monitor::state::run_enable_adapter()
+    {
+        std::wstring id;
+        HWND owner = nullptr;
         {
-            events.on_guard_result(applied, detail);
+            std::scoped_lock lock{mutex};
+            id = disabled_adapter_id;
+            owner = action_owner;
         }
+        if (id.empty())
+        {
+            report(usb_link_action::enable_adapter, true, "the iPhone network adapter is not disabled");
+            return;
+        }
+        if (!safe_instance_id(id))
+        {
+            std::string const detail = std::format("refusing unexpected device instance ID \"{}\"", utf16_to_utf8(id));
+            log::warning("USB link: {}", detail);
+            report(usb_link_action::enable_adapter, false, detail);
+            return;
+        }
+
+        // pnputil (Windows 10 2004+) enables exactly that device function; it
+        // touches neither the rest of the iPhone's USB device nor charging.
+        log::info("USB link: asking for administrator consent to re-enable {}", utf16_to_utf8(id));
+        outcome<DWORD> const ran =
+            run_elevated(system_tool(L"pnputil.exe"), std::format(L"/enable-device \"{}\"", id), owner);
+        if (!ran)
+        {
+            std::string const detail = ran.error().describe();
+            log::warning("USB link: adapter not re-enabled: {}", detail);
+            report(usb_link_action::enable_adapter, false, detail);
+            return;
+        }
+
+        usb_link_state after = evaluate();
+        for (int check = 0; check < 10 && after.link_adapter_disabled; ++check)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds{300});
+            after = evaluate();
+        }
+        publish(after);
+        bool const enabled = !after.link_adapter_disabled && (*ran == 0 || *ran == pnputil_reboot_required);
+        std::string const detail = std::format("pnputil exit code {}; adapter {}", *ran,
+                                               after.link_adapter_disabled ? "still disabled" : "enabled");
+        if (enabled)
+        {
+            log::info("USB link: iPhone network adapter re-enabled ({})", detail);
+        }
+        else
+        {
+            log::warning("USB link: re-enabling the iPhone network adapter failed ({})", detail);
+        }
+        report(usb_link_action::enable_adapter, enabled, detail);
     }
 
     void usb_link_monitor::state::worker_loop()
@@ -568,11 +710,12 @@ namespace uxplay
         for (;;)
         {
             bool guard_now = false;
+            bool enable_now = false;
             {
                 std::unique_lock lock{mutex};
                 wake.wait_for(lock, poll_interval, [this]
                 {
-                    return stopping || dirty || guard_requested;
+                    return stopping || dirty || guard_requested || enable_requested;
                 });
                 if (stopping)
                 {
@@ -592,8 +735,13 @@ namespace uxplay
                 }
                 dirty = false;
                 guard_now = std::exchange(guard_requested, false);
+                enable_now = std::exchange(enable_requested, false);
             }
             publish(evaluate());
+            if (enable_now)
+            {
+                run_enable_adapter();
+            }
             if (guard_now)
             {
                 run_guard();
@@ -669,7 +817,17 @@ namespace uxplay
         {
             std::scoped_lock lock{impl->mutex};
             impl->guard_requested = true;
-            impl->guard_owner = static_cast<HWND>(owner_window);
+            impl->action_owner = static_cast<HWND>(owner_window);
+        }
+        impl->wake.notify_all();
+    }
+
+    void usb_link_monitor::enable_link_adapter(void *owner_window)
+    {
+        {
+            std::scoped_lock lock{impl->mutex};
+            impl->enable_requested = true;
+            impl->action_owner = static_cast<HWND>(owner_window);
         }
         impl->wake.notify_all();
     }

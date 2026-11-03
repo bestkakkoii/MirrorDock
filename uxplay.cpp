@@ -142,6 +142,7 @@ static std::atomic<unsigned int> missed_feedback{0};
 static bool reset_httpd = false;
 static bool force_h264_only = false;    /* "-h264": do not offer H.265 to the client */
 static int gpu_preference = 0;          /* "-gpu auto|intel|nvidia" */
+static int ui_language_choice = 0;      /* "-ui": 0 auto, 1 zh-TW, 2 zh-CN, 3 en (native_media_settings) */
 static HANDLE shutdown_complete_event = NULL;
 
 
@@ -704,6 +705,8 @@ static void print_info (char *name) {
     printf("-h264     Offer only H.264 (default: H.265 too if the GPU decodes it)\n");
     printf("-gpu g    GPU for decode/present: auto (display owner), integrated|intel,\n");
     printf("          discrete|nvidia (any vendor, AMD included), software|warp\n");
+    printf("-ui l     Interface language: auto (Windows display language, the\n");
+    printf("          default), zh-TW (Traditional Chinese), zh-CN (Simplified), en\n");
     printf("-pin[xxxx]Use a 4-digit pin code to control client access (default: no)\n");
     printf("          default pin is random: optionally use fixed pin xxxx\n");
     printf("-reg [fn] Keep a register in ~/.uxplay.register to verify returning\n");
@@ -1393,6 +1396,23 @@ static void parse_arguments (int argc, char *argv[]) {
             } else {
                 fprintf(stderr, "invalid \"-gpu %s\": choices are auto, integrated (intel), discrete (nvidia), "
                         "software (warp)\n", choice.c_str());
+                exit(1);
+            }
+        } else if (arg == "-ui") {
+            if (!option_has_value(i, argc, arg, argv[i+1])) exit(1);
+            std::string choice(argv[++i]);
+            std::transform(choice.begin(), choice.end(), choice.begin(),
+                           [](unsigned char c) { return (char) std::tolower(c); });
+            if (choice == "auto") {
+                ui_language_choice = 0;
+            } else if (choice == "zh-tw" || choice == "zh-hant") {
+                ui_language_choice = 1;
+            } else if (choice == "zh-cn" || choice == "zh-hans") {
+                ui_language_choice = 2;
+            } else if (choice == "en") {
+                ui_language_choice = 3;
+            } else {
+                fprintf(stderr, "invalid \"-ui %s\": choices are auto, zh-TW, zh-CN, en\n", argv[i]);
                 exit(1);
             }
         } else if (arg == "-nofreeze") {
@@ -2531,6 +2551,7 @@ int main (int argc, char *argv[]) {
     native_settings.keep_window_on_stop = !new_window_closing_behavior;
     native_settings.log_level = log_level;
     native_settings.gpu_preference = gpu_preference;
+    native_settings.ui_language = ui_language_choice;
     native_settings.tray_icon = true;
     native_settings.log_path = native_log_path.empty() ? NULL : native_log_path.c_str();
     native_settings.log_callback = native_log_callback;

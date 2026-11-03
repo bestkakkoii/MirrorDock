@@ -27,12 +27,45 @@ import uxplay_audio_decoder;
 import uxplay_system_tuning;
 import uxplay_gpu_device;
 import uxplay_video_window;
+import uxplay_ui_text;
 
 namespace
 {
     using uxplay::media_source;
 
     constexpr auto engine_start_wait = std::chrono::seconds{3};
+
+    // interface text in the language chosen at native_media_start
+    std::wstring ui_text_string(uxplay::ui_text id)
+    {
+        return std::wstring{uxplay::ui_string(id)};
+    }
+
+    // native_media_settings::ui_language: 0 follows the Windows display
+    // language; 1/2/3 force Traditional Chinese / Simplified Chinese / English
+    void apply_ui_language(int requested)
+    {
+        if (requested >= 1 && requested <= 3)
+        {
+            uxplay::ui_language const forced = requested == 1   ? uxplay::ui_language::traditional_chinese
+                                               : requested == 2 ? uxplay::ui_language::simplified_chinese
+                                                                : uxplay::ui_language::english;
+            uxplay::set_ui_language(forced);
+            uxplay::log::info("interface language: {} (set with -ui)", uxplay::ui_language_name(forced));
+            return;
+        }
+        auto detected = uxplay::detect_ui_language();
+        if (!detected)
+        {
+            uxplay::set_ui_language(uxplay::ui_language::english);
+            uxplay::log::warning("interface language: the Windows display language is unavailable ({}); using English",
+                                 detected.error().describe());
+            return;
+        }
+        uxplay::set_ui_language(detected->language);
+        uxplay::log::info("interface language: {} (Windows display language {})",
+                          uxplay::ui_language_name(detected->language), uxplay::utf16_to_utf8(detected->windows_language));
+    }
 
     struct bridge_state
     {
@@ -170,27 +203,28 @@ namespace
         {
             if (link.link_up)
             {
-                return L"USB：已連線（未使用）";
+                return ui_text_string(uxplay::ui_text::usb_connected_unused);
             }
             if (link.iphone_attached)
             {
-                return L"USB：已連接（僅充電）";
+                return ui_text_string(uxplay::ui_text::usb_attached_charging_only);
             }
-            return L"USB：未連接";
+            return ui_text_string(uxplay::ui_text::usb_not_connected);
         }
         if (link.link_adapter_disabled)
         {
-            return L"USB：網路卡已停用";
+            return ui_text_string(uxplay::ui_text::usb_adapter_disabled);
         }
         if (link.link_up)
         {
-            return std::format(L"USB：已連線 {}", uxplay::utf8_to_utf16(link.local_address));
+            return std::format(L"{} {}", uxplay::ui_string(uxplay::ui_text::usb_connected_at),
+                               uxplay::utf8_to_utf16(link.local_address));
         }
         if (link.iphone_attached)
         {
-            return L"USB：請開啟個人熱點";
+            return ui_text_string(uxplay::ui_text::usb_turn_on_hotspot);
         }
-        return L"USB：未連接";
+        return ui_text_string(uxplay::ui_text::usb_not_connected);
     }
 
     void refresh_usb_link_line()
@@ -254,22 +288,25 @@ namespace
         ready->set_usb_link(usb_link_line(next, prefer), offer, offer_enable_adapter(next, prefer));
         if (offer && (!previous.link_up || !offer_data_guard(previous)))
         {
-            ready->notify(L"行動數據保護", L"電腦正經由 iPhone 行動數據上網。點此改為僅使用 Wi-Fi。",
-                          uxplay::tray_command::apply_data_guard);
+            ready->notify(ui_text_string(uxplay::ui_text::data_guard_offer_title),
+                          ui_text_string(uxplay::ui_text::data_guard_offer_text), uxplay::tray_command::apply_data_guard);
         }
         else if (offer_enable_adapter(next, prefer) && !previous.link_adapter_disabled)
         {
-            ready->notify(L"USB 網路卡已停用", L"點此重新啟用，以使用 USB 投影。",
+            ready->notify(ui_text_string(uxplay::ui_text::adapter_disabled_title),
+                          ui_text_string(uxplay::ui_text::adapter_disabled_text),
                           uxplay::tray_command::enable_link_adapter);
         }
         else if (prefer && next.link_up && !previous.link_up)
         {
-            ready->notify(L"USB 已連線", L"螢幕鏡像將經由 USB 傳輸。");
+            ready->notify(ui_text_string(uxplay::ui_text::usb_connected_title),
+                          ui_text_string(uxplay::ui_text::usb_connected_text));
         }
         else if (prefer && next.link_missing && !previous.link_missing && !state.hotspot_hint_shown)
         {
             state.hotspot_hint_shown = true;
-            ready->notify(L"iPhone 已連接", L"開啟「個人熱點」即可使用 USB 投影。");
+            ready->notify(ui_text_string(uxplay::ui_text::iphone_attached_title),
+                          ui_text_string(uxplay::ui_text::iphone_attached_text));
         }
     }
 
@@ -285,22 +322,27 @@ namespace
         {
             if (done)
             {
-                ready->notify(L"USB 網路卡已啟用", L"開啟個人熱點後即可使用 USB 投影。");
+                ready->notify(ui_text_string(uxplay::ui_text::adapter_enabled_title),
+                              ui_text_string(uxplay::ui_text::adapter_enabled_text));
             }
             else
             {
-                ready->notify(L"USB 網路卡仍停用", declined ? L"已取消系統管理員授權。" : L"啟用失敗，詳見記錄檔。");
+                ready->notify(ui_text_string(uxplay::ui_text::adapter_still_disabled_title),
+                              ui_text_string(declined ? uxplay::ui_text::admin_declined
+                                                      : uxplay::ui_text::enable_failed));
             }
             refresh_usb_link_line();
             return;
         }
         if (done)
         {
-            ready->notify(L"行動數據保護已啟用", L"電腦上網僅使用 Wi-Fi。");
+            ready->notify(ui_text_string(uxplay::ui_text::data_guard_on_title),
+                          ui_text_string(uxplay::ui_text::data_guard_on_text));
         }
         else
         {
-            ready->notify(L"行動數據保護未啟用", declined ? L"已取消系統管理員授權。" : L"設定失敗，詳見記錄檔。");
+            ready->notify(ui_text_string(uxplay::ui_text::data_guard_off_title),
+                          ui_text_string(declined ? uxplay::ui_text::admin_declined : uxplay::ui_text::apply_failed));
         }
     }
 
@@ -459,6 +501,8 @@ extern "C" int native_media_start(const native_media_settings *settings)
         return 0;
     }
     uxplay::log::install_sink(settings->log_callback, static_cast<uxplay::log::level>(settings->log_level));
+    // before the engine thread creates the window, tray menu and control bar
+    apply_ui_language(settings->ui_language);
     state.event_callback = settings->event_callback;
     state.event_user_data = settings->event_user_data;
     state.log_path = settings->log_path != nullptr ? uxplay::utf8_to_utf16(settings->log_path) : std::wstring{};
@@ -662,11 +706,11 @@ extern "C" void native_media_link_preference_applied(bool session_ended)
         return;
     }
     bool const prefer = bridge().prefer_usb_link.load();
-    std::wstring const title = prefer ? L"已切換為 USB 優先" : L"已切換為僅 Wi-Fi";
-    std::wstring const text = session_ended ? L"請在 iPhone 重新選擇 UxPlay。"
-                              : prefer      ? L"連接 USB 並開啟個人熱點時使用 USB。"
-                                            : L"USB 連線僅供充電。";
-    ready->notify(title, text);
+    uxplay::ui_text const title = prefer ? uxplay::ui_text::switched_to_usb_first : uxplay::ui_text::switched_to_wifi_only;
+    uxplay::ui_text const text = session_ended ? uxplay::ui_text::choose_uxplay_again
+                                 : prefer      ? uxplay::ui_text::usb_when_hotspot_on
+                                               : uxplay::ui_text::usb_charging_only;
+    ready->notify(ui_text_string(title), ui_text_string(text));
 }
 
 extern "C" void native_media_notify(const char *title, const char *text)

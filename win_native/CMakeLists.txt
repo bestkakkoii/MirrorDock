@@ -50,6 +50,7 @@ target_sources( uxplay_native
       src/uxplay_system_tuning.cppm
       src/uxplay_media_types.cppm
       src/uxplay_gpu_device.cppm
+      src/uxplay_ui_text.cppm
       src/uxplay_video_frame.cppm
       src/uxplay_video_decoder.cppm
       src/uxplay_video_overlay.cppm
@@ -65,6 +66,7 @@ target_sources( uxplay_native
     src/uxplay_clock.cpp
     src/uxplay_system_tuning.cpp
     src/uxplay_gpu_device.cpp
+    src/uxplay_ui_text.cpp
     src/uxplay_video_frame.cpp
     src/uxplay_video_decoder.cpp
     src/uxplay_video_overlay.cpp
@@ -119,7 +121,12 @@ if ( UXPLAY_NATIVE_TESTS )
   set_target_properties( usb_link_tests PROPERTIES CXX_MODULE_STD ON )
   add_test( NAME usb_link_tests COMMAND usb_link_tests )
 
-  foreach( test_source tests/engine_smoke_test.cpp tests/usb_link_tests.cpp )
+  add_executable( ui_text_tests tests/ui_text_tests.cpp )
+  target_link_libraries( ui_text_tests PRIVATE uxplay_native )
+  set_target_properties( ui_text_tests PROPERTIES CXX_MODULE_STD ON )
+  add_test( NAME ui_text_tests COMMAND ui_text_tests )
+
+  foreach( test_source tests/engine_smoke_test.cpp tests/usb_link_tests.cpp tests/ui_text_tests.cpp )
     set_property( SOURCE ${test_source} APPEND PROPERTY COMPILE_OPTIONS
       -Wall -Wextra -Wpedantic -Wshadow -Wold-style-cast -Werror )
   endforeach()

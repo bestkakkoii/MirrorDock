@@ -20,6 +20,7 @@ import uxplay_video_presenter;
 import uxplay_audio_decoder;
 import uxplay_audio_output;
 import uxplay_system_tuning;
+import uxplay_ui_text;
 
 namespace uxplay
 {
@@ -236,7 +237,8 @@ namespace uxplay
         if (!stream)
         {
             displayed_source.store(-1);
-            window->set_status(std::format(L"{} · 等待連線", settings.window_title));
+            window->set_status(
+                std::format(L"{} · {}", settings.window_title, ui_string(ui_text::waiting_for_connection)));
             window->set_stream_info({}, {});
             if (!settings.keep_window_on_stop)
             {
@@ -547,7 +549,8 @@ namespace uxplay
             return std::unexpected(window.error());
         }
         created->window = std::move(*window);
-        created->window->set_status(std::format(L"{} · 等待連線", created->settings.window_title));
+        created->window->set_status(std::format(L"{} · {}", created->settings.window_title,
+                                                 ui_string(ui_text::waiting_for_connection)));
 
         auto presenter = video_presenter::create(*created->gpu, created->window->native_handle(),
                                                  created->display_mode.refresh_period_ns(),

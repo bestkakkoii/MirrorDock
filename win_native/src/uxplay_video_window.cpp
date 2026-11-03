@@ -13,6 +13,7 @@ module uxplay_video_window;
 import std;
 import uxplay_status;
 import uxplay_log;
+import uxplay_ui_text;
 import uxplay_video_overlay;
 
 namespace uxplay
@@ -95,7 +96,7 @@ namespace uxplay
         std::wstring notify_text;
         std::optional<tray_command> notify_action;
         std::optional<tray_command> balloon_action; // UI thread only
-        std::wstring usb_link_text = L"USB：檢查中…";
+        std::wstring usb_link_text{ui_string(ui_text::usb_checking)};
         std::mutex text_mutex;
         HWND window = nullptr;
         HDEVNOTIFY device_notification = nullptr;
@@ -339,24 +340,26 @@ namespace uxplay
         AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, usb_line.c_str());
         if (enable_adapter_offer.load())
         {
-            AppendMenuW(menu, MF_STRING, menu_enable_adapter, L"啟用 USB 網路卡…");
+            AppendMenuW(menu, MF_STRING, menu_enable_adapter, ui_string(ui_text::enable_usb_adapter_menu).data());
         }
         if (data_guard_offer.load())
         {
-            AppendMenuW(menu, MF_STRING, menu_data_guard, L"保護行動數據…");
+            AppendMenuW(menu, MF_STRING, menu_data_guard, ui_string(ui_text::protect_mobile_data_menu).data());
         }
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         // switching here never touches the USB device: the cable keeps charging
-        AppendMenuW(menu, MF_STRING, menu_prefer_usb, L"USB 優先");
-        AppendMenuW(menu, MF_STRING, menu_wifi_only, L"僅 Wi-Fi");
+        AppendMenuW(menu, MF_STRING, menu_prefer_usb, ui_string(ui_text::prefer_usb_link).data());
+        AppendMenuW(menu, MF_STRING, menu_wifi_only, ui_string(ui_text::wifi_only).data());
         CheckMenuRadioItem(menu, menu_prefer_usb, menu_wifi_only,
                            prefer_usb_link.load() ? menu_prefer_usb : menu_wifi_only, MF_BYCOMMAND);
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(menu, MF_STRING | (is_visible.load() ? 0U : MF_GRAYED), menu_fullscreen, L"全螢幕\tF11");
-        AppendMenuW(menu, MF_STRING | (muted.load() ? MF_CHECKED : 0U), menu_mute, L"靜音");
-        AppendMenuW(menu, MF_STRING, menu_open_log, L"記錄檔");
+        std::wstring const fullscreen_item = std::wstring{ui_string(ui_text::full_screen)} + L"\tF11";
+        AppendMenuW(menu, MF_STRING | (is_visible.load() ? 0U : MF_GRAYED), menu_fullscreen,
+                    fullscreen_item.c_str());
+        AppendMenuW(menu, MF_STRING | (muted.load() ? MF_CHECKED : 0U), menu_mute, ui_string(ui_text::mute).data());
+        AppendMenuW(menu, MF_STRING, menu_open_log, ui_string(ui_text::open_log).data());
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(menu, MF_STRING, menu_exit, L"結束");
+        AppendMenuW(menu, MF_STRING, menu_exit, ui_string(ui_text::exit).data());
         POINT cursor{};
         GetCursorPos(&cursor);
         SetForegroundWindow(window); // required so the menu closes on outside clicks

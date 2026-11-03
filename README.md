@@ -23,6 +23,9 @@ install. It ships as a single `uxplay.exe`.
 * **Player-style window:** a control bar that appears with the mouse and
   hides after 3 s, fullscreen on double-click / F / F11 / Alt+Enter,
   notification-area menu, display hot-plug and refresh changes followed live.
+* **Your language:** the interface (control bar, tray menu, notifications)
+  follows the Windows display language — Traditional Chinese, Simplified
+  Chinese, or English for every other language; `-ui` picks one.
 * **Fast:** advertised ~0.5 s after launch (the first start of a newly
   downloaded copy takes longer while antivirus scans it); exits in ~0.05 s.
 
@@ -51,6 +54,7 @@ options; common ones:
 | `-fs` | start in full screen |
 | `-gpu auto\|integrated\|discrete\|software` | GPU used for decoding and display |
 | `-h264` / `-h265` | offer only H.264 / always offer H.265 |
+| `-ui auto\|zh-TW\|zh-CN\|en` | interface language (default: the Windows display language) |
 | `-vsync ms` | shift audio against video (lip sync tuning) |
 | `-pin`, `-pw` | require a PIN or password |
 | `-reset n` | reset after n seconds without client heartbeat |

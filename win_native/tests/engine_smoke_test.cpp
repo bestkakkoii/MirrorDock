@@ -5,7 +5,8 @@
 // and presented.  Exit code 0 when every access unit produced a picture and
 // the presenter showed frames.
 //
-// usage: engine_smoke_test <stream.264|stream.265> <h264|h265> <fps> [auto|intel|nvidia] [quiet]
+// usage: engine_smoke_test <stream.264|stream.265> <h264|h265> <fps> [auto|intel|nvidia] [quiet|loud]
+//                          [zh-TW|zh-CN|en]   (interface language of the window and control bar)
 import std;
 import uxplay_log;
 import uxplay_clock;
@@ -14,6 +15,7 @@ import uxplay_media_engine;
 import uxplay_video_decoder;
 import uxplay_audio_decoder;
 import uxplay_gpu_device;
+import uxplay_ui_text;
 
 namespace
 {
@@ -67,7 +69,8 @@ int main(int argc, char **argv)
 {
     if (argc < 4)
     {
-        std::println(std::cerr, "usage: engine_smoke_test <stream> <h264|h265> <fps> [auto|intel|nvidia] [quiet]");
+        std::println(std::cerr, "usage: engine_smoke_test <stream> <h264|h265> <fps> [auto|intel|nvidia] [quiet|loud] "
+                                "[zh-TW|zh-CN|en]");
         return 2;
     }
     uxplay::log::install_sink(print_line, uxplay::log::level::info);
@@ -79,6 +82,10 @@ int main(int argc, char **argv)
     // quiet: test tone at about -61 dBFS (inaudible) for runs on a machine someone is using
     bool const quiet = argc > 5 && std::string_view{argv[5]} == "quiet";
     double const tone_amplitude = quiet ? 30.0 : 3000.0;
+    std::string_view const language = argc > 6 ? std::string_view{argv[6]} : std::string_view{"en"};
+    uxplay::set_ui_language(language == "zh-TW"   ? uxplay::ui_language::traditional_chinese
+                            : language == "zh-CN" ? uxplay::ui_language::simplified_chinese
+                                                 : uxplay::ui_language::english);
 
     std::ifstream file{path, std::ios::binary};
     std::vector<std::uint8_t> const stream{std::istreambuf_iterator<char>{file}, std::istreambuf_iterator<char>{}};

@@ -99,6 +99,7 @@ Engine modules (`win_native/src`, C++26 named modules, `import std;`):
 | `uxplay_audio_decoder`, `uxplay_audio_output` | AAC-ELD/ALAC/AAC-LC/LPCM -> float32 at device rate; WASAPI IAudioClient3 low-latency period, per-sample scheduling with ≤0.3 % cubic-resampling drift correction, mute, soft limiter |
 | `uxplay_media_engine` | the AirPlay pipeline and the shared presentation timeline |
 | `uxplay_media_types` | media source identity (AirPlay) |
+| `uxplay_ui_text` | interface text table (Traditional Chinese, Simplified Chinese, English; completeness checked at compile time), Windows display-language detection, DirectWrite locale |
 | `uxplay_usb_link` | iPhone USB network link (AirPlay over the Personal Hotspot cable): attach/link detection, tray status and hints, link classification for the window label, cellular-data guard |
 | `native_media_bridge.cpp` | C API (`win_native/include/native_media.h`) used by `uxplay.cpp` |
 
@@ -148,6 +149,15 @@ Engine modules (`win_native/src`, C++26 named modules, `import std;`):
   Defender scanned it). On console close the handler waits (≤4 s)
   for the orderly shutdown so mDNS goodbyes are sent. Startup failures exit
   with code 1.
+* **Interface language:** chosen once in `native_media_start`, before the
+  engine thread creates the window, tray menu and control bar:
+  `native_media_settings::ui_language` (`-ui`) or else the first entry of
+  `GetUserPreferredUILanguages` — zh-TW/HK/MO and `zh-Hant` → Traditional,
+  other `zh` → Simplified, anything else → English (detection failure is
+  logged and falls back to English). All user-visible strings come from
+  `ui_string(ui_text)`; the control bar measures label widths, and its
+  DirectWrite locale (zh-TW / zh-CN / en-US) selects the matching CJK font.
+  Log messages and `-h` stay English.
 * **Failures** are explicit `uxplay::outcome` values with stage, original
   code and system/library message; nothing fails silently.
 * **Audio output:** UxPlay's own mute (control bar / tray) is engine-owned and
@@ -253,7 +263,8 @@ MSYSTEM=CLANG64 bash -lc 'bash win_native/build_scripts/build_deps.sh <src_root>
 MSYSTEM=CLANG64 bash -lc 'bash win_native/build_scripts/build_uxplay_native.sh <uxplay_src> <build_dir> <prefix> Release'
 # tests
 <build_dir>/win_native/usb_link_tests.exe
-<build_dir>/win_native/engine_smoke_test.exe <annexb stream> h264|h265 60 [auto|intel|nvidia] [quiet]
+<build_dir>/win_native/ui_text_tests.exe
+<build_dir>/win_native/engine_smoke_test.exe <annexb stream> h264|h265 60 [auto|intel|nvidia] [quiet|loud] [zh-TW|zh-CN|en]
 # package (exe + guide + licences + complete corresponding source)
 python -I win_native/build_scripts/package_zip.py <build_dir> <uxplay_src> <msys2>/clang64 <src_root> dist/uxplay_native_win64.zip
 ```
@@ -293,6 +304,7 @@ relinking is possible from the bundled source and build scripts.
 ## Options specific to this build
 
 `-gpu auto|integrated|discrete|software` (aliases `intel`, `nvidia`, `warp`),
+`-ui auto|zh-TW|zh-CN|en` (interface language),
 `-h264` / `-h265` (by default H.265 is offered only with HEVC hardware
 decode). Display geometry/refresh are advertised from the monitor unless
 `-s`/`-fps` are given. `-ca <file>` writes cover art to a file (on-screen

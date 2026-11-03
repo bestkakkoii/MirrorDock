@@ -14,6 +14,7 @@ module uxplay_video_overlay;
 import std;
 import uxplay_status;
 import uxplay_log;
+import uxplay_ui_text;
 
 namespace uxplay
 {
@@ -52,11 +53,6 @@ namespace uxplay
         constexpr std::wstring_view glyph_mute = L"";
         constexpr std::wstring_view glyph_more = L"";
         constexpr std::wstring_view glyph_shield = L"";
-
-        constexpr std::wstring_view label_prefer_usb = L"USB 優先";
-        constexpr std::wstring_view label_wifi_only = L"僅 Wi-Fi";
-        constexpr std::wstring_view label_data_guard = L"保護行動數據";
-        constexpr std::wstring_view label_enable_adapter = L"啟用 USB 網路卡";
 
         enum class element
         {
@@ -198,7 +194,7 @@ namespace uxplay
         {
             if (HRESULT const result = dwrite_factory->CreateTextFormat(
                     spec.family, nullptr, spec.weight, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, spec.size,
-                    L"zh-TW", spec.format->GetAddressOf());
+                    ui_locale_name().data(), spec.format->GetAddressOf());
                 FAILED(result))
             {
                 return std::unexpected(make_hresult_failure("IDWriteFactory::CreateTextFormat", result));
@@ -215,7 +211,8 @@ namespace uxplay
                 if (SUCCEEDED(fonts->FindFamilyName(family, &index, &exists)) && exists &&
                     SUCCEEDED(dwrite_factory->CreateTextFormat(family, nullptr, DWRITE_FONT_WEIGHT_NORMAL,
                                                                DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
-                                                               16.0F, L"zh-TW", icon_format.GetAddressOf())))
+                                                               16.0F, ui_locale_name().data(),
+                                                               icon_format.GetAddressOf())))
                 {
                     break;
                 }
@@ -400,24 +397,31 @@ namespace uxplay
 
         // what fits: icons always; then the alert chips, the link switch, the
         // stream label, the stream detail
-        float const segment_one = text_width(label_prefer_usb, button_format.Get()) + 2.0F * text_padding;
-        float const segment_two = text_width(label_wifi_only, button_format.Get()) + 2.0F * text_padding;
+        // labels in the interface language: widths are measured, so longer
+        // English labels push lower-priority elements out instead of clipping
+        std::wstring_view const fullscreen_label =
+            ui_string(model.fullscreen ? ui_text::exit_full_screen : ui_text::full_screen);
+        std::wstring_view const more_label = ui_string(ui_text::more);
+        std::wstring_view const mute_label = ui_string(model.muted ? ui_text::unmute : ui_text::mute);
+        std::wstring_view const prefer_usb_label = ui_string(ui_text::prefer_usb_link);
+        std::wstring_view const wifi_only_label = ui_string(ui_text::wifi_only);
+        float const segment_one = text_width(prefer_usb_label, button_format.Get()) + 2.0F * text_padding;
+        float const segment_two = text_width(wifi_only_label, button_format.Get()) + 2.0F * text_padding;
         float const segmented_width = segment_one + segment_two + 4.0F;
         auto chip_width = [this](std::wstring_view label)
         {
             return text_width(label, button_format.Get()) + chip_icon_width + 6.0F + 2.0F * chip_padding;
         };
-        float const icons_width = button_width(model.fullscreen ? L"結束全螢幕" : L"全螢幕") +
-                                  button_width(L"更多") + button_width(model.muted ? L"取消靜音" : L"靜音") +
-                                  2.0F * icon_gap;
+        float const icons_width =
+            button_width(fullscreen_label) + button_width(more_label) + button_width(mute_label) + 2.0F * icon_gap;
         float chips_width = 0.0F;
         if (model.offer_enable_adapter)
         {
-            chips_width += chip_width(label_enable_adapter) + gap;
+            chips_width += chip_width(ui_string(ui_text::enable_usb_adapter)) + gap;
         }
         if (model.offer_data_guard)
         {
-            chips_width += chip_width(label_data_guard) + gap;
+            chips_width += chip_width(ui_string(ui_text::protect_mobile_data)) + gap;
         }
         float const label_width = model.transport.empty()
                                       ? 0.0F
@@ -438,12 +442,11 @@ namespace uxplay
         float right = width - side_margin;
         float left_edge = right;
         draw_icon_button(element::fullscreen, model.fullscreen ? glyph_back_to_window : glyph_fullscreen,
-                         model.fullscreen ? L"結束全螢幕" : L"全螢幕", right, top, left_edge);
+                         fullscreen_label, right, top, left_edge);
         right = left_edge - icon_gap;
-        draw_icon_button(element::more, glyph_more, L"更多", right, top, left_edge);
+        draw_icon_button(element::more, glyph_more, more_label, right, top, left_edge);
         right = left_edge - icon_gap;
-        draw_icon_button(element::mute, model.muted ? glyph_mute : glyph_volume, model.muted ? L"取消靜音" : L"靜音",
-                         right, top, left_edge);
+        draw_icon_button(element::mute, model.muted ? glyph_mute : glyph_volume, mute_label, right, top, left_edge);
         right = left_edge - gap;
 
         if (show_segmented)
@@ -469,8 +472,8 @@ namespace uxplay
                           selected ? rgba(0.08F, 0.08F, 0.08F, 1.0F) : white(0.88F), DWRITE_TEXT_ALIGNMENT_CENTER);
                 boxes.push_back(hit_box{id, rect});
             };
-            segment(element::prefer_usb, first, label_prefer_usb, model.prefer_usb_link);
-            segment(element::wifi_only, second, label_wifi_only, !model.prefer_usb_link);
+            segment(element::prefer_usb, first, prefer_usb_label, model.prefer_usb_link);
+            segment(element::wifi_only, second, wifi_only_label, !model.prefer_usb_link);
             right = container.left - gap;
         }
 
@@ -497,11 +500,11 @@ namespace uxplay
             };
             if (model.offer_data_guard)
             {
-                chip(element::data_guard, label_data_guard);
+                chip(element::data_guard, ui_string(ui_text::protect_mobile_data));
             }
             if (model.offer_enable_adapter)
             {
-                chip(element::enable_adapter, label_enable_adapter);
+                chip(element::enable_adapter, ui_string(ui_text::enable_usb_adapter));
             }
         }
 

@@ -46,6 +46,8 @@ typedef struct native_media_settings {
     bool keep_window_on_stop;          /* "-nc": keep the last frame visible after the client stops */
     int log_level;                     /* messages above this level are discarded */
     int gpu_preference;                /* 0 = display-owning GPU (default), 1 = integrated, 2 = discrete */
+    int ui_language;                   /* interface text: 0 = Windows display language (default),
+                                          1 = Traditional Chinese, 2 = Simplified Chinese, 3 = English */
     bool tray_icon;                    /* notification-area icon with status and menu */
     const char *log_path;              /* UTF-8 path opened by "Open log" (may be NULL) */
     native_media_log_callback log_callback;

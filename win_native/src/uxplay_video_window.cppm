@@ -5,6 +5,9 @@
 // borderless window covering the monitor (no display mode change), which
 // DXGI flip-model swap chains promote to independent flip: the lowest
 // latency path, identical to exclusive fullscreen but instant to toggle.
+// A player-style control bar (uxplay_video_overlay) appears when the
+// pointer moves over the video and hides after a few idle seconds, in
+// windowed and fullscreen mode alike.
 //
 // All public members may be called from any thread; they post messages to
 // the UI thread.  Callbacks are invoked on the UI thread and must not block.
@@ -23,6 +26,7 @@ export namespace uxplay
         enable_link_adapter, // re-enable a disabled "Apple Mobile Device Ethernet"
         prefer_usb_link,     // AirPlay over the USB cable when it is up (default)
         wifi_only,           // never use the USB link for AirPlay (cable only charges)
+        toggle_mute,         // UxPlay's own output (independent of the iPhone volume)
         open_log,
         exit
     };
@@ -67,6 +71,10 @@ export namespace uxplay
         void set_usb_link(std::wstring text, bool offer_data_guard, bool offer_enable_adapter);
         // which link AirPlay uses: USB first (true) or Wi-Fi only (false)
         void set_link_preference(bool prefer_usb_link);
+        // control bar: link of the shown stream ("USB"/"Wi-Fi", empty when
+        // idle) and its size; local mute state
+        void set_stream_info(std::wstring transport, std::wstring detail);
+        void set_muted(bool muted);
         // legacy QuickTime capture toggle: shown only when available
         void set_legacy_usb(bool available, bool enabled);
         // on_click: command run when the user clicks the balloon

@@ -12,6 +12,7 @@ module uxplay_video_window;
 import std;
 import uxplay_status;
 import uxplay_log;
+import uxplay_video_overlay;
 
 namespace uxplay
 {
@@ -26,9 +27,11 @@ namespace uxplay
         constexpr UINT message_tray_update = WM_APP + 6;
         constexpr UINT message_tray_notify = WM_APP + 7;
         constexpr UINT message_tray_callback = WM_APP + 10;
+        constexpr UINT message_overlay_update = WM_APP + 11;
         constexpr UINT tray_icon_id = 1;
         constexpr UINT_PTR cursor_timer_id = 1;
-        constexpr UINT cursor_hide_delay_ms = 2500;
+        // same idle time as the control bar (media-player behaviour)
+        constexpr UINT cursor_hide_delay_ms = 3000;
         // Initial window: largest size of the video aspect within this
         // fraction of the monitor work area.
         constexpr double work_area_fraction = 0.9;
@@ -41,6 +44,7 @@ namespace uxplay
             menu_enable_adapter,
             menu_prefer_usb,
             menu_wifi_only,
+            menu_mute,
             menu_open_log,
             menu_exit
         };
@@ -103,6 +107,11 @@ namespace uxplay
         std::atomic<bool> data_guard_offer{false};
         std::atomic<bool> enable_adapter_offer{false};
         std::atomic<bool> prefer_usb_link{true};
+        std::atomic<bool> muted{false};
+        std::wstring stream_transport; // guarded by text_mutex
+        std::wstring stream_detail;    // guarded by text_mutex
+        std::unique_ptr<video_overlay> overlay; // UI thread only
+        POINT last_pointer{LONG_MIN, LONG_MIN};
         bool fullscreen_on_first_show = false;
         bool shown_once = false;
         bool cursor_hidden = false;
@@ -124,6 +133,8 @@ namespace uxplay
         void remove_tray_icon();
         void show_tray_menu();
         void tray(tray_command command);
+        void refresh_overlay();
+        void on_overlay_command(overlay_command command);
         LRESULT handle(UINT message, WPARAM wparam, LPARAM lparam);
 
         static LRESULT CALLBACK procedure(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
@@ -159,6 +170,11 @@ namespace uxplay
                      monitor.bottom - monitor.top, SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
         is_fullscreen.store(true);
         SetTimer(window, cursor_timer_id, cursor_hide_delay_ms, nullptr);
+        refresh_overlay();
+        if (overlay)
+        {
+            overlay->owner_changed();
+        }
         if (callbacks.on_fullscreen_changed)
         {
             callbacks.on_fullscreen_changed(true);
@@ -178,6 +194,11 @@ namespace uxplay
         SetWindowPos(window, nullptr, 0, 0, 0, 0,
                      SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
         is_fullscreen.store(false);
+        refresh_overlay();
+        if (overlay)
+        {
+            overlay->owner_changed();
+        }
         if (callbacks.on_fullscreen_changed)
         {
             callbacks.on_fullscreen_changed(false);
@@ -320,29 +341,29 @@ namespace uxplay
         AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, usb_line.c_str());
         if (enable_adapter_offer.load())
         {
-            AppendMenuW(menu, MF_STRING, menu_enable_adapter, L"重新啟用 Apple USB 網路卡（USB 投影需要，需系統管理員）…");
+            AppendMenuW(menu, MF_STRING, menu_enable_adapter, L"啟用 USB 網路卡…");
         }
         if (data_guard_offer.load())
         {
-            AppendMenuW(menu, MF_STRING, menu_data_guard, L"保護手機流量：電腦上網只走 Wi-Fi（需系統管理員）…");
+            AppendMenuW(menu, MF_STRING, menu_data_guard, L"保護行動數據…");
         }
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         // switching here never touches the USB device: the cable keeps charging
-        AppendMenuW(menu, MF_STRING, menu_prefer_usb, L"USB 優先：接著 iPhone 熱點線時走 USB");
-        AppendMenuW(menu, MF_STRING, menu_wifi_only, L"只用 Wi-Fi：USB 線只充電，不用來投影");
+        AppendMenuW(menu, MF_STRING, menu_prefer_usb, L"USB 優先");
+        AppendMenuW(menu, MF_STRING, menu_wifi_only, L"僅 Wi-Fi");
         CheckMenuRadioItem(menu, menu_prefer_usb, menu_wifi_only,
                            prefer_usb_link.load() ? menu_prefer_usb : menu_wifi_only, MF_BYCOMMAND);
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(menu, MF_STRING | (is_visible.load() ? 0U : MF_GRAYED), menu_fullscreen,
-                    L"全螢幕切換\tF11 / 雙擊畫面");
+        AppendMenuW(menu, MF_STRING | (is_visible.load() ? 0U : MF_GRAYED), menu_fullscreen, L"全螢幕\tF11");
+        AppendMenuW(menu, MF_STRING | (muted.load() ? MF_CHECKED : 0U), menu_mute, L"靜音");
         if (legacy_usb_available.load())
         {
             AppendMenuW(menu, MF_STRING | (legacy_usb_enabled.load() ? MF_CHECKED : 0U), menu_legacy_usb,
-                        L"舊版 QuickTime USB 擷取（僅 iOS 15 以前）");
+                        L"QuickTime USB 擷取（舊版）");
         }
-        AppendMenuW(menu, MF_STRING, menu_open_log, L"開啟記錄檔");
+        AppendMenuW(menu, MF_STRING, menu_open_log, L"記錄檔");
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(menu, MF_STRING, menu_exit, L"結束 UxPlay");
+        AppendMenuW(menu, MF_STRING, menu_exit, L"結束");
         POINT cursor{};
         GetCursorPos(&cursor);
         SetForegroundWindow(window); // required so the menu closes on outside clicks
@@ -370,6 +391,9 @@ namespace uxplay
         case menu_wifi_only:
             tray(tray_command::wifi_only);
             break;
+        case menu_mute:
+            tray(tray_command::toggle_mute);
+            break;
         case menu_open_log:
             tray(tray_command::open_log);
             break;
@@ -395,6 +419,58 @@ namespace uxplay
         if (callbacks.on_tray_command)
         {
             callbacks.on_tray_command(command);
+        }
+    }
+
+    void video_window::state::refresh_overlay()
+    {
+        if (!overlay)
+        {
+            return;
+        }
+        overlay_model model;
+        {
+            std::scoped_lock lock{text_mutex};
+            model.transport = stream_transport;
+            model.detail = stream_detail;
+        }
+        model.prefer_usb_link = prefer_usb_link.load();
+        model.fullscreen = is_fullscreen.load();
+        model.muted = muted.load();
+        model.offer_data_guard = data_guard_offer.load();
+        model.offer_enable_adapter = enable_adapter_offer.load();
+        overlay->set_model(std::move(model));
+    }
+
+    void video_window::state::on_overlay_command(overlay_command command)
+    {
+        switch (command)
+        {
+        case overlay_command::toggle_fullscreen:
+            set_fullscreen(!is_fullscreen.load());
+            break;
+        case overlay_command::prefer_usb_link:
+            tray(tray_command::prefer_usb_link);
+            break;
+        case overlay_command::wifi_only:
+            tray(tray_command::wifi_only);
+            break;
+        case overlay_command::toggle_mute:
+            tray(tray_command::toggle_mute);
+            break;
+        case overlay_command::apply_data_guard:
+            // the click is user input to this process: it may take the
+            // foreground, so the UAC prompt opens instead of flashing
+            SetForegroundWindow(window);
+            tray(tray_command::apply_data_guard);
+            break;
+        case overlay_command::enable_link_adapter:
+            SetForegroundWindow(window);
+            tray(tray_command::enable_link_adapter);
+            break;
+        case overlay_command::open_menu:
+            show_tray_menu();
+            break;
         }
     }
 
@@ -431,6 +507,13 @@ namespace uxplay
                     enter_fullscreen();
                 }
                 shown_once = true;
+                // like a player: show the controls briefly when playback starts
+                refresh_overlay();
+                if (overlay)
+                {
+                    overlay->owner_changed();
+                    overlay->activity();
+                }
             }
             else if (aspect_changed && !is_fullscreen.load() && !IsZoomed(window))
             {
@@ -439,6 +522,10 @@ namespace uxplay
             return 0;
         }
         case message_hide:
+            if (overlay)
+            {
+                overlay->hide();
+            }
             if (is_visible.load())
             {
                 leave_fullscreen();
@@ -462,6 +549,9 @@ namespace uxplay
             return 0;
         case message_tray_update:
             update_tray_icon();
+            return 0;
+        case message_overlay_update:
+            refresh_overlay();
             return 0;
         case message_tray_notify:
             if (tray_added)
@@ -514,6 +604,7 @@ namespace uxplay
             }
         case message_quit:
             KillTimer(window, cursor_timer_id);
+            overlay.reset(); // owned popup: destroy before the owner
             remove_tray_icon();
             if (device_notification != nullptr)
             {
@@ -537,6 +628,16 @@ namespace uxplay
             if (wparam != SIZE_MINIMIZED && callbacks.on_client_resized)
             {
                 callbacks.on_client_resized(LOWORD(lparam), HIWORD(lparam));
+            }
+            if (overlay)
+            {
+                overlay->owner_changed();
+            }
+            return 0;
+        case WM_MOVE:
+            if (overlay)
+            {
+                overlay->owner_changed();
             }
             return 0;
         case WM_ERASEBKGND:
@@ -577,12 +678,27 @@ namespace uxplay
             }
             break;
         case WM_MOUSEMOVE:
+        {
+            // Windows also sends WM_MOUSEMOVE when the window moves under a
+            // still pointer or the cursor changes: react to real movement only
+            POINT pointer{};
+            GetCursorPos(&pointer);
+            if (pointer.x == last_pointer.x && pointer.y == last_pointer.y)
+            {
+                break;
+            }
+            last_pointer = pointer;
             show_cursor_again();
+            if (overlay)
+            {
+                overlay->activity();
+            }
             if (is_fullscreen.load())
             {
                 SetTimer(window, cursor_timer_id, cursor_hide_delay_ms, nullptr);
             }
             break;
+        }
         case WM_TIMER:
             if (wparam == cursor_timer_id)
             {
@@ -692,6 +808,19 @@ namespace uxplay
             shared->window = window;
             shared->taskbar_created_message = RegisterWindowMessageW(L"TaskbarCreated");
             shared->add_tray_icon();
+            if (auto bar = video_overlay::create(window, [shared](overlay_command command)
+                {
+                    shared->on_overlay_command(command);
+                });
+                bar)
+            {
+                shared->overlay = std::move(*bar);
+            }
+            else
+            {
+                // the window, keyboard shortcuts and tray menu still work
+                log::warning("control bar unavailable: {}", bar.error().describe());
+            }
 
             DEV_BROADCAST_DEVICEINTERFACE_W filter{};
             filter.dbcc_size = sizeof(filter);
@@ -764,11 +893,29 @@ namespace uxplay
         }
         impl->data_guard_offer.store(offer_data_guard);
         impl->enable_adapter_offer.store(offer_enable_adapter);
+        PostMessageW(impl->window, message_overlay_update, 0, 0);
     }
 
     void video_window::set_link_preference(bool prefer_usb_link)
     {
         impl->prefer_usb_link.store(prefer_usb_link);
+        PostMessageW(impl->window, message_overlay_update, 0, 0);
+    }
+
+    void video_window::set_stream_info(std::wstring transport, std::wstring detail)
+    {
+        {
+            std::scoped_lock lock{impl->text_mutex};
+            impl->stream_transport = std::move(transport);
+            impl->stream_detail = std::move(detail);
+        }
+        PostMessageW(impl->window, message_overlay_update, 0, 0);
+    }
+
+    void video_window::set_muted(bool muted)
+    {
+        impl->muted.store(muted);
+        PostMessageW(impl->window, message_overlay_update, 0, 0);
     }
 
     void video_window::set_legacy_usb(bool available, bool enabled)

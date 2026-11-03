@@ -218,6 +218,7 @@ namespace uxplay
         std::array<audio_pipeline, media_source_count> audio_pipelines;
         std::atomic<int> displayed_source{-1};
         std::atomic<bool> airplay_over_usb{false};
+        std::atomic<bool> muted{false};
         std::atomic<bool> stopping{false};
         std::thread statistics_thread;
         std::mutex statistics_mutex;
@@ -234,7 +235,8 @@ namespace uxplay
         if (!stream)
         {
             displayed_source.store(-1);
-            window->set_status(std::format(L"{} — 等待 iPhone 連線", settings.window_title));
+            window->set_status(std::format(L"{} · 等待連線", settings.window_title));
+            window->set_stream_info({}, {});
             if (!settings.keep_window_on_stop)
             {
                 window->hide();
@@ -245,13 +247,11 @@ namespace uxplay
         // AirPlay can arrive over Wi-Fi or over the iPhone USB link; label the
         // transport the client actually used.
         bool const over_usb = stream->source == media_source::usb || airplay_over_usb.load();
-        std::wstring const short_label = over_usb ? L"USB" : L"Wi-Fi";
-        std::wstring const full_label = stream->source == media_source::usb ? L"USB"
-                                        : (airplay_over_usb.load() ? L"USB AirPlay" : L"Wi-Fi AirPlay");
-        window->set_status(std::format(L"{} — {} 鏡像中 {}x{}", settings.window_title, short_label, stream->width,
-                                       stream->height));
-        window->set_title(std::format(L"{} — {} — {}x{}", settings.window_title, full_label, stream->width,
-                                      stream->height));
+        std::wstring const label = over_usb ? L"USB" : L"Wi-Fi";
+        std::wstring const size = std::format(L"{} × {}", stream->width, stream->height);
+        window->set_status(std::format(L"{} · {} · {}", settings.window_title, label, size));
+        window->set_title(std::format(L"{} · {} · {}", settings.window_title, label, size));
+        window->set_stream_info(label, size);
         window->show_for_video(stream->width, stream->height);
         char const *const path = stream->source == media_source::usb ? "USB (QuickTime)"
                                  : (airplay_over_usb.load() ? "AirPlay over USB cable" : "AirPlay over Wi-Fi");
@@ -402,11 +402,12 @@ namespace uxplay
             // audio: where a silent session loses its sound (no packets, decoder
             // output empty or all zero, nothing played, or volume 0)
             log::info("{}: presented {} dropped {} | sync delay {:.1f} ms | audio {} packets ({} empty, {} failed "
-                      "total), decoded {} frames peak {}, played {} frames, volume x{:.2f} | audio device latency "
-                      "{:.1f} ms",
+                      "total), decoded {} frames peak {}, played {} frames, volume x{:.2f}{} | audio device "
+                      "latency {:.1f} ms",
                       media_source_name(source), stats.presented, stats.dropped,
                       static_cast<double>(timelines[source_index(source)].delay()) / 1e6, packets, empty_outputs,
                       failures, decoded_frames, level_text(peak), played.played_frames, played.gain,
+                      played.muted ? " (muted in UxPlay)" : "",
                       static_cast<double>(audio->device_latency_ns()) / 1e6);
         }
     }
@@ -507,6 +508,16 @@ namespace uxplay
         };
         window_events.on_tray_command = [engine](tray_command command)
         {
+            if (command == tray_command::toggle_mute)
+            {
+                // an engine concern (it owns the audio output)
+                bool const now_muted = !engine->muted.load();
+                engine->muted.store(now_muted);
+                engine->audio->set_muted(now_muted);
+                engine->window->set_muted(now_muted);
+                log::info("UxPlay audio output {}", now_muted ? "muted" : "unmuted");
+                return;
+            }
             if (engine->callbacks.on_tray_command)
             {
                 engine->callbacks.on_tray_command(command);
@@ -536,7 +547,7 @@ namespace uxplay
             return std::unexpected(window.error());
         }
         created->window = std::move(*window);
-        created->window->set_status(std::format(L"{} — 等待 iPhone 連線", created->settings.window_title));
+        created->window->set_status(std::format(L"{} · 等待連線", created->settings.window_title));
 
         auto presenter = video_presenter::create(*created->gpu, created->window->native_handle(),
                                                  created->display_mode.refresh_period_ns(),

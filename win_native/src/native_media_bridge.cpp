@@ -172,27 +172,27 @@ namespace
         {
             if (link.link_up)
             {
-                return L"USB：線路已連線，但目前只用 Wi-Fi 投影";
+                return L"USB：已連線（未使用）";
             }
             if (link.iphone_attached)
             {
-                return L"USB：iPhone 已接上（只用 Wi-Fi 投影，USB 線只充電）";
+                return L"USB：已連接（僅充電）";
             }
-            return L"USB：未接上 iPhone（只用 Wi-Fi 投影）";
+            return L"USB：未連接";
         }
         if (link.link_adapter_disabled)
         {
-            return L"USB：Apple USB 網路卡已被停用，USB 投影無法使用";
+            return L"USB：網路卡已停用";
         }
         if (link.link_up)
         {
-            return std::format(L"USB：已連線（{}）— 投影走傳輸線", uxplay::utf8_to_utf16(link.local_address));
+            return std::format(L"USB：已連線 {}", uxplay::utf8_to_utf16(link.local_address));
         }
         if (link.iphone_attached)
         {
-            return L"USB：iPhone 已接上，開啟「個人熱點」即走 USB";
+            return L"USB：請開啟個人熱點";
         }
-        return L"USB：未接上 iPhone（目前走 Wi-Fi）";
+        return L"USB：未連接";
     }
 
     void refresh_usb_link_line()
@@ -256,28 +256,22 @@ namespace
         ready->set_usb_link(usb_link_line(next, prefer), offer, offer_enable_adapter(next, prefer));
         if (offer && (!previous.link_up || !offer_data_guard(previous)))
         {
-            ready->notify(L"保護手機流量",
-                          L"電腦正經由 iPhone 的行動數據上網。點這則通知並在系統視窗按「是」，電腦上網就固定走 "
-                          L"Wi-Fi（只需一次；投影本身不耗流量）。",
+            ready->notify(L"行動數據保護", L"電腦正經由 iPhone 行動數據上網。點此改為僅使用 Wi-Fi。",
                           uxplay::tray_command::apply_data_guard);
         }
         else if (offer_enable_adapter(next, prefer) && !previous.link_adapter_disabled)
         {
-            ready->notify(L"USB 投影的網路卡被停用了",
-                          L"點這則通知並在系統視窗按「是」即可重新啟用。之後想改走 Wi-Fi，請用系統匣的「只用 "
-                          L"Wi-Fi」，不必停用網路卡（停用可能讓 USB 充電中斷）。",
+            ready->notify(L"USB 網路卡已停用", L"點此重新啟用，以使用 USB 投影。",
                           uxplay::tray_command::enable_link_adapter);
         }
         else if (prefer && next.link_up && !previous.link_up)
         {
-            ready->notify(L"USB 已連線",
-                          L"在 iPhone「螢幕鏡像輸出」選 UxPlay，畫面就走 USB 傳輸線（不耗行動數據）。");
+            ready->notify(L"USB 已連線", L"螢幕鏡像將經由 USB 傳輸。");
         }
         else if (prefer && next.link_missing && !previous.link_missing && !state.hotspot_hint_shown)
         {
             state.hotspot_hint_shown = true;
-            ready->notify(L"iPhone 已接上 USB",
-                          L"要走 USB 投影：在 iPhone 開「設定 › 個人熱點 › 允許其他人加入」。投影本身不耗行動數據。");
+            ready->notify(L"iPhone 已連接", L"開啟「個人熱點」即可使用 USB 投影。");
         }
     }
 
@@ -293,32 +287,22 @@ namespace
         {
             if (done)
             {
-                ready->notify(L"已重新啟用 Apple USB 網路卡",
-                              L"iPhone 開著個人熱點時，USB 投影就能使用。");
-            }
-            else if (declined)
-            {
-                ready->notify(L"網路卡仍是停用狀態",
-                              L"系統視窗被按了「否」。可從通知區域選單的「重新啟用 Apple USB 網路卡」再試一次。");
+                ready->notify(L"USB 網路卡已啟用", L"開啟個人熱點後即可使用 USB 投影。");
             }
             else
             {
-                ready->notify(L"網路卡仍是停用狀態", L"重新啟用沒有完成（原因見記錄檔）。可從通知區域選單再試一次。");
+                ready->notify(L"USB 網路卡仍停用", declined ? L"已取消系統管理員授權。" : L"啟用失敗，詳見記錄檔。");
             }
             refresh_usb_link_line();
             return;
         }
         if (done)
         {
-            ready->notify(L"已保護手機流量", L"電腦上網固定走 Wi-Fi，iPhone 傳輸線只用來投影（設定已保存）。");
-        }
-        else if (declined)
-        {
-            ready->notify(L"未保護手機流量", L"系統視窗被按了「否」。可從通知區域選單的「保護手機流量」再試一次。");
+            ready->notify(L"行動數據保護已啟用", L"電腦上網僅使用 Wi-Fi。");
         }
         else
         {
-            ready->notify(L"未保護手機流量", L"設定沒有完成（原因見記錄檔）。可從通知區域選單再試一次。");
+            ready->notify(L"行動數據保護未啟用", declined ? L"已取消系統管理員授權。" : L"設定失敗，詳見記錄檔。");
         }
     }
 
@@ -446,7 +430,8 @@ namespace
                 emit(NATIVE_MEDIA_EVENT_EXIT_REQUESTED);
                 break;
             case uxplay::tray_command::toggle_fullscreen:
-                break;
+            case uxplay::tray_command::toggle_mute:
+                break; // handled by the window / the engine
             }
         };
         auto created = uxplay::media_engine::create(std::move(engine_settings), std::move(callbacks));
@@ -737,14 +722,11 @@ extern "C" void native_media_link_preference_applied(bool session_ended)
         return;
     }
     bool const prefer = bridge().prefer_usb_link.load();
-    std::wstring const title = prefer ? L"已改為 USB 優先" : L"已改為只用 Wi-Fi";
-    std::wstring text = prefer ? L"iPhone 開著個人熱點並接上傳輸線時，投影走 USB。"
-                               : L"投影只走 Wi-Fi；USB 線可以繼續接著充電，不用停用任何裝置。";
-    if (session_ended)
-    {
-        text += L"目前這次投影已結束，請在 iPhone「螢幕鏡像輸出」重新選 UxPlay。";
-    }
-    ready->notify(title, std::move(text));
+    std::wstring const title = prefer ? L"已切換為 USB 優先" : L"已切換為僅 Wi-Fi";
+    std::wstring const text = session_ended ? L"請在 iPhone 重新選擇 UxPlay。"
+                              : prefer      ? L"連接 USB 並開啟個人熱點時使用 USB。"
+                                            : L"USB 連線僅供充電。";
+    ready->notify(title, text);
 }
 
 extern "C" void native_media_notify(const char *title, const char *text)

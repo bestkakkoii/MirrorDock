@@ -51,6 +51,7 @@ C++26 named modules (`import std;`, clang 23 + libc++ module support):
 | `uxplay_system_tuning` | EcoQoS/power-throttling opt-out, MMCSS, priority, DPI |
 | `uxplay_gpu_device` | D3D11 device on the GPU that physically scans out the monitor (QueryDisplayConfig LUID), DWM composition clock |
 | `uxplay_video_window` | Win32 window + UI thread, borderless fullscreen toggle (double-click/F/F11/Alt+Enter, Esc), tray icon/menu, USB arrival notifications |
+| `uxplay_video_overlay` | player-style control bar: layered, non-activating popup owned by the video window, Direct2D/DirectWrite (software rasterizer), Segoe Fluent/MDL2 icon glyphs; fades in on real pointer movement, out after 3 s idle (stays while hovered); link switch, mute, menu, fullscreen, alert chips |
 | `uxplay_video_decoder`, `uxplay_video_frame` | FFmpeg H.264/HEVC, D3D11VA, shader-readable decoder textures (zero copy) |
 | `uxplay_video_presenter` | flip-model swap chain, frame-latency waitable (max latency 1), timestamp-scheduled presentation, source arbitration |
 | `uxplay_audio_decoder`, `uxplay_audio_output` | AAC-ELD/ALAC/AAC-LC/LPCM -> float32 at device rate; WASAPI IAudioClient3 low-latency period, per-sample scheduling with ≤0.3 % cubic-resampling drift correction |
@@ -86,7 +87,7 @@ C++26 named modules (`import std;`, clang 23 + libc++ module support):
   delay stabilised at ~14.7 ms over 8000+ presented frames with ~0 new drops;
   audio (AAC 44.1 kHz) stayed in sync and no longer disrupts video on start;
   lock/unlock recovers cleanly. Startup-to-advertised ~0.2 s, exit ~0.05 s.
-* **Threads:** UI thread (window, tray), render thread (MMCSS "Playback"),
+* **Threads:** UI thread (window, tray, control bar), render thread (MMCSS "Playback"),
   one decode thread per source, WASAPI thread (MMCSS "Pro Audio"), USB worker,
   engine start thread, USB link monitor thread (`uxplay_usb_link`: IP Helper
   change callbacks only mark it dirty; it evaluates, publishes state to the
@@ -109,6 +110,25 @@ C++26 named modules (`import std;`, clang 23 + libc++ module support):
   waits (≤4 s) for the orderly shutdown so mDNS goodbyes are sent.
 * **Failures** are explicit `uxplay::outcome` values with stage, original
   code and system/library message; nothing fails silently.
+* **Audio output:** UxPlay's own mute (control bar / tray) is engine-owned and
+  ramped like a volume change; a soft limiter (unity below -1 dBFS, tanh knee
+  above) catches decoded overs — AirPlay AAC-ELD peaks of +2.5 dBFS were
+  measured, which the endpoint would otherwise hard-clip. The 10 s
+  statistics line reports audio packets, empty/failed decodes, decoded peak,
+  played frames, volume and mute, so a silent session shows where sound
+  stops (a "no sound" report on 2026-11-03 was traced this way to a mute
+  outside UxPlay: packets, peak and played frames were all normal).
+* **UI stack (recorded exception to the owner's desktop-GUI default of a
+  webview stack such as C++26 + saucer):** the only GUI is the video window,
+  its control bar and the tray menu, built with Win32 + Direct2D/DirectWrite
+  inside the existing C++26 module engine. Reasons: the video is a D3D11
+  flip-model swap chain whose lowest-latency path (independent flip in
+  fullscreen) must stay free when the controls are hidden — a separate
+  layered popup does that, a web view over the video would need permanent
+  composition or DirectComposition interop with a browser surface; a
+  WebView2 runtime would add a multi-process browser to a ~10 MB player that
+  is ready in ~0.5 s; the controls are seven buttons. No Qt anywhere (the
+  `qt_` files are the QuickTime capture protocol).
 
 ## USB mirroring (status: not viable on iOS 26 via QuickTime)
 

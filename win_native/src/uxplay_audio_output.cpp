@@ -161,6 +161,24 @@ namespace uxplay
         };
     }
 
+    namespace
+    {
+        // Decoded AAC can exceed full scale (AirPlay mirroring peaks of
+        // +2.5 dBFS were measured); the endpoint would clip them hard.  Unity
+        // below -1 dBFS, then a smooth tanh knee that approaches 0 dBFS.
+        float soft_limit(float sample)
+        {
+            constexpr float knee = 0.891F; // -1 dBFS
+            float const magnitude = std::abs(sample);
+            if (magnitude <= knee)
+            {
+                return sample;
+            }
+            float const limited = knee + (1.0F - knee) * std::tanh((magnitude - knee) / (1.0F - knee));
+            return std::copysign(limited, sample);
+        }
+    }
+
     struct audio_output::state
     {
         audio_format_listener listener;
@@ -176,6 +194,7 @@ namespace uxplay
         audio_device_format device_format{};
         std::array<float, media_source_count> target_gains{1.0F, 1.0F};
         std::array<std::uint64_t, media_source_count> frames_played_since_report{}; // reset by take_flow()
+        bool muted = false;
         std::int64_t latency_ns = 0;
 
         // audio-thread-only
@@ -371,6 +390,10 @@ namespace uxplay
                 gain_target = target_gains[source_index(*source)];
                 heard_gain = gain_target;
             }
+            if (muted)
+            {
+                gain_target = 0.0F; // ramped like a volume change: no click
+            }
             if (source != heard_source)
             {
                 if (source)
@@ -481,8 +504,8 @@ namespace uxplay
         for (UINT32 frame = 0; frame < frame_count; ++frame)
         {
             current_gain += std::clamp(gain_target - current_gain, -ramp, ramp);
-            float const left = scratch[static_cast<std::size_t>(frame) * 2] * current_gain;
-            float const right = scratch[static_cast<std::size_t>(frame) * 2 + 1] * current_gain;
+            float const left = soft_limit(scratch[static_cast<std::size_t>(frame) * 2] * current_gain);
+            float const right = soft_limit(scratch[static_cast<std::size_t>(frame) * 2 + 1] * current_gain);
             float *out = destination + static_cast<std::size_t>(frame) * static_cast<std::size_t>(device_channels);
             if (device_channels == 1)
             {
@@ -729,6 +752,13 @@ namespace uxplay
         audio_flow flow;
         flow.played_frames = std::exchange(impl->frames_played_since_report[source_index(source)], 0);
         flow.gain = impl->target_gains[source_index(source)];
+        flow.muted = impl->muted;
         return flow;
+    }
+
+    void audio_output::set_muted(bool muted)
+    {
+        std::scoped_lock lock{impl->mutex};
+        impl->muted = muted;
     }
 }

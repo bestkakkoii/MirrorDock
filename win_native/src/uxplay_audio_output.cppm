@@ -41,6 +41,7 @@ export namespace uxplay
     {
         std::uint64_t played_frames = 0; // frames taken from the source's queue
         float gain = 1.0F;               // current per-source volume
+        bool muted = false;              // UxPlay's own mute (all sources)
     };
 
     class audio_output
@@ -72,6 +73,9 @@ export namespace uxplay
 
         // per-source linear gain (AirPlay volume applies to Wi-Fi audio only)
         void set_volume(media_source source, float linear_gain);
+
+        // local mute of the whole output, independent of the senders' volume
+        void set_muted(bool muted);
 
         // Engine period + device stream latency of the open endpoint.
         [[nodiscard]] std::int64_t device_latency_ns() const;

@@ -52,6 +52,7 @@ target_sources( uxplay_native
       src/uxplay_gpu_device.cppm
       src/uxplay_video_frame.cppm
       src/uxplay_video_decoder.cppm
+      src/uxplay_video_overlay.cppm
       src/uxplay_video_window.cppm
       src/uxplay_video_presenter.cppm
       src/uxplay_audio_output.cppm
@@ -68,6 +69,7 @@ target_sources( uxplay_native
     src/uxplay_gpu_device.cpp
     src/uxplay_video_frame.cpp
     src/uxplay_video_decoder.cpp
+    src/uxplay_video_overlay.cpp
     src/uxplay_video_window.cpp
     src/uxplay_video_presenter.cpp
     src/uxplay_audio_output.cpp
@@ -115,7 +117,7 @@ endforeach()
 target_link_directories( uxplay_native PUBLIC ${UXPLAY_FFMPEG_LIBRARY_DIRS} ${UXPLAY_LIBUSB_LIBRARY_DIRS} )
 target_link_libraries( uxplay_native PUBLIC
   avcodec swresample avutil usb-1.0
-  d3d11 dxgi dwmapi avrt ole32 uuid user32 gdi32 bcrypt ws2_32 crypt32 setupapi iphlpapi cfgmgr32 )
+  d3d11 dxgi dwmapi avrt ole32 uuid user32 gdi32 bcrypt ws2_32 crypt32 setupapi iphlpapi cfgmgr32 d2d1 dwrite )
 
 # ---- tests (not part of the shipped program) -------------------------------
 option( UXPLAY_NATIVE_TESTS "Build the native engine tests" ON )

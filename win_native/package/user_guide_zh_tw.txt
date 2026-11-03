@@ -147,7 +147,8 @@ USB 網段 AirPlay 是 iOS 26 唯一可行的有線投影方式。
     HEVC 硬體解碼）
   真機 Wi-Fi 實測（iPhone 16 Pro Max / iOS 26.6，HEVC）：同步延遲穩定
   約 15 ms。
-‧ 不再使用 GStreamer：程式只有約 16 MB（原本約 250 MB），
+‧ 不再使用 GStreamer：只有單一 uxplay.exe（約 14 MB，不需要任何額外
+  DLL；原本約 250 MB），
   啟動到可連線約 0.2～0.3 秒（原版 1.2～3.2 秒，另加開主控台約 1.2 秒），
   結束約 0.05 秒（原版約 1 秒）。
 ‧ 聲音走 WASAPI 低延遲模式（2.7 ms 緩衝），畫面走 DXGI flip-model

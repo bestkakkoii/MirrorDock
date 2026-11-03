@@ -261,11 +261,24 @@ FFmpeg options: `--disable-everything` plus decoders h264, hevc, aac, alac,
 pcm_s16le, pcm_f32le; parsers h264, hevc, aac; hwaccels h264/hevc d3d11va
 (+va2); swresample; w32threads.
 
-**Exception (recorded):** GLib 2.90.1 and its runtime DLLs (libintl
-gettext-runtime 1.0, libiconv 1.19, pcre2 10.49, libwinpthread 14.0.0) are
-MSYS2 binary packages, not main-branch builds. GLib is only used for
-uxplay.cpp's main loop; rebuilding it from main (meson + its dependency chain)
-was not done in this delivery.
+**Linking (single executable):** everything is linked statically
+(`-static`): the pinned FFmpeg/OpenSSL/libplist/libusb builds, libc++,
+libunwind, winpthreads, and GLib with libintl, libiconv and pcre2
+(`GLIB_STATIC_COMPILATION`; glib-2.0.pc does not carry it). `uxplay.exe`
+imports only Windows system DLLs, so the package bundles no DLL. The UCRT
+(`api-ms-win-crt-*` → `ucrtbase.dll`) stays dynamic: the MinGW/clang UCRT
+target cannot link it statically (MSVC `/MT` can), but it is part of
+Windows 10/11, so deployment is the same single file. Licence texts of every
+statically linked library ship in `licenses/`; LGPL relinking is possible
+from the bundled source and build scripts. Verified: the exe runs alone in an
+empty folder with only System32 on PATH.
+
+**Exception (recorded):** GLib 2.90.1 and its dependencies (libintl
+gettext-runtime 1.0, libiconv 1.19, pcre2 10.49, winpthreads 14.0.0) are
+MSYS2 binary packages (static archives), not main-branch builds. GLib is only
+used for uxplay.cpp's main loop; rebuilding it from main (meson + its
+dependency chain) was not done in this delivery. Replacing that loop with a
+native one would remove GLib entirely.
 
 ## Removed in this build (not available without GStreamer)
 

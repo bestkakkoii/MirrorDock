@@ -2,8 +2,11 @@
 
 usage: python -I package_zip.py <build_dir> <source_dir> <msys2_clang64_dir> <deps_src_root> <output_zip>
 
-Contents: stripped uxplay.exe, its non-system DLL closure, the Traditional
-Chinese user guide, licence texts and the complete corresponding source.
+Contents: stripped uxplay.exe (statically linked: it needs only Windows
+system DLLs, so no DLL is bundled; the collector reports any that appear),
+the Traditional Chinese user guide, licence texts of every statically linked
+library and the complete corresponding source (LGPL relinking: rebuild from
+it with win_native/build_scripts).
 """
 import os
 import shutil
@@ -53,6 +56,12 @@ def main():
         "libplist_lgpl-2.1.txt": os.path.join(deps_src, "libplist", "COPYING.LESSER"),
         "libusb_lgpl-2.1.txt": os.path.join(deps_src, "libusb", "COPYING"),
         "glib_lgpl-2.1.txt": os.path.join(clang64, "share", "licenses", "glib2", "COPYING"),
+        "libintl_lgpl-2.1.txt": os.path.join(clang64, "share", "licenses", "gettext-runtime", "intl", "COPYING.LIB"),
+        "libiconv_lgpl-2.1.txt": os.path.join(clang64, "share", "licenses", "libiconv", "COPYING.LIB"),
+        "pcre2_bsd-3-clause.txt": os.path.join(clang64, "share", "licenses", "pcre2", "LICENCE.md"),
+        "winpthreads_mit.txt": os.path.join(clang64, "share", "licenses", "winpthreads", "COPYING"),
+        "llvm_libcxx_apache-2.0-with-llvm-exception.txt": os.path.join(clang64, "share", "licenses", "libc++",
+                                                                       "LICENSE"),
         "llhttp_mit.txt": os.path.join(source_dir, "lib", "llhttp", "LICENSE-MIT"),
         "playfair.txt": os.path.join(source_dir, "lib", "playfair", "LICENSE.md"),
         "quicktime_video_hack_mit.txt": os.path.join(source_dir, "win_native", "tests", "qt_fixtures",

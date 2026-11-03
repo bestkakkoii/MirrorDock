@@ -22,6 +22,6 @@ cmake -S "$source_dir" -B "$build_dir" -G Ninja \
     -DOPENSSL_ROOT_DIR="$deps_prefix" -DOPENSSL_USE_STATIC_LIBS=TRUE \
     -DLIBPLIST="$deps_prefix/lib/libplist-2.0.a" \
     -DCMAKE_PREFIX_PATH="$deps_prefix;/clang64" \
-    -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -Wl,--gc-sections" \
+    -DCMAKE_EXE_LINKER_FLAGS="-static -Wl,--gc-sections" \
     -Wno-dev
 cmake --build "$build_dir" -- -k 0

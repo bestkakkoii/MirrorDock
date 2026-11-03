@@ -91,12 +91,17 @@ target_include_directories( uxplay_native SYSTEM PUBLIC ${UXPLAY_FFMPEG_INCLUDE_
 # WIN32_LEAN_AND_MEAN / NOMINMAX are defined by each source before <windows.h>
 target_compile_definitions( uxplay_native PUBLIC UNICODE _UNICODE _WIN32_WINNT=0x0A00 WINVER=0x0A00 )
 
-# GLib: uxplay.cpp's main loop and renderer_compat.c's renderer headers
+# GLib: uxplay.cpp's main loop and renderer_compat.c's renderer headers.
+# Linked statically with its own static dependencies (libintl -> libiconv,
+# pcre2) so the program is one executable with no bundled DLLs;
+# GLIB_STATIC_COMPILATION drops GLib's dllimport declarations (glib-2.0.pc
+# does not carry it).
 pkg_check_modules( UXPLAY_GLIB REQUIRED glib-2.0 )
 add_library( uxplay_glib INTERFACE )
-target_include_directories( uxplay_glib SYSTEM INTERFACE ${UXPLAY_GLIB_INCLUDE_DIRS} )
-target_link_directories( uxplay_glib INTERFACE ${UXPLAY_GLIB_LIBRARY_DIRS} )
-target_link_libraries( uxplay_glib INTERFACE ${UXPLAY_GLIB_LIBRARIES} )
+target_include_directories( uxplay_glib SYSTEM INTERFACE ${UXPLAY_GLIB_STATIC_INCLUDE_DIRS} )
+target_compile_definitions( uxplay_glib INTERFACE GLIB_STATIC_COMPILATION )
+target_link_directories( uxplay_glib INTERFACE ${UXPLAY_GLIB_STATIC_LIBRARY_DIRS} )
+target_link_libraries( uxplay_glib INTERFACE ${UXPLAY_GLIB_STATIC_LIBRARIES} iconv )
 target_link_libraries( uxplay_native PUBLIC uxplay_glib )
 
 # Strongest practical warning set, as errors, on the owned sources only: the

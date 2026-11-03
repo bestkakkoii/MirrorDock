@@ -1,9 +1,5 @@
-aux_source_directory(. dnssd_src)
-set(DIR_SRCS ${dnssd_src})
-include_directories(.)
-add_library( dnssd 
-        STATIC
-        ${DIR_SRCS})
-
-
-
+aux_source_directory( . dnssd_src )
+add_library( dnssd STATIC ${dnssd_src} )
+target_include_directories( dnssd PRIVATE . )
+# see lib/CMakeLists.txt for -Wno-sign-compare
+target_compile_options( dnssd PRIVATE -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare -Werror )

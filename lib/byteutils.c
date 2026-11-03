@@ -20,31 +20,15 @@
 
 #include <time.h>
 #include <string.h>
-#ifdef _WIN32
 # include <winsock2.h>
-#else
-# include <netinet/in.h>
-#endif
 
 #include "byteutils.h"
 
-#ifdef _WIN32
 # ifndef ntohll
 #  define ntohll(x) ((1==ntohl(1)) ? (x) : (((uint64_t)ntohl((x) & 0xFFFFFFFFUL)) << 32) | ntohl((uint32_t)((x) >> 32)))
 # endif
 #ifndef htonll
 #  define htonll(x) ((1==htonl(1)) ? (x) : (((uint64_t)htonl((x) & 0xFFFFFFFFUL)) << 32) | htonl((uint32_t)((x) >> 32)))
-#endif
-#else
-#  ifndef htonll
-#   ifdef SYS_ENDIAN_H
-#    include <sys/endian.h>
-#   else
-#    include <endian.h>
-#   endif
-#   define htonll(x) htobe64(x)
-#   define ntohll(x) be64toh(x)
-#  endif
 #endif
 
 // The functions in this file assume a little endian cpu architecture!

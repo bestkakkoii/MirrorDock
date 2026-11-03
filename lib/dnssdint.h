@@ -20,10 +20,6 @@
 
 #include "global.h"
 
-/* the previous behavior of announcing UxPlay with a fixed public key PK
- * can be restored by uncommenting the following line  */
-//#define PK "b07727d6f6cd6e08b58ede525ec3cdeaa252ad9f683feb212ef8a205246554e7"
-
 #define RAOP_TXTVERS "1"
 #define RAOP_CH "2"             /* Audio channels: 2 */
 #define RAOP_CN "0,1,2,3"       /* Audio codec: PCM, ALAC, AAC, AAC ELD */

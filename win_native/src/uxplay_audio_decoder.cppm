@@ -1,8 +1,9 @@
-// AirPlay / QuickTime audio decoding to interleaved stereo float32 at the
-// audio device rate.
+// SPDX-License-Identifier: MIT
+// AirPlay audio decoding to interleaved stereo float32 at the audio device
+// rate.
 //
 // AirPlay mirroring sends AAC-ELD 44.1 kHz (480-sample frames), audio-only
-// streaming sends ALAC 44.1 kHz; QuickTime USB capture sends LPCM 48 kHz.
+// streaming sends ALAC 44.1 kHz (AAC-LC and LPCM are also accepted).
 // Sample-rate conversion uses libswresample's windowed-sinc resampler; the
 // resampler delay is reported so presentation times stay exact.
 export module uxplay_audio_decoder;

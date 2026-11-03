@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 module;
 
 #define WIN32_LEAN_AND_MEAN
@@ -39,7 +40,6 @@ namespace uxplay
         enum menu_identifier : UINT
         {
             menu_fullscreen = 100,
-            menu_legacy_usb,
             menu_data_guard,
             menu_enable_adapter,
             menu_prefer_usb,
@@ -102,8 +102,6 @@ namespace uxplay
         std::thread ui_thread;
         std::atomic<bool> is_visible{false};
         std::atomic<bool> is_fullscreen{false};
-        std::atomic<bool> legacy_usb_available{false};
-        std::atomic<bool> legacy_usb_enabled{false};
         std::atomic<bool> data_guard_offer{false};
         std::atomic<bool> enable_adapter_offer{false};
         std::atomic<bool> prefer_usb_link{true};
@@ -356,11 +354,6 @@ namespace uxplay
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(menu, MF_STRING | (is_visible.load() ? 0U : MF_GRAYED), menu_fullscreen, L"全螢幕\tF11");
         AppendMenuW(menu, MF_STRING | (muted.load() ? MF_CHECKED : 0U), menu_mute, L"靜音");
-        if (legacy_usb_available.load())
-        {
-            AppendMenuW(menu, MF_STRING | (legacy_usb_enabled.load() ? MF_CHECKED : 0U), menu_legacy_usb,
-                        L"QuickTime USB 擷取（舊版）");
-        }
         AppendMenuW(menu, MF_STRING, menu_open_log, L"記錄檔");
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(menu, MF_STRING, menu_exit, L"結束");
@@ -375,9 +368,6 @@ namespace uxplay
         {
         case menu_fullscreen:
             tray(tray_command::toggle_fullscreen);
-            break;
-        case menu_legacy_usb:
-            tray(tray_command::toggle_usb);
             break;
         case menu_data_guard:
             tray(tray_command::apply_data_guard);
@@ -916,12 +906,6 @@ namespace uxplay
     {
         impl->muted.store(muted);
         PostMessageW(impl->window, message_overlay_update, 0, 0);
-    }
-
-    void video_window::set_legacy_usb(bool available, bool enabled)
-    {
-        impl->legacy_usb_available.store(available);
-        impl->legacy_usb_enabled.store(enabled);
     }
 
     void video_window::notify(std::wstring title, std::wstring text, std::optional<tray_command> on_click)

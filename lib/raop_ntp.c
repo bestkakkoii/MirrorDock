@@ -113,12 +113,10 @@ struct raop_ntp_s {
 
 /* code for recv with kernel timestamp */
 
-#ifdef _WIN32
 #ifndef WSA_CMSG_SPACE
 #define WSA_CMSG_SPACE(len) (sizeof(struct cmsghdr) + (len))
 #endif
 static LARGE_INTEGER g_system_qpc_frequency =  {0};
-#endif
 
 // Helper to calculate signed difference between two Q32.32 time stamps
 double ntp_diff_to_seconds(q32_32_t ntp_end, q32_32_t ntp_start) {
@@ -128,12 +126,9 @@ double ntp_diff_to_seconds(q32_32_t ntp_end, q32_32_t ntp_start) {
 
 
 void raop_ntp_global_init(void) {
-#ifdef _WIN32
     QueryPerformanceFrequency(&g_system_qpc_frequency);
-#endif
 }
 
-#ifdef _WIN32
 /* On Windows the server "local time" is the QueryPerformanceCounter timeline
  * in nanoseconds.  It is monotonic (unaffected by wall-clock/NTP adjustments
  * of the host) and is the same clock used by DXGI frame statistics and WASAPI
@@ -148,7 +143,6 @@ static uint64_t qpc_ticks_to_ns(int64_t ticks) {
     const int64_t remainder = ticks % frequency;
     return (uint64_t) whole_seconds * SECOND_IN_NSECS + (uint64_t) ((remainder * (int64_t) SECOND_IN_NSECS) / frequency);
 }
-#endif
 
 
 kernel_timestamp_session_t* kernel_timestamp_session_create(raop_ntp_t *raop_ntp, int sock_fd) {
@@ -158,7 +152,6 @@ kernel_timestamp_session_t* kernel_timestamp_session_create(raop_ntp_t *raop_ntp
     }
     session->raop_ntp = raop_ntp;
     session->sock_fd = sock_fd;
-#if defined(_WIN32)
     session->qpc_frequency = g_system_qpc_frequency.QuadPart;
     session ->pWSARecvMsg_ptr = NULL;
     // Anchor this session's QPC baseline immediately at creation
@@ -211,13 +204,6 @@ kernel_timestamp_session_t* kernel_timestamp_session_create(raop_ntp_t *raop_ntp
         }
     }
 #endif
-#else
-    // Non-Wndows POSIX path   (note: could instead use SO_TIMESTAMP_MONOTONIC on macOS)
-    {
-        int enable_ts = 1;
-        setsockopt(sock_fd, SOL_SOCKET, SO_TIMESTAMP, (const char*)&enable_ts, sizeof(enable_ts));
-    }
-#endif
     return session;
 }
 
@@ -228,7 +214,6 @@ ssize_t kernel_timestamp_session_recv(kernel_timestamp_session_t *session, char 
     if (recv_time_kernel && recv_time_clock) {
         *recv_time_kernel = 0;
         *recv_time_clock = 0;
-#ifdef _WIN32
 #if defined(SIO_TIMESTAMPING) //not defined in legacy MSVCRT systems such as MSYS2 MINGW64
         if (session->pWSARecvMsg_ptr) {
             LPFN_WSARECVMSG pWSARecvMsg = (LPFN_WSARECVMSG) session->pWSARecvMsg_ptr;
@@ -327,52 +312,6 @@ ssize_t kernel_timestamp_session_recv(kernel_timestamp_session_t *session, char 
             } 
         }
 #endif
-#else // non-Windows POSIX path
-        struct sockaddr_storage remote_addr = {0};
-        struct iovec iov = { .iov_base = buf, .iov_len = buf_len };
-    
-        // Allocate a union to guarantee strict alignment requirements for the buffer
-        union {
-            char buf[CMSG_SPACE(sizeof(struct timeval)) + 64]; 
-            struct cmsghdr align;
-        } control_un;
-    
-        struct msghdr msg = {
-            .msg_name = &remote_addr,
-            .msg_namelen = sizeof(remote_addr),
-            .msg_iov = &iov,
-            .msg_iovlen = 1,
-            .msg_control = control_un.buf,
-            .msg_controllen = sizeof(control_un.buf)
-        };
-
-        ssize_t n = recvmsg(session->sock_fd, &msg, 0);
-        if (n < 0) {
-            return n;
-        }
-
-        // immediate fallback time 
-        *recv_time_clock = raop_ntp_get_local_time();
-
-        if (!(msg.msg_flags & MSG_CTRUNC)) {
-            struct cmsghdr *cmsg;
-            for (cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
-                if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_TIMESTAMP) {
-                    struct timeval *tv_kernel = (struct timeval *)CMSG_DATA(cmsg);
-                    *recv_time_kernel = ((uint64_t)tv_kernel->tv_sec * SECOND_IN_NSECS) + (uint64_t)tv_kernel->tv_usec * USEC_IN_NSECS;
-                    break;
-                }
-            }
-        }
-
-        if (src_addr && addrlen) {
-            int copy_len = ((int)msg.msg_namelen < *addrlen) ? (int)msg.msg_namelen : *addrlen;
-            memcpy(src_addr, msg.msg_name, copy_len);
-            *addrlen = (int)msg.msg_namelen; 
-        }
-
-        return n;
-#endif
     }
     //Fallback path if kernel timestamp could not be extracted; also used on MINGW64 systems or if recv_time_kernel == NULL
 
@@ -383,11 +322,7 @@ ssize_t kernel_timestamp_session_recv(kernel_timestamp_session_t *session, char 
         saddrlen = (socklen_t *) addrlen;
     }
     
-#ifdef _WIN32
     int n = recvfrom(session->sock_fd, buf, (int) buf_len, 0, saddr, saddrlen);
-#else
-    ssize_t n = recvfrom(session->sock_fd, buf, buf_len, 0, saddr, saddrlen);
-#endif
     if (recv_time_clock) {
         *recv_time_clock = 0;
         if ( n >= 0) {
@@ -544,15 +479,8 @@ raop_ntp_init_socket(raop_ntp_t *raop_ntp, int use_ipv6)
     /* responses normally arrive within a few ms; a short timeout also bounds
      * how long raop_ntp_stop() can wait for this thread */
     uint32_t recv_timeout_msec = 150; 
-#ifdef _WIN32
     DWORD tv  = recv_timeout_msec;
 #define CAST (char *)    
-#else
-    struct timeval tv;
-    tv.tv_sec = recv_timeout_msec / (uint32_t) 1000;
-    tv.tv_usec = ((uint32_t) 1000) * (recv_timeout_msec % (uint32_t) 1000);
-#define CAST
-#endif
     if (setsockopt(tsock, SOL_SOCKET, SO_RCVTIMEO, CAST &tv, sizeof(tv)) < 0) {
         goto sockets_cleanup;
     }
@@ -579,11 +507,7 @@ raop_ntp_init_socket(raop_ntp_t *raop_ntp, int use_ipv6)
 static void
 raop_ntp_flush_socket(int fd)
 {
-#ifdef _WIN32
     u_long bytes_available = 0;
-#else
-    int bytes_available = 0;
-#endif
     while (IOCTLSOCKET(fd, FIONREAD, &bytes_available) == 0 && bytes_available > 0) {
         // We are guaranteed that we won't block, because bytes are available.
         // Read 1 byte. Extra bytes in the datagram will be discarded.
@@ -710,7 +634,7 @@ raop_ntp_thread(void *arg) {
                         MUTEX_UNLOCK(raop_ntp->sync_params_mutex);
                         recv_time = recv_time_clock;
                     } else if (!raop_ntp->kernel_timestamp_inconsistency_detected ||
-                               ((int64_t) (localtime - raop_ntp->last_detection_time)) > (12ULL * SECOND_IN_NSECS)) {
+                               ((int64_t) (localtime - raop_ntp->last_detection_time)) > (int64_t) (12ULL * SECOND_IN_NSECS)) {
                         recv_time = recv_time_kernel;
                         kernel_time = true;
                     } else {
@@ -1000,15 +924,9 @@ uint64_t raop_ntp_timestamp_to_nano_seconds(raop_ntp_t *raop_ntp, uint64_t times
  * The system Unix time is used as the local wall clock.
  */
 uint64_t raop_ntp_get_local_time() {
-#ifdef _WIN32
     LARGE_INTEGER now;
     QueryPerformanceCounter(&now);
     return qpc_ticks_to_ns(now.QuadPart);
-#else
-    struct timespec time;
-    clock_gettime(CLOCK_REALTIME, &time);
-    return ((uint64_t) time.tv_nsec) + (uint64_t) time.tv_sec * SECOND_IN_NSECS;
-#endif
 }
 
 /**

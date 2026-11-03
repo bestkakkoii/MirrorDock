@@ -30,10 +30,5 @@ void netutils_wakeup_signal(int wakeup_fd);
 void netutils_wakeup_drain(int wakeup_fd);
 void netutils_wakeup_close(int wakeup_fd);
 
-/* for p2p support (macOS only ) */
-#if defined(__APPLE__) && defined(UXPLAY_HAVE_APPLE_P2P)
-void netutils_set_peer_to_peer(int enabled);
-#endif
-
 
 #endif

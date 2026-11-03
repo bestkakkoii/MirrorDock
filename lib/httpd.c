@@ -31,10 +31,7 @@
 
 static const char *typename[] = {
     [CONNECTION_TYPE_UNKNOWN] = "Unknown",
-    [CONNECTION_TYPE_RAOP]    = "RAOP",
-    [CONNECTION_TYPE_AIRPLAY] = "AirPlay",
-    [CONNECTION_TYPE_EVENT]   = "EVENT (reverse HTTP)",
-    [CONNECTION_TYPE_HLS]     = "HLS"
+    [CONNECTION_TYPE_RAOP]    = "RAOP"
 };
 
 struct http_connection_s {
@@ -528,41 +525,6 @@ httpd_thread(void *arg)
                 connection->last_active = time(NULL);
                 recv_datalen = ret;
             }
-            if (connection->type == CONNECTION_TYPE_EVENT) {
-            /* Parse PTTH HTTP response / EVENT message from data read from connection */
-                ret = http_request_add_event_data(connection->request, buffer, (size_t) recv_datalen);
-                if (ret != 0) {
-                    logger_log(httpd->logger, LOGGER_ERR, "httd error in adding event data (too large?)): size = %d", recv_datalen);		  
-                    httpd_remove_connection(httpd, connection, 0);
-                    continue;
-                }
-                size_t header_len = 0;
-                size_t body_len = 0;
-                char *header = NULL;
-                char *body = NULL;
-                while (http_request_parse_event_data(connection->request, &header,  &header_len, &body, &body_len)) {
-                    if (header) {
-                        if (strlen(header) > 8 && !strncmp(header,"HTTP/1.1", 8)) {
-                            logger_log(httpd->logger, LOGGER_DEBUG, "<<<<<< reverse-HTTP response:\n%s\n", header);
-                        } else if (strlen(header) > 9 && !strncmp(header,"EVENT/1.0", 9)) {
-                            if (body) {
-                                logger_log(httpd->logger, LOGGER_INFO, "<<<<<< event message with Body:\n%s\n", header);
-                            } else {
-                                logger_log(httpd->logger, LOGGER_DEBUG, "<<<<<< event message without Body:\n%s\n", header);
-                            }
-                        } else {
-                            char line[33] = {0};
-                            strncpy(line, header, 32);
-                            logger_log(httpd->logger, LOGGER_ERR, "<<<<<< unrecognized message on EVENT channel:\n%s\n", line);
-                        }
-                        free (header);
-                    }
-                    if (body) {
-                        free (body);
-                    }
-                }
-                continue;
-            }
             /* Parse HTTP request from data read from connection */	    
             ret = http_request_add_data(connection->request, buffer, (size_t) recv_datalen);
             if (http_request_has_error(connection->request)) {
@@ -595,11 +557,6 @@ httpd_thread(void *arg)
                     /* Get response data and datalen */
                     const char *data = http_response_get_data(response, &datalen);
 
-                    bool is_upgrade_response = false;
-                    if (datalen >= 12 && strncmp(data, "HTTP/1.1 101", 12) == 0){
-                        is_upgrade_response = true;
-                    }
-
                     int written = 0;
                     while (written < datalen) {
                         int ret = send(connection->socket_fd, data + written, datalen - written, 0);
@@ -608,17 +565,6 @@ httpd_thread(void *arg)
                             break;
                         }
                         written += ret;
-                    }
-
-                    if (is_upgrade_response){
-                        if (http_request_upgrade_data(connection->request) == 0) {
-                            http_request_set_reverse(connection->request);
-                            connection->type = CONNECTION_TYPE_EVENT;
-                            logger_log(httpd->logger, LOGGER_INFO, "socket %d upgraded to PTTH reverse-HTTP protocol", connection->socket_fd);
-                        } else {
-                            logger_log(httpd->logger, LOGGER_ERR, "failed to allocate memory for reverse-HTTP upgrade");
-                            exit(1);
-                        }
                     }
 
                     if (http_response_get_disconnect(response)) {
@@ -630,11 +576,8 @@ httpd_thread(void *arg)
                     logger_log(httpd->logger, LOGGER_WARNING, "httpd didn't get response");
                 }
 
-		// destroy the request unless the connection is CONNECTION_TYPE_EVENT, in which case it persists until the connection ends
-                if (connection->type != CONNECTION_TYPE_EVENT) {
-                    http_request_destroy(connection->request);
-                    connection->request = NULL;
-                }
+                http_request_destroy(connection->request);
+                connection->request = NULL;
 
             } else {
                 logger_log(httpd->logger, LOGGER_DEBUG, "Request not complete, waiting for more data...");

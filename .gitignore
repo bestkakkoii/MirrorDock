@@ -1,2 +1,8 @@
+# build output and packages
 build/
+dist/
+# local tool and editor state
+.vs/
 .vscode/
+.claude/
+__pycache__/

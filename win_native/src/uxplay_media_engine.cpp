@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 module;
 
 #define WIN32_LEAN_AND_MEAN
@@ -246,15 +247,14 @@ namespace uxplay
         displayed_source.store(static_cast<int>(stream->source));
         // AirPlay can arrive over Wi-Fi or over the iPhone USB link; label the
         // transport the client actually used.
-        bool const over_usb = stream->source == media_source::usb || airplay_over_usb.load();
+        bool const over_usb = airplay_over_usb.load();
         std::wstring const label = over_usb ? L"USB" : L"Wi-Fi";
         std::wstring const size = std::format(L"{} × {}", stream->width, stream->height);
         window->set_status(std::format(L"{} · {} · {}", settings.window_title, label, size));
         window->set_title(std::format(L"{} · {} · {}", settings.window_title, label, size));
         window->set_stream_info(label, size);
         window->show_for_video(stream->width, stream->height);
-        char const *const path = stream->source == media_source::usb ? "USB (QuickTime)"
-                                 : (airplay_over_usb.load() ? "AirPlay over USB cable" : "AirPlay over Wi-Fi");
+        char const *const path = over_usb ? "AirPlay over the USB cable" : "AirPlay over Wi-Fi";
         log::info("displaying {} {}x{}", path, stream->width, stream->height);
     }
 
@@ -758,11 +758,6 @@ namespace uxplay
     void media_engine::set_volume(media_source source, double linear_gain)
     {
         impl->audio->set_volume(source, static_cast<float>(linear_gain));
-    }
-
-    void media_engine::set_legacy_usb(bool available, bool enabled)
-    {
-        impl->window->set_legacy_usb(available, enabled);
     }
 
     void media_engine::set_usb_link(std::wstring text, bool offer_data_guard, bool offer_enable_adapter)

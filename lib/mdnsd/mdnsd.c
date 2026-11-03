@@ -17,11 +17,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifndef WIN32
-#include <ifaddrs.h>
-#include <net/if.h>
-#include <time.h>
-#endif
 
 #include "../compat.h"
 #include "mdnsd.h"
@@ -83,13 +78,7 @@ struct mdnsd_s {
 
 static uint64_t mdns_now_ms(void)
 {
-#ifdef _WIN32
     return (uint64_t) GetTickCount64();
-#else
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    return (uint64_t) now.tv_sec * 1000u + (uint64_t) (now.tv_nsec / 1000000);
-#endif
 }
 
 static int mdns_put_u8(mdns_packet_t *packet, unsigned int value)
@@ -395,7 +384,6 @@ static uint32_t mdns_pick_ipv4(uint32_t held, int *held_present, int allow_usb_l
 {
     uint32_t addr = 0;
     *held_present = 0;
-#ifdef _WIN32
     ULONG const flags = GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_SKIP_ANYCAST |
                         GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER;
     ULONG buflen = 15000;
@@ -453,42 +441,6 @@ static uint32_t mdns_pick_ipv4(uint32_t held, int *held_present, int allow_usb_l
         addr = usb_link != 0 ? usb_link : fallback;
     }
     free(pAddresses);
-#else
-    int fd;
-    struct sockaddr_in remote;
-    struct sockaddr_in local;
-    socklen_t local_len = sizeof(local);
-    struct ifaddrs *ifaddr = NULL;
-
-    fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (fd == -1) {
-        return 0;
-    }
-
-    memset(&remote, 0, sizeof(remote));
-    remote.sin_family = AF_INET;
-    remote.sin_port = htons(MDNS_PORT);
-    inet_pton(AF_INET, MDNS_ADDR4, &remote.sin_addr);
-
-    if (connect(fd, (struct sockaddr *) &remote, sizeof(remote)) == 0 &&
-        getsockname(fd, (struct sockaddr *) &local, &local_len) == 0) {
-        addr = local.sin_addr.s_addr;
-    }
-
-    CLOSESOCKET(fd);
-    (void) allow_usb_link; /* no USB-link preference outside Windows */
-
-    if (held != 0 && getifaddrs(&ifaddr) == 0) {
-        for (struct ifaddrs *ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
-            if (ifa->ifa_addr != NULL && ifa->ifa_addr->sa_family == AF_INET &&
-                ((struct sockaddr_in *) ifa->ifa_addr)->sin_addr.s_addr == held) {
-                *held_present = 1;
-                break;
-            }
-        }
-        freeifaddrs(ifaddr);
-    }
-#endif
     return addr;
 }
 
@@ -500,60 +452,9 @@ static uint32_t mdns_get_default_ipv4(int allow_usb_link)
 
 static int mdns_get_default_ipv6(unsigned char addr[16], unsigned int *scope_id)
 {
-#ifdef WIN32
     (void) addr;
     (void) scope_id;
     return 0;
-#else
-    struct ifaddrs *ifaddr = NULL;
-    struct ifaddrs *ifa;
-    int found = 0;
-
-    memset(addr, 0, 16);
-    *scope_id = 0;
-
-    if (getifaddrs(&ifaddr) == -1) {
-        return 0;
-    }
-
-    for (ifa = ifaddr; ifa; ifa = ifa->ifa_next) {
-        struct sockaddr_in6 *sin6;
-        unsigned char *bytes;
-
-        if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_INET6 ||
-            !(ifa->ifa_flags & IFF_UP) ||
-            !(ifa->ifa_flags & IFF_MULTICAST) ||
-            (ifa->ifa_flags & IFF_LOOPBACK)) {
-            continue;
-        }
-
-        sin6 = (struct sockaddr_in6 *) ifa->ifa_addr;
-        bytes = sin6->sin6_addr.s6_addr;
-        if (IN6_IS_ADDR_UNSPECIFIED(&sin6->sin6_addr) ||
-            IN6_IS_ADDR_LOOPBACK(&sin6->sin6_addr)) {
-            continue;
-        }
-
-        if (!found || IN6_IS_ADDR_LINKLOCAL(&sin6->sin6_addr)) {
-            memcpy(addr, bytes, 16);
-            *scope_id = sin6->sin6_scope_id;
-            if (!*scope_id) {
-                *scope_id = if_nametoindex(ifa->ifa_name);
-            }
-            found = 1;
-            if (IN6_IS_ADDR_LINKLOCAL(&sin6->sin6_addr)) {
-                break;
-            }
-        }
-    }
-
-    freeifaddrs(ifaddr);
-    if (!*scope_id) {
-        memset(addr, 0, 16);
-        return 0;
-    }
-    return found;
-#endif
 }
 
 static int mdns_open_socket4(uint32_t iface_addr)

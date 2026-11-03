@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Generate the UxPlay native application icon (monitor + phone glyph).
 
 Pure Python (zlib only): draws at 4x supersampling, writes a multi-size ICO

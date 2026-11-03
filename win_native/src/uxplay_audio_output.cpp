@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 module;
 
 #define WIN32_LEAN_AND_MEAN
@@ -192,7 +193,12 @@ namespace uxplay
         std::array<source_timeline, media_source_count> timelines;
         std::array<std::atomic<std::int64_t>, media_source_count> delays{};
         audio_device_format device_format{};
-        std::array<float, media_source_count> target_gains{1.0F, 1.0F};
+        std::array<float, media_source_count> target_gains = []
+        {
+            std::array<float, media_source_count> unity{};
+            unity.fill(1.0F);
+            return unity;
+        }();
         std::array<std::uint64_t, media_source_count> frames_played_since_report{}; // reset by take_flow()
         bool muted = false;
         std::int64_t latency_ns = 0;

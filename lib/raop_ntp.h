@@ -32,12 +32,10 @@ typedef struct kernel_timestamp_session_s {
     int sock_fd;
     raop_ntp_t *raop_ntp;
     uint64_t suspend_kernel_timestamps_until;
-#ifdef _WIN32
     void *pWSARecvMsg_ptr;
     int64_t base_qpc_ticks;
     int64_t qpc_frequency;
     uint64_t base_system_time_us;
-#endif
 
 } kernel_timestamp_session_t;
 

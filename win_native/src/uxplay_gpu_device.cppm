@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // D3D11 device bound to the GPU that scans out the monitor.
 //
 // On this Optimus laptop the monitor is driven by the Intel HD Graphics 530

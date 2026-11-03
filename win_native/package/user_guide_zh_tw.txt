@@ -127,14 +127,12 @@ USB 網段 AirPlay 是 iOS 26 唯一可行的有線投影方式。
   -vsync no      關閉影音時間戳同步（收到就播）
   -pin           需要輸入 PIN 碼才能連線（PIN 會用系統通知顯示）
   -nc            iPhone 停止鏡像時保留最後畫面不關視窗
-  -usb           （進階）舊版 QuickTime 有線擷取，只適用 iOS 15 以前；iOS 16+
-                 無效，預設關閉（加了這個選項，系統匣才會出現「QuickTime
-                 USB 擷取（舊版）」開關）。
-                 USB 投影請用上面第三節的方式，不需要這個選項。
+  -ca 檔名       播放音樂時把專輯封面存成檔案
   -d             詳細除錯記錄
 其餘 UxPlay 原有選項大多照舊可用（uxplay.exe -h 會列出）。
-本特化版移除了需要 GStreamer 的功能：-hls、-mp4、畫面封面(-ca)、
--vrtp、-artp、-vs、-as（若指定會在記錄中註明已忽略）。
+本版不含需要 GStreamer 等其他平台元件的功能（HLS 影片投放、MP4 錄影、
+畫面上顯示封面、RTP 轉送、畫面翻轉/旋轉、藍牙 LE 廣播等）。舊設定檔裡
+若有這些選項，會在記錄檔註明「已忽略」，不影響啟動。
 
 
 七、針對這台電腦做的最佳化（實測）
@@ -147,9 +145,10 @@ USB 網段 AirPlay 是 iOS 26 唯一可行的有線投影方式。
     HEVC 硬體解碼）
   真機 Wi-Fi 實測（iPhone 16 Pro Max / iOS 26.6，HEVC）：同步延遲穩定
   約 15 ms。
-‧ 不再使用 GStreamer：只有單一 uxplay.exe（約 14 MB，不需要任何額外
-  DLL；原本約 250 MB），
-  啟動到可連線約 0.2～0.3 秒（原版 1.2～3.2 秒，另加開主控台約 1.2 秒），
+‧ 不再使用 GStreamer：只有單一 uxplay.exe（不需要任何額外 DLL；
+  原本約 250 MB），
+  啟動到可連線約 0.5 秒（新下載後第一次啟動會因防毒掃描新檔案而較慢；
+  原版 1.2～3.2 秒，另加開主控台約 1.2 秒），
   結束約 0.05 秒（原版約 1 秒）。
 ‧ 聲音走 WASAPI 低延遲模式（2.7 ms 緩衝），畫面走 DXGI flip-model
   （最多只排 1 幀），影音共用同一條時間軸，依實際網路/解碼狀況自動
@@ -186,6 +185,7 @@ USB 網段 AirPlay 是 iOS 26 唯一可行的有線投影方式。
 ‧ 畫面會頓：多半是上面第八節的「同步顯示 50 Hz」造成，改成單一螢幕
   或讓兩螢幕同更新率即可。
 
-授權：UxPlay 為 GPL-3.0；FFmpeg（LGPL-2.1+ 組件）、OpenSSL（Apache-2.0）、
-libplist（LGPL-2.1+）、libusb（LGPL-2.1+）、GLib（LGPL-2.1+）。
-原始碼與完整授權文字見 licenses 資料夾。
+授權：UxPlay 程式整體為 GPL-3.0；其中 Windows 原生媒體引擎（win_native）
+為 MIT。內含 FFmpeg（LGPL-2.1+ 組件）、OpenSSL（Apache-2.0）、libplist
+（LGPL-2.1+）、LLVM libc++（Apache-2.0 WITH LLVM-exception）、winpthreads
+（MIT）。原始碼與完整授權文字見 source 與 licenses 資料夾。

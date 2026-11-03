@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Video presentation shaders (Shader Model 5.0, compiled offline with fxc).
 //
 // Input planes are always bound as single-slice Texture2DArray views so the

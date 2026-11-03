@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // The iPhone's wired network link: Personal Hotspot over the USB cable
 // ("Apple Mobile Device Ethernet", always 172.20.10.0/28).  AirPlay mirroring
 // rides this link when it is up (USB first, Wi-Fi second); the mirror itself

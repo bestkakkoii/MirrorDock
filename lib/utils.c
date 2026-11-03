@@ -234,11 +234,7 @@ void ntp_timestamp_to_time(uint64_t ntp_timestamp, char *timestamp, size_t maxsi
     time_t rawtime = (time_t) (ntp_timestamp / SECOND_IN_NSECS);
     struct tm ts = *localtime(&rawtime);
     assert(maxsize > 29);
-#ifdef _WIN32  /*modification for compiling for Windows */
     strftime(timestamp, 20, "%Y-%m-%d %H:%M:%S", &ts);
-#else
-    strftime(timestamp, 20, "%F %T", &ts);
-#endif
     snprintf(timestamp + 19, 11,".%9.9llu", (unsigned long long) ntp_timestamp % SECOND_IN_NSECS);
 }
 

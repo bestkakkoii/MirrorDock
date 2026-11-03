@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Native media engine: owns the GPU device, video window, presenter and
 // audio output, and runs one decode pipeline per media source.
 //
@@ -89,7 +90,6 @@ export namespace uxplay
         [[nodiscard]] source_statistics statistics(media_source source) const;
 
         // notification-area integration
-        void set_legacy_usb(bool available, bool enabled);
         void set_usb_link(std::wstring text, bool offer_data_guard, bool offer_enable_adapter);
         void set_link_preference(bool prefer_usb_link);
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
 # Build pinned main-branch dependencies as static libraries for the
 # UxPlay Windows-native build (MSYS2 CLANG64, portable x86-64-v2 baseline:
 # runs on any SSE4.2/POPCNT CPU — every Win10/11 x64 machine — while FFmpeg
@@ -18,16 +19,6 @@ export ACLOCAL_PATH=/clang64/share/aclocal:/usr/share/aclocal
 tuning_flags="-O3 -march=x86-64-v2 -mtune=generic"
 jobs=8
 mkdir -p "$install_prefix"
-
-build_libusb()
-{
-    cd "$source_root/libusb"
-    ./bootstrap.sh
-    ./configure --prefix="$install_prefix" --enable-static --disable-shared \
-        --disable-examples-build --disable-tests-build CFLAGS="$tuning_flags"
-    make -j"$jobs"
-    make install
-}
 
 build_libplist()
 {

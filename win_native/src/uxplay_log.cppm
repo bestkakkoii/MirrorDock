@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Process-wide log sink for the native media engine.  The sink is installed
 // once by the C bridge and forwards to UxPlay's console logger, so engine and
 // AirPlay-core messages share one ordered stream.

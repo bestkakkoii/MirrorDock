@@ -23,12 +23,9 @@
 #include "http_request.h"
 #include "llhttp/llhttp.h"
 
-#define MAX_EVENT_DATA 4096
-
 struct http_request_s {
     llhttp_t parser;
     llhttp_settings_t parser_settings;
-    bool is_reverse;  // if true, this is a reverse-response from client
     const char *method;
     char *url;
     size_t url_len;
@@ -251,54 +248,6 @@ http_request_destroy(http_request_t *request)
     }
 }
 
-static size_t
-parse_ptth(const char *data, const size_t datalen, size_t *header_len, size_t *body_len)
-{
-    *header_len = 0;
-    *body_len = 0;
-
-    //  skip any leading junk (non-printable ASCII) or whitespace in front of next message
-    size_t junk_offset = 0;
-    while (junk_offset < datalen && (data[junk_offset] <= 0x20 || data[junk_offset] == 0x7f)) {
-        junk_offset++;
-    }
-
-    // Adjust parsing frame past the junk
-    const char *actual_data = data + junk_offset;
-    size_t actual_datalen = datalen - junk_offset;
-
-    const char *header_end = strstr(actual_data, "\r\n\r\n");
-    if (!header_end) {
-        return 0; // incomplete headers
-    }
-
-    size_t hl = (header_end - actual_data) + 4;
-    size_t bl = 0;
-
-    const char *cl_ptr = NULL;
-    for (size_t i = 0; i < hl - 15; i++) {
-        if (strncasecmp(actual_data + i, "Content-Length:", 15) == 0) {
-            cl_ptr = actual_data + i;
-            break;
-        }
-    }
-
-    if (cl_ptr) {
-        bl = (size_t) strtoul(cl_ptr + 15, NULL, 10);
-    }
-
-    size_t total_msg_len = hl + bl;
-    if (actual_datalen < total_msg_len) {
-        return 0; // incomplete body
-    }
-    
-    *header_len = hl;
-    *body_len = bl;
-
-    //  (downstream memmove flushes both message + junk)
-    return total_msg_len + junk_offset;
-}
-
 int
 http_request_add_data(http_request_t *request, const char *data, size_t datalen)
 {
@@ -308,79 +257,6 @@ http_request_add_data(http_request_t *request, const char *data, size_t datalen)
         llhttp_resume_after_upgrade(&request->parser);
     }
     return ret;
-}
-
-int
-http_request_add_event_data(http_request_t *request, const char *data, size_t datalen)
-{
-    if (request->datalen + datalen >= MAX_EVENT_DATA) {
-        return -1;
-    }
-    memcpy(request->data + request->datalen, data, datalen);
-    request->datalen += datalen;
-    request->data[request->datalen] = '\0';
-    return 0;
-}
-
-// any message returned by parse_event_data must be free'd
-bool http_request_parse_event_data(http_request_t *request, char **header_ptr, size_t *header_len, char **body_ptr, size_t *body_len) {
-    *header_len = 0;
-    *body_len = 0;
-    *header_ptr = NULL;
-    *body_ptr = NULL;
-
-    /* now attempt to parse the reverse-HTTP response, or EVENT message */
-    size_t message_len = parse_ptth(request->data, request->datalen, header_len, body_len);
-    if (!message_len) {
-        return false;
-    }
-    assert (request->datalen >= message_len);
-    assert (message_len == *header_len + *body_len);
-
-    char *local_header = (char *) malloc(*header_len + 1);
-    if (!local_header) return false;
-    
-    memcpy(local_header, request->data, *header_len);
-    local_header[*header_len] = '\0';
-
-    char *local_body = NULL;
-    if (*body_len) {
-        local_body = (char *) malloc(*body_len + 1);
-        if (!local_body) {
-            free(local_header);
-            return false;
-        }
-        memcpy(local_body, request->data + *header_len, *body_len);
-        local_body[*body_len] = '\0';
-    }
-
-    size_t remaining_len = request->datalen - message_len;    
-    if (remaining_len) {
-        memmove(request->data, request->data + message_len, remaining_len);
-    }
-    request->datalen = remaining_len;
-    request->data[request->datalen] = '\0'; 
-
-    *header_ptr = local_header;
-    *body_ptr = local_body;
-
-    return true;
-}
-
-int http_request_upgrade_data(http_request_t *request)
-{
-    if (request->data) {
-        free(request->data);
-        request->data = NULL;
-    }
-    size_t max_event_data = MAX_EVENT_DATA;
-    request->data = (char *) malloc (max_event_data);
-    if (!request->data) {
-        return -1;
-    }
-    request->data[0] = '\0';
-    request->datalen = 0;
-    return 0;
 }
 
 int
@@ -422,10 +298,7 @@ http_request_get_error_description(http_request_t *request)
 const char *
 http_request_get_method(http_request_t *request)
 {
-    if (!request || request->is_reverse) {
-        return NULL;
-    }     
-    if (request->is_reverse) {
+    if (!request) {
         return NULL;
     }
     return request->method;
@@ -434,11 +307,7 @@ http_request_get_method(http_request_t *request)
 const char *
 http_request_get_url(http_request_t *request)
 {
-    if (!request || request->is_reverse) {  
-        return NULL;
-    }
-
-    if (request->is_reverse) {
+    if (!request) {
         return NULL;
     }
     return request->url;
@@ -447,7 +316,7 @@ http_request_get_url(http_request_t *request)
 const char *
 http_request_get_protocol(http_request_t *request)
 {
-    if (!request || request->is_reverse) {
+    if (!request) {
         return NULL;
     }
     return request->protocol;
@@ -457,7 +326,7 @@ const char *
 http_request_get_header(http_request_t *request, const char *name)
 {
 
-    if (!request || !name || request->is_reverse || !request->headers || request->headers_index < 0) {
+    if (!request || !name || !request->headers || request->headers_index < 0) {
         return NULL;
     }
 
@@ -482,7 +351,7 @@ http_request_header_get_size(http_request_t *request, int *num_fields, size_t *m
         *max_value_len = 0;
     }
 
-    if (!request || request->is_reverse || request->headers_size == 0 || request->headers_index < 0 || !request->headers) {
+    if (!request || request->headers_size == 0 || request->headers_index < 0 || !request->headers) {
         return 0;
     }
     
@@ -520,7 +389,7 @@ http_request_header_get_size(http_request_t *request, int *num_fields, size_t *m
 const char *
 http_request_get_data(http_request_t *request, int *datalen)
 {
-    if (!request || request->is_reverse) {
+    if (!request) {
         return NULL;
     }
 
@@ -533,7 +402,7 @@ http_request_get_data(http_request_t *request, int *datalen)
 int 
 http_request_get_header_string(http_request_t *request, char **header_str)
 {
-    if (!request || request->is_reverse || request->headers_size == 0 || request->headers_index < 0) {
+    if (!request || request->headers_size == 0 || request->headers_index < 0) {
         *header_str = NULL;
         return 0;
     }
@@ -576,12 +445,4 @@ http_request_get_header_string(http_request_t *request, char **header_str)
     }
     assert(p == &(str[len]));
     return len;
-}
-
-bool http_request_is_reverse(http_request_t *request) {
-    return request->is_reverse;
-}
-
-void http_request_set_reverse(http_request_t *request) {
-    request->is_reverse = true;
 }

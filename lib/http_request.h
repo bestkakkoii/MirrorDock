@@ -22,8 +22,6 @@ typedef struct http_request_s http_request_t;
 http_request_t *http_request_init(void);
 
 int http_request_add_data(http_request_t *request, const char *data, size_t datalen);
-int http_request_add_event_data(http_request_t *request, const char *data, size_t datalen);
-bool http_request_parse_event_data(http_request_t *request, char **header, size_t *header_len, char **body, size_t *body_len);
 int http_request_is_complete(http_request_t *request);
 int http_request_has_error(http_request_t *request);
 
@@ -36,9 +34,6 @@ const char *http_request_get_header(http_request_t *request, const char *name);
 const char *http_request_get_data(http_request_t *request, int *datalen);
 size_t http_request_header_get_size(http_request_t *request, int *fields, size_t *max_field_len, size_t *max_value_len);
 int http_request_get_header_string(http_request_t *request, char **header_str);
-bool http_request_is_reverse(http_request_t *request);
-void http_request_set_reverse(http_request_t *request);
-int http_request_upgrade_data(http_request_t *request);
 
 void http_request_destroy(http_request_t *request);
 

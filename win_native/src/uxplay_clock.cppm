@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Monotonic timeline of the native media engine.
 //
 // now_ns() is QueryPerformanceCounter expressed in nanoseconds using exactly

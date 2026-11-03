@@ -1,0 +1,4 @@
+# shell scripts run in MSYS2 bash: LF on every checkout (CRLF breaks bash)
+*.sh text eol=lf
+# Windows batch files
+*.cmd text eol=crlf

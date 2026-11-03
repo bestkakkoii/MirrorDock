@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Player-style control bar over the video window.
 //
 // A layered, non-activating popup owned by the video window and drawn with

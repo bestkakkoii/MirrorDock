@@ -15,7 +15,6 @@
  *==================================================================
  */
 
-#ifdef _WIN32
 #include <stdlib.h>
 #include <string.h>
 #include "compat.h"
@@ -33,4 +32,3 @@ char *wsa_strerror(int errnum) {
     }
     return message;
 }
-#endif

@@ -41,17 +41,13 @@ raop_handler_info(raop_conn_t *conn,
     raop_t *raop = conn->raop;
     assert(raop->dnssd);
 
-    /* There are three possible RTSP/1.0  GET/info requests
-       (1) with a CSeq number and with a plist
-       (2) with a CSeq number and without a plist
-       (3) without a CSeq number or a Header (part of Bluetooth LE Service Discovery) */
+    /* There are two possible RTSP/1.0  GET/info requests (both with a CSeq
+       number; conn_request rejects requests without one)
+       (1) with a plist
+       (2) without a plist */
 
-    const char* url =  NULL;
     const char* content_type =  NULL;
-    const char* cseq =  NULL;
-    url  = http_request_get_url(request);
     content_type = http_request_get_header(request, "Content-Type");
-    cseq = http_request_get_header(request, "CSeq");
     int len = 0;
     bool add_txt_airplay = false;
     bool add_txt_raop = false;
@@ -85,14 +81,7 @@ raop_handler_info(raop_conn_t *conn,
         }
         plist_free(req_root_node);
     }
-    
 
-    /* Bluetoth LE discovery protocol request */
-    if (!cseq) {
-        add_txt_airplay = (bool) strstr(url, txtAirPlay);
-        add_txt_raop = (bool) strstr(url, txtRAOP);
-    }
-    
     if (add_txt_airplay) {
         const char *txt = dnssd_get_airplay_txt(raop->dnssd, &len);
         plist_t txt_airplay_node = plist_new_data(txt, len);
@@ -159,11 +148,6 @@ raop_handler_info(raop_conn_t *conn,
 
     plist_t model_node = plist_new_string(GLOBAL_MODEL);
     plist_dict_set_item(res_node, "model", model_node);
-
-    /* dont need anything below here in the Bluetooth LE response */
-    if (cseq == NULL) {
-        goto finished;
-    }
 
     plist_t initial_volume_node = plist_new_real(raop->callbacks.audio_set_client_volume(raop->callbacks.cls)); 
     plist_dict_set_item(res_node, "initialVolume", initial_volume_node);
@@ -990,7 +974,6 @@ raop_handler_setup(raop_conn_t *conn,
             switch (type) {
             case 110: {
                 // Mirroring
-                raop_destroy_airplay_video(raop, -1);  //cleanup any hls data still present when mirror video starts
                 unsigned short dport = raop->mirror_data_lport;
                 plist_t stream_id_node = plist_dict_get_item(req_stream_node, "streamConnectionID");
                 uint64_t stream_connection_id = 0;
@@ -1185,7 +1168,7 @@ raop_handler_set_parameter(raop_conn_t *conn,
                 if (conn->raop_rtp && raop_rtp_is_running(conn->raop_rtp)) {
                     raop_rtp_set_volume(conn->raop_rtp, vol);
                 } else if (raop->callbacks.audio_set_volume) {
-                    /* set volume in playbin (hls) */
+                    /* no audio session yet: apply the volume directly */
                     raop->callbacks.audio_set_volume(raop->callbacks.cls, vol);
                 }
             } else if (conn->raop_rtp) {
@@ -1325,17 +1308,9 @@ raop_handler_teardown(raop_conn_t *conn,
         if (conn->raop_rtp) {
             /* Stop our audio RTP session */
             raop_rtp_stop(conn->raop_rtp);
-            /* stop any  coverart rendering */
-            if (raop->callbacks.audio_stop_coverart_rendering) {
-                raop->callbacks.audio_stop_coverart_rendering(raop->callbacks.cls);
-            }
         }
     } else if (teardown_110) {
-        if (raop->hls_pending) {
-            raop->callbacks.video_reset(raop->callbacks.cls, RESET_TYPE_RTP_TO_HLS_TEARDOWN);
-        } else {
-            raop->callbacks.video_reset(raop->callbacks.cls, RESET_TYPE_RTP_SHUTDOWN);
-        }
+        raop->callbacks.video_reset(raop->callbacks.cls, RESET_TYPE_RTP_SHUTDOWN);
         if (conn->raop_rtp_mirror) {
         /* Stop our video RTP session */
             raop_rtp_mirror_stop(conn->raop_rtp_mirror);
@@ -1351,11 +1326,6 @@ raop_handler_teardown(raop_conn_t *conn,
             conn->raop_rtp_mirror = NULL;
             /*fix for iOS >= 27 (does not send teardown_110 when mirrroring is stopped) */
             raop->callbacks.video_reset(raop->callbacks.cls, RESET_TYPE_RTP_SHUTDOWN);
-        }
-        /* shut down any HLS connections */
-        int hls_count = httpd_count_connection_type(raop->httpd, CONNECTION_TYPE_HLS);
-        if (hls_count) {
-            raop->callbacks.video_reset(raop->callbacks.cls, RESET_TYPE_HLS_SHUTDOWN);
         }
     }
 }

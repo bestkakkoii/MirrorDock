@@ -241,7 +241,6 @@ char *get_token(char **cursor, char *token_name, char start_char, char end_char)
     return token; 
 }
 
-//#define test_digest
 bool
 pairing_digest_verify(const char *method, const char * authorization, const char *password) {
   /* RFC 2617 HTTP md5 Digest password authentication */
@@ -269,24 +268,6 @@ pairing_digest_verify(const char *method, const char * authorization, const char
     char *raw = NULL;
     bool authenticated;
 
-#ifdef test_digest
-    char testauth[] = "Digest username=\"Mufasa\","
-                 "realm=\"testrealm@host.com\","
-                 "nonce=\"dcd98b7102dd2f0e8b11d0f600bfb0c093\","
-                 "uri=\"/dir/index.html\","
-                 "qop=auth,"
-                 "nc=00000001,"
-                 "cnonce=\"0a4f113b\","
-                 "response=\"6629fae49393a05397450978507c4ef1\","
-                 "opaque=\"5ccc069c403ebaf9f0171e9517f40e41\""
-    ;
-    pwd = "Circle Of Life";
-    mthd = "GET";
-    cursor = testauth;
-    
-    char HA1[] = "939e7578ed9e3c518a452acee763bce9";
-    char HA2[] = "39aff3a2bab6126f332b942af96d3366";
-#endif
     username = get_token(&cursor, "username", '\"', '\"');
     realm = get_token(&cursor, "realm", '\"', '\"');
     nonce = get_token(&cursor,"nonce", '\"', '\"');
@@ -298,17 +279,6 @@ pairing_digest_verify(const char *method, const char * authorization, const char
     }
     response = get_token(&cursor, "response", '\"', '\"');
 
-#ifdef test_digest
-    printf("username: [%s]  realm: [%s]\n", username, realm);
-    printf("nonce: [%s]\n", nonce);
-    printf("method: [%s]\n", mthd);
-    printf("uri: [%s]\n", uri);
-    if (qop) {
-        printf("qop: [%s], nc=[%s], cnonce: [%s]\n", qop, nc, cnonce);
-    }
-    printf("response: [%s]\n", response);
-
-#endif
     
     /* H1 = H(username : realm : password ) */
     len = strlen(username) + strlen(realm) + strlen(pwd) + 3;
@@ -325,9 +295,6 @@ pairing_digest_verify(const char *method, const char * authorization, const char
     char *hash1 = get_md5(raw);
     free (raw);    
     
-#ifdef test_digest
-    printf("hash1: should be %s, was: %s\n", HA1, hash1);
-#endif
     
     /* H2 = H(method : uri) */
     len = strlen(mthd) + strlen(uri) + 2;
@@ -342,9 +309,6 @@ pairing_digest_verify(const char *method, const char * authorization, const char
     char *hash2 = get_md5(raw);
     free (raw);
 
-#ifdef test_digest
-    printf("hash2: should be %s, was:  %s\n", HA2, hash2);
-#endif
 
     /* result = H(H1 : nonce (or nonce:nc:cnonce:qop) : H2) */    
     len = strlen(hash1) +  strlen(nonce) + strlen(hash2) + 3;
@@ -375,16 +339,10 @@ pairing_digest_verify(const char *method, const char * authorization, const char
     free (raw);
     authenticated = (strcmp(result,response) ? false : true);
 
-#ifdef test_digest
-    printf("result: should be %s, was:  %s, authenticated is %s\n", response, result, (authenticated ? "true" : "false"));
-#endif
 
     free (result);
     free(sentence);
 
-#ifdef test_digest
-    exit(0);
-#endif
 
     return authenticated;
 }

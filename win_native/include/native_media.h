@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /*
  * C interface between uxplay.cpp (and the C AirPlay core) and the
  * Windows-native media engine implemented as C++26 modules in win_native/src.
@@ -29,8 +30,6 @@ typedef enum native_media_log_level {
 
 typedef enum native_media_event {
     NATIVE_MEDIA_EVENT_WINDOW_CLOSED = 1, /* user closed the video window: drop the AirPlay client */
-    NATIVE_MEDIA_EVENT_USB_STARTED = 2,   /* USB (QuickTime) mirroring became the active source */
-    NATIVE_MEDIA_EVENT_USB_STOPPED = 3,   /* USB mirroring ended (unplugged, stopped, or failed) */
     NATIVE_MEDIA_EVENT_EXIT_REQUESTED = 4, /* "Exit" chosen in the notification-area menu */
     NATIVE_MEDIA_EVENT_LINK_PREFERENCE_CHANGED = 5 /* "USB first" / "Wi-Fi only" chosen: see
                                                       native_media_prefer_usb_link() */
@@ -44,7 +43,6 @@ typedef struct native_media_settings {
     bool start_fullscreen;
     bool timestamp_sync;               /* false: present AirPlay mirror media on arrival ("-vsync no") */
     double audio_offset_ms;            /* "-vsync x": positive delays audio relative to video */
-    bool usb_mirroring;                /* legacy QuickTime USB capture (-usb; iOS 15 and earlier) */
     bool keep_window_on_stop;          /* "-nc": keep the last frame visible after the client stops */
     int log_level;                     /* messages above this level are discarded */
     int gpu_preference;                /* 0 = display-owning GPU (default), 1 = integrated, 2 = discrete */

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
 # Configure + build the Windows-native UxPlay with MSYS2 CLANG64.
 # Usage: build_uxplay_native.sh <source_dir> <build_dir> <deps_prefix> [Release|RelWithDebInfo]
 set -euo pipefail

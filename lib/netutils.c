@@ -21,21 +21,11 @@
 #include <stdio.h>
 
 #include "compat.h"
-#ifndef _WIN32
-#include <fcntl.h>
-#endif
 
-#if defined(__APPLE__) && defined(UXPLAY_HAVE_APPLE_P2P)
-#ifndef SO_RECV_ANYIF
-/* XNU's private socket option for unrestricted inbound processing. */
-#define SO_RECV_ANYIF 0x1104
-#endif
-#endif
 
 int
 netutils_init()
 {
-#ifdef WIN32
     WORD wVersionRequested;
 	WSADATA wsaData;
 	int ret;
@@ -51,27 +41,14 @@ netutils_init()
 		/* Version mismatch, requested version not found */
 		return -1;
 	}
-#endif
     return 0;
 }
 
 void
 netutils_cleanup()
 {
-#ifdef WIN32
     WSACleanup();
-#endif
 }
-
-/* for p2p support (macOS only ) */
-#if defined(__APPLE__) && defined(UXPLAY_HAVE_APPLE_P2P)
-static int peer_to_peer = 0;
-void
-netutils_set_peer_to_peer(int enabled)
-{
-    peer_to_peer = enabled ? 1 : 0;
-}
-#endif
 
 int
 netutils_wakeup_open(void)
@@ -94,13 +71,8 @@ netutils_wakeup_open(void)
         CLOSESOCKET(wakeup_fd);
         return -1;
     }
-#ifdef _WIN32
     u_long non_blocking = 1;
     ioctlsocket(wakeup_fd, FIONBIO, &non_blocking);
-#else
-    int flags = fcntl(wakeup_fd, F_GETFL, 0);
-    fcntl(wakeup_fd, F_SETFL, flags | O_NONBLOCK);
-#endif
     return wakeup_fd;
 }
 
@@ -181,11 +153,7 @@ netutils_init_socket(unsigned short *port, int use_ipv6, int use_udp)
 
     struct sockaddr_storage saddr;
     socklen_t socklen = 0;
-#ifndef _WIN32
-    int reuseaddr = 1;
-#else
     const char reuseaddr = 1;
-#endif
     
     assert(port);
 
@@ -199,16 +167,6 @@ netutils_init_socket(unsigned short *port, int use_ipv6, int use_udp)
         goto cleanup;
     }
 
-#if defined(__APPLE__) && defined(UXPLAY_HAVE_APPLE_P2P)
-    if (peer_to_peer) {
-        int recv_any_if = 1;
-        ret = setsockopt(server_fd, SOL_SOCKET, SO_RECV_ANYIF, &recv_any_if, sizeof(recv_any_if));
-        if (ret == -1) {
-            fprintf(stderr, "setsockopt(SO_RECV_ANYIF) failed: %s\n", strerror(errno));
-            goto cleanup;
-        }
-    }
-#endif
 
     memset(&saddr, 0, sizeof(saddr));
     if (use_ipv6) {
@@ -219,12 +177,6 @@ netutils_init_socket(unsigned short *port, int use_ipv6, int use_udp)
         sin6ptr->sin6_addr = in6addr_any;
         sin6ptr->sin6_port = htons(*port);
 
-#ifndef _WIN32
-        int v6only = 1;
-        /* Make sure we only listen to IPv6 addresses */
-        setsockopt(server_fd, IPPROTO_IPV6, IPV6_V6ONLY,
-                   (char *) &v6only, sizeof(v6only));
-#endif
 
         socklen = sizeof(*sin6ptr);
         ret = bind(server_fd, (struct sockaddr *)sin6ptr, socklen);

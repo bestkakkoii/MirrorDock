@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 module;
 
 extern "C"
@@ -19,8 +20,8 @@ namespace uxplay
 {
     namespace
     {
-        // AudioSpecificConfig / magic cookies used by AirPlay (see UxPlay's
-        // renderers/audio_renderer.c caps strings)
+        // AudioSpecificConfig / magic cookies used by AirPlay (the values in
+        // upstream UxPlay's GStreamer audio caps)
         constexpr std::array<std::uint8_t, 4> aac_eld_config{0xf8, 0xe8, 0x50, 0x00};
         constexpr std::array<std::uint8_t, 2> aac_lc_config{0x12, 0x10};
         constexpr std::array<std::uint8_t, 36> alac_cookie{

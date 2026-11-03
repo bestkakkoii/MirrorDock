@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Timestamp-scheduled audio output through WASAPI shared mode.
 //
 // * IAudioClient3 minimum engine period (event driven) for the smallest

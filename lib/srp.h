@@ -59,25 +59,11 @@
 
 #ifndef SRP_H
 #define SRP_H
-#define APPLE_VARIANT
 
 struct SRPVerifier;
-#if 0  /*begin removed section 1*/
-struct SRPUser;
-#endif  /*end removed section 1*/
 typedef enum
 {
-#if 0 /* begin removed section 2*/
-    SRP_NG_1024,
-    SRP_NG_1536,
-#endif /* end removed section 2*/
     SRP_NG_2048,
-#if 0 /* begin removed section 3*/
-    SRP_NG_3072,
-    SRP_NG_4096,
-    SRP_NG_6144,
-    SRP_NG_8192,
-#endif /* end removed section 3*/
     SRP_NG_CUSTOM
 } SRP_NGType;
 
@@ -130,7 +116,6 @@ void srp_create_salted_verification_key( SRP_HashAlgorithm alg,
                                          const char * n_hex, const char * g_hex );
 
 
-#ifdef APPLE_VARIANT
 /* Out: bytes_B, len_B
  * On failure, bytes_B will be set to NULL and len_B will be set to 0
  *
@@ -145,7 +130,6 @@ void srp_create_server_ephemeral_key( SRP_HashAlgorithm alg, SRP_NGType ng_type,
                                       const unsigned char ** bytes_B, int * len_B,
 				      const char * n_hex, const char * g_hex,
 				      int rfc5054_compat );
-#endif
 
 /* Out: bytes_B, len_B.
  * 
@@ -161,9 +145,7 @@ struct SRPVerifier *  srp_verifier_new( SRP_HashAlgorithm alg, SRP_NGType ng_typ
                                         const unsigned char * bytes_s, int len_s, 
                                         const unsigned char * bytes_v, int len_v,
                                         const unsigned char * bytes_A, int len_A,
-#ifdef APPLE_VARIANT
 					const unsigned char * bytes_b, int len_b,
-#endif
                                         const unsigned char ** bytes_B, int * len_B,
                                         const char * n_hex, const char * g_hex,
                                         int rfc5054_compat );
@@ -198,39 +180,4 @@ void                  srp_verifier_verify_session( struct SRPVerifier * ver,
  * breaks compatibility with previous versions of the csrp library but is recommended
  * for new code. 
  */
-#if 0   /*begin removed section 4 */
-struct SRPUser *      srp_user_new( SRP_HashAlgorithm alg, SRP_NGType ng_type, const char * username,
-                                    const unsigned char * bytes_password, int len_password,
-                                    const char * n_hex, const char * g_hex,
-                                    int rfc5054_compat );
-                                    
-void                  srp_user_delete( struct SRPUser * usr );
-
-int                   srp_user_is_authenticated( struct SRPUser * usr);
-
-
-const char *          srp_user_get_username( struct SRPUser * usr );
-
-/* key_length may be null */
-const unsigned char * srp_user_get_session_key( struct SRPUser * usr, int * key_length );
-
-int                   srp_user_get_session_key_length( struct SRPUser * usr );
-
-/* Output: username, bytes_A, len_A */
-void                  srp_user_start_authentication( struct SRPUser * usr, const char ** username, 
-                                                     const unsigned char ** bytes_A, int * len_A );
-
-/* Output: bytes_M, len_M  (len_M may be null and will always be 
- *                          srp_user_get_session_key_length() bytes in size) */
-/* (in APPLE_VARIANT case, session_key_length is DOUBLE the length of bytes_M) */
-void                  srp_user_process_challenge( struct SRPUser * usr, 
-                                                  const unsigned char * bytes_s, int len_s, 
-                                                  const unsigned char * bytes_B, int len_B,
-                                                  const unsigned char ** bytes_M, int * len_M );
-                                                  
-/* bytes_HAMK must be exactly srp_user_get_session_key_length() bytes in size */
-/* (in APPLE_VARIANT case, session_key_length is DOUBLE the length of bytes_HAMK) */
-void                  srp_user_verify_session( struct SRPUser * usr, const unsigned char * bytes_HAMK );
-
-#endif  /*end removed section 4*/
 #endif /* Include Guard */

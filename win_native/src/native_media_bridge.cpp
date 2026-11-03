@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // C entry points (native_media.h) over the C++ media engine.
 //
 // The C interface replaces UxPlay's process-wide GStreamer renderer
@@ -20,7 +21,6 @@ import uxplay_log;
 import uxplay_clock;
 import uxplay_media_types;
 import uxplay_media_engine;
-import uxplay_usb_mirror;
 import uxplay_usb_link;
 import uxplay_video_decoder;
 import uxplay_audio_decoder;
@@ -43,10 +43,8 @@ namespace
         std::atomic<bool> start_requested{false};
         std::atomic<bool> start_finished{false};
         std::unique_ptr<uxplay::media_engine> engine_owner;
-        std::unique_ptr<uxplay::usb_mirror> usb_owner;
         std::unique_ptr<uxplay::usb_link_monitor> usb_link_owner;
         std::atomic<uxplay::media_engine *> engine{nullptr};
-        std::atomic<uxplay::usb_mirror *> usb{nullptr};
         std::atomic<uxplay::usb_link_monitor *> usb_link{nullptr};
         // USB link monitor thread only
         std::optional<uxplay::usb_link_state> last_usb_link;
@@ -355,22 +353,13 @@ namespace
         }
     }
 
-    void create_engine(uxplay::engine_settings engine_settings, bool usb_mirroring)
+    void create_engine(uxplay::engine_settings engine_settings)
     {
         bridge_state &state = bridge();
         std::int64_t const started = uxplay::clock::now_ns();
         uxplay::engine_callbacks callbacks;
-        callbacks.on_window_closed = [](media_source source)
+        callbacks.on_window_closed = [](media_source)
         {
-            if (source == media_source::usb)
-            {
-                if (uxplay::usb_mirror *const usb = bridge().usb.load(); usb != nullptr)
-                {
-                    uxplay::log::info("window closed: stopping USB mirroring (replug the iPhone to start again)");
-                    usb->stop_current_session();
-                }
-                return;
-            }
             emit(NATIVE_MEDIA_EVENT_WINDOW_CLOSED);
         };
         callbacks.on_usb_device_change = []
@@ -379,27 +368,12 @@ namespace
             {
                 link->refresh();
             }
-            if (uxplay::usb_mirror *const usb = bridge().usb.load(); usb != nullptr)
-            {
-                usb->rescan();
-            }
         };
         callbacks.on_tray_command = [](uxplay::tray_command command)
         {
             bridge_state &current = bridge();
             switch (command)
             {
-            case uxplay::tray_command::toggle_usb:
-                if (uxplay::usb_mirror *const usb = current.usb.load(); usb != nullptr)
-                {
-                    bool const enable = !usb->enabled();
-                    usb->set_enabled(enable);
-                    if (uxplay::media_engine *const ready = current.engine.load(); ready != nullptr)
-                    {
-                        ready->set_legacy_usb(true, enable);
-                    }
-                }
-                break;
             case uxplay::tray_command::apply_data_guard:
                 if (uxplay::usb_link_monitor *const link = current.usb_link.load(); link != nullptr)
                 {
@@ -443,37 +417,6 @@ namespace
         {
             state.engine_owner = std::move(*created);
             state.engine.store(state.engine_owner.get(), std::memory_order_release);
-            // the USB watcher always exists so the tray menu can switch it on later
-            uxplay::display_summary const display = state.engine_owner->display();
-            uxplay::usb_mirror_events usb_events;
-            usb_events.on_started = []
-            {
-                emit(NATIVE_MEDIA_EVENT_USB_STARTED);
-            };
-            usb_events.on_stopped = []
-            {
-                emit(NATIVE_MEDIA_EVENT_USB_STOPPED);
-            };
-            auto usb = uxplay::usb_mirror::create(*state.engine_owner, std::move(usb_events), display.width,
-                                                  display.height);
-            if (!usb)
-            {
-                uxplay::log::error("legacy QuickTime USB capture unavailable: {}", usb.error().describe());
-                state.engine_owner->set_legacy_usb(false, false);
-            }
-            else
-            {
-                state.usb_owner = std::move(*usb);
-                state.usb_owner->set_enabled(usb_mirroring);
-                // the legacy toggle is offered only when asked for with -usb
-                state.engine_owner->set_legacy_usb(usb_mirroring, usb_mirroring);
-                state.usb.store(state.usb_owner.get(), std::memory_order_release);
-                if (usb_mirroring)
-                {
-                    uxplay::log::info("legacy QuickTime USB capture enabled (-usb): streams only on iOS 15 and "
-                                      "earlier; on iOS 16+ use AirPlay over the USB cable (Personal Hotspot)");
-                }
-            }
 
             // AirPlay over the USB cable: status, hints and the cellular-data guard
             uxplay::usb_link_events link_events;
@@ -549,12 +492,11 @@ extern "C" int native_media_start(const native_media_settings *settings)
                           : settings->gpu_preference == 2 ? uxplay::gpu_preference::discrete
                           : settings->gpu_preference == 3 ? uxplay::gpu_preference::software
                                                           : uxplay::gpu_preference::automatic;
-    bool const usb_mirroring = settings->usb_mirroring;
     state.start_finished.store(false);
     state.start_requested.store(true, std::memory_order_release);
-    state.start_thread = std::thread{[engine_settings = std::move(engine_settings), usb_mirroring]() mutable
+    state.start_thread = std::thread{[engine_settings = std::move(engine_settings)]() mutable
     {
-        create_engine(std::move(engine_settings), usb_mirroring);
+        create_engine(std::move(engine_settings));
     }};
     return 0;
 }
@@ -569,8 +511,6 @@ extern "C" void native_media_stop(void)
     }
     state.usb_link.store(nullptr);
     state.usb_link_owner.reset();
-    state.usb.store(nullptr);
-    state.usb_owner.reset();
     state.engine.store(nullptr);
     state.engine_owner.reset();
 }

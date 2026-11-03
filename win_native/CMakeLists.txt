@@ -1,12 +1,12 @@
+# SPDX-License-Identifier: MIT
 # Windows-native media engine for UxPlay (C++26 named modules).
 #
 # Inputs (pinned main-branch builds, see README_AI.md): FFmpeg (libavcodec,
-# libavutil, libswresample) and libusb-1.0, found through pkg-config; the
-# Windows SDK shader compiler fxc.exe for offline HLSL compilation.
+# libavutil, libswresample), found through pkg-config; the Windows SDK shader
+# compiler fxc.exe for offline HLSL compilation.
 
 find_package( PkgConfig REQUIRED )
 pkg_check_modules( UXPLAY_FFMPEG REQUIRED libavcodec libavutil libswresample )
-pkg_check_modules( UXPLAY_LIBUSB REQUIRED libusb-1.0 )
 
 file( GLOB UXPLAY_FXC_CANDIDATES "C:/Program Files (x86)/Windows Kits/10/bin/*/x64/fxc.exe" )
 list( SORT UXPLAY_FXC_CANDIDATES COMPARE NATURAL ORDER DESCENDING )
@@ -58,8 +58,6 @@ target_sources( uxplay_native
       src/uxplay_audio_output.cppm
       src/uxplay_audio_decoder.cppm
       src/uxplay_media_engine.cppm
-      src/uxplay_qt_protocol.cppm
-      src/uxplay_usb_mirror.cppm
       src/uxplay_usb_link.cppm
   PRIVATE
     src/uxplay_status.cpp
@@ -75,34 +73,18 @@ target_sources( uxplay_native
     src/uxplay_audio_output.cpp
     src/uxplay_audio_decoder.cpp
     src/uxplay_media_engine.cpp
-    src/uxplay_qt_protocol.cpp
-    src/uxplay_usb_mirror.cpp
     src/uxplay_usb_link.cpp
-    src/native_media_bridge.cpp
-    src/renderer_compat.c )
+    src/native_media_bridge.cpp )
 add_dependencies( uxplay_native uxplay_shaders )
 target_compile_features( uxplay_native PUBLIC cxx_std_26 )
 set_target_properties( uxplay_native PROPERTIES CXX_MODULE_STD ON CXX_EXTENSIONS OFF )
 target_include_directories( uxplay_native PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include )
 target_include_directories( uxplay_native PRIVATE ${UXPLAY_GENERATED} )
-# module interfaces include FFmpeg/libusb headers in their global module
+# module interfaces include FFmpeg headers in their global module
 # fragment: importers (and CMake's synthesized BMIs) need them as system headers
-target_include_directories( uxplay_native SYSTEM PUBLIC ${UXPLAY_FFMPEG_INCLUDE_DIRS} ${UXPLAY_LIBUSB_INCLUDE_DIRS} )
+target_include_directories( uxplay_native SYSTEM PUBLIC ${UXPLAY_FFMPEG_INCLUDE_DIRS} )
 # WIN32_LEAN_AND_MEAN / NOMINMAX are defined by each source before <windows.h>
 target_compile_definitions( uxplay_native PUBLIC UNICODE _UNICODE _WIN32_WINNT=0x0A00 WINVER=0x0A00 )
-
-# GLib: uxplay.cpp's main loop and renderer_compat.c's renderer headers.
-# Linked statically with its own static dependencies (libintl -> libiconv,
-# pcre2) so the program is one executable with no bundled DLLs;
-# GLIB_STATIC_COMPILATION drops GLib's dllimport declarations (glib-2.0.pc
-# does not carry it).
-pkg_check_modules( UXPLAY_GLIB REQUIRED glib-2.0 )
-add_library( uxplay_glib INTERFACE )
-target_include_directories( uxplay_glib SYSTEM INTERFACE ${UXPLAY_GLIB_STATIC_INCLUDE_DIRS} )
-target_compile_definitions( uxplay_glib INTERFACE GLIB_STATIC_COMPILATION )
-target_link_directories( uxplay_glib INTERFACE ${UXPLAY_GLIB_STATIC_LIBRARY_DIRS} )
-target_link_libraries( uxplay_glib INTERFACE ${UXPLAY_GLIB_STATIC_LIBRARIES} iconv )
-target_link_libraries( uxplay_native PUBLIC uxplay_glib )
 
 # Strongest practical warning set, as errors, on the owned sources only: the
 # std module that CMake synthesizes from libc++'s std.cppm must not inherit
@@ -119,20 +101,15 @@ foreach( owned_source ${UXPLAY_NATIVE_SOURCES} ${UXPLAY_NATIVE_MODULES} )
   endif()
 endforeach()
 
-target_link_directories( uxplay_native PUBLIC ${UXPLAY_FFMPEG_LIBRARY_DIRS} ${UXPLAY_LIBUSB_LIBRARY_DIRS} )
+target_link_directories( uxplay_native PUBLIC ${UXPLAY_FFMPEG_LIBRARY_DIRS} )
 target_link_libraries( uxplay_native PUBLIC
-  avcodec swresample avutil usb-1.0
-  d3d11 dxgi dwmapi avrt ole32 uuid user32 gdi32 bcrypt ws2_32 crypt32 setupapi iphlpapi cfgmgr32 d2d1 dwrite )
+  avcodec swresample avutil
+  d3d11 dxgi dwmapi avrt ole32 uuid user32 gdi32 bcrypt ws2_32 crypt32 iphlpapi cfgmgr32 d2d1 dwrite )
 
 # ---- tests (not part of the shipped program) -------------------------------
 option( UXPLAY_NATIVE_TESTS "Build the native engine tests" ON )
 if ( UXPLAY_NATIVE_TESTS )
   enable_testing()
-  add_executable( qt_protocol_tests tests/qt_protocol_tests.cpp )
-  target_link_libraries( qt_protocol_tests PRIVATE uxplay_native )
-  set_target_properties( qt_protocol_tests PROPERTIES CXX_MODULE_STD ON )
-  add_test( NAME qt_protocol_tests COMMAND qt_protocol_tests ${CMAKE_CURRENT_SOURCE_DIR}/tests/qt_fixtures )
-
   add_executable( engine_smoke_test tests/engine_smoke_test.cpp )
   target_link_libraries( engine_smoke_test PRIVATE uxplay_native )
   set_target_properties( engine_smoke_test PROPERTIES CXX_MODULE_STD ON )
@@ -142,7 +119,7 @@ if ( UXPLAY_NATIVE_TESTS )
   set_target_properties( usb_link_tests PROPERTIES CXX_MODULE_STD ON )
   add_test( NAME usb_link_tests COMMAND usb_link_tests )
 
-  foreach( test_source tests/qt_protocol_tests.cpp tests/engine_smoke_test.cpp tests/usb_link_tests.cpp )
+  foreach( test_source tests/engine_smoke_test.cpp tests/usb_link_tests.cpp )
     set_property( SOURCE ${test_source} APPEND PROPERTY COMPILE_OPTIONS
       -Wall -Wextra -Wpedantic -Wshadow -Wold-style-cast -Werror )
   endforeach()

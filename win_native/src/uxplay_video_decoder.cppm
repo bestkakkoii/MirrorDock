@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // H.264 / H.265 decoding with FFmpeg's D3D11VA hwaccel on the display GPU.
 //
 // Low-latency configuration: AV_CODEC_FLAG_LOW_DELAY and no frame threading,

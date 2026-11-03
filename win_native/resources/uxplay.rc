@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Resources of the Windows-native UxPlay executable.
 #include <winver.h>
 

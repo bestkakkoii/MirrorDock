@@ -34,7 +34,6 @@
 #include "utils.h"
 #include "plist/plist.h"
 
-#ifdef _WIN32
 #define CAST (char *)
 /* are these keepalive settings for WIN32 correct? */
 /* (taken from https://github.com/wegank/ludimus)  */
@@ -42,24 +41,13 @@
 #define TCP_KEEPCNT 16
 #define TCP_KEEPIDLE TCP_KEEPALIVE
 #define TCP_KEEPINTVL 17
-#else
-#define CAST
-#endif
 
 #define SECOND_IN_NSECS 1000000000ULL
 #define SEC SECOND_IN_NSECS
 
-/* for MacOS, where SOL_TCP and TCP_KEEPIDLE are not defined */
-#if !defined(SOL_TCP) && defined(IPPROTO_TCP)
+/* the Windows headers define TCP_KEEPIDLE (ws2ipdef.h) but not SOL_TCP */
+#ifndef SOL_TCP
 #define SOL_TCP IPPROTO_TCP
-#endif
-#if !defined(TCP_KEEPIDLE) && defined(TCP_KEEPALIVE)
-#define TCP_KEEPIDLE TCP_KEEPALIVE
-#endif
-
-/* for OpenBSD, where TCP_KEEPIDLE and TCP_KEEPALIVE are not defined */
-#if !defined(TCP_KEEPIDLE) && !defined(TCP_KEEPALIVE)
-#define TCP_KEEPIDLE SO_KEEPALIVE
 #endif
 
 //struct h264codec_s {
@@ -274,7 +262,6 @@ raop_rtp_mirror_thread(void *arg)
                            "raop_rtp_mirror could not set stream socket keepalive time %d %s", sock_err, SOCKET_ERROR_STRING(sock_err));
             }
 /* OpenBSD does not have these options.  */
-#ifndef __OpenBSD__
             option = 10;
             if (setsockopt(stream_fd, SOL_TCP, TCP_KEEPINTVL, CAST &option, sizeof(option)) < 0) {
                 int sock_err = SOCKET_GET_ERROR();
@@ -287,7 +274,6 @@ raop_rtp_mirror_thread(void *arg)
                 logger_log(raop_rtp_mirror->logger, LOGGER_WARNING,
                            "raop_rtp_mirror could not set stream socket keepalive probes %d %s", sock_err, SOCKET_ERROR_STRING(sock_err));
             }
-#endif /* !__OpenBSD__ */
             readstart = 0;
         }
 

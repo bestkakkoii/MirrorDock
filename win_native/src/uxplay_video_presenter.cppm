@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Timestamp-scheduled video presentation on a flip-model swap chain.
 //
 // * DXGI_SWAP_EFFECT_FLIP_DISCARD, 2 buffers, frame-latency waitable object

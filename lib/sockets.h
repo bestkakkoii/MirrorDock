@@ -15,7 +15,6 @@
 #ifndef SOCKETS_H
 #define SOCKETS_H
 
-#if defined(WIN32)
 
 char *wsa_strerror(int errnum);
 
@@ -40,15 +39,5 @@ typedef int socklen_t;
 #define WSAENOMEM WSA_NOT_ENOUGH_MEMORY
 #define CLOSESOCKET closesocket
 #define IOCTLSOCKET ioctlsocket 
-#else
-
-#define CLOSESOCKET close
-#define IOCTLSOCKET ioctl
-
-#define SOCKET_GET_ERROR()      (errno)
-#define SOCKET_SET_ERROR(value) (errno = (value))
-#define SOCKET_ERRORNAME(name)  name
-#define SOCKET_ERROR_STRING(errnum) strerror(errnum)
-#endif
 
 #endif

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Host tuning for this laptop (i7-6700HQ, Intel HD 530 + GTX 960M Optimus,
 // battery-capable).  Everything here is process- or thread-scoped and is
 // reverted automatically by Windows when the process exits; no system

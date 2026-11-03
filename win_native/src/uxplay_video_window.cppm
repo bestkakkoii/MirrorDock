@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Video window with its own UI thread.
 //
 // Fullscreen works like a web video player: double-click, F, F11 or
@@ -21,7 +22,6 @@ export namespace uxplay
     enum class tray_command
     {
         toggle_fullscreen,
-        toggle_usb, // legacy QuickTime capture (only offered with -usb)
         apply_data_guard,
         enable_link_adapter, // re-enable a disabled "Apple Mobile Device Ethernet"
         prefer_usb_link,     // AirPlay over the USB cable when it is up (default)
@@ -75,8 +75,6 @@ export namespace uxplay
         // idle) and its size; local mute state
         void set_stream_info(std::wstring transport, std::wstring detail);
         void set_muted(bool muted);
-        // legacy QuickTime capture toggle: shown only when available
-        void set_legacy_usb(bool available, bool enabled);
         // on_click: command run when the user clicks the balloon
         void notify(std::wstring title, std::wstring text, std::optional<tray_command> on_click = std::nullopt);
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Decoded picture handed from a video decoder to the presenter.
 //
 // Owns one AVFrame reference.  Hardware frames reference a slice of the

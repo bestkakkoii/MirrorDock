@@ -1,10 +1,11 @@
+// SPDX-License-Identifier: MIT
 // Media engine smoke test without a phone: plays an Annex-B elementary stream
 // (with access-unit delimiters) at its frame rate as a fake mirroring source,
 // plus a 440 Hz tone with matching timestamps, then reports what was decoded
 // and presented.  Exit code 0 when every access unit produced a picture and
 // the presenter showed frames.
 //
-// usage: engine_smoke_test <stream.264|stream.265> <h264|h265> <fps> [auto|intel|nvidia] [usb|airplay]
+// usage: engine_smoke_test <stream.264|stream.265> <h264|h265> <fps> [auto|intel|nvidia] [quiet]
 import std;
 import uxplay_log;
 import uxplay_clock;
@@ -66,7 +67,7 @@ int main(int argc, char **argv)
 {
     if (argc < 4)
     {
-        std::println(std::cerr, "usage: engine_smoke_test <stream> <h264|h265> <fps> [auto|intel|nvidia] [usb|airplay] [quiet]");
+        std::println(std::cerr, "usage: engine_smoke_test <stream> <h264|h265> <fps> [auto|intel|nvidia] [quiet]");
         return 2;
     }
     uxplay::log::install_sink(print_line, uxplay::log::level::info);
@@ -74,11 +75,9 @@ int main(int argc, char **argv)
     bool const hevc = std::string_view{argv[2]} == "h265";
     double const fps = std::stod(argv[3]);
     std::string_view const gpu_choice = argc > 4 ? std::string_view{argv[4]} : std::string_view{"auto"};
-    uxplay::media_source const source = (argc > 5 && std::string_view{argv[5]} == "airplay")
-                                            ? uxplay::media_source::airplay
-                                            : uxplay::media_source::usb;
+    uxplay::media_source const source = uxplay::media_source::airplay;
     // quiet: test tone at about -61 dBFS (inaudible) for runs on a machine someone is using
-    bool const quiet = argc > 6 && std::string_view{argv[6]} == "quiet";
+    bool const quiet = argc > 5 && std::string_view{argv[5]} == "quiet";
     double const tone_amplitude = quiet ? 30.0 : 3000.0;
 
     std::ifstream file{path, std::ios::binary};

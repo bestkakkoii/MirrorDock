@@ -1,4 +1,5 @@
 @echo off
+rem SPDX-License-Identifier: MIT
 rem Installs Apple's USB driver so the optional "AirPlay over the USB cable"
 rem path can work (see the user guide, section 3). Not needed for Wi-Fi.
 rem Safe to run more than once.

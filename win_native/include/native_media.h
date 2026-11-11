@@ -146,7 +146,7 @@ void native_media_set_volume(double linear_gain);
  * Returns 1 when the client is on the USB link. */
 int native_media_set_airplay_local_address(const char *local_address);
 
-/* Link preference, persisted per user (HKCU\Software\UxPlay\prefer_usb_link):
+/* Link preference, persisted per user (prefer_usb_link in the settings key):
  * true = AirPlay over the USB cable whenever the iPhone link is up (default),
  * false = Wi-Fi only (the cable can stay plugged in to charge).  Valid from
  * native_media_start() on. */

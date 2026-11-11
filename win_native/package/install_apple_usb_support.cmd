@@ -12,7 +12,7 @@ winget install --id Apple.AppleMobileDeviceSupport --silent --accept-package-agr
 echo.
 if %ERRORLEVEL%==0 (
   echo Done. Next: on the iPhone enable Settings ^> Personal Hotspot ^> Allow Others to Join,
-  echo keep the USB cable connected, then pick UxPlay in Screen Mirroring.
+  echo keep the USB cable connected, then pick MirrorDock in Screen Mirroring.
 ) else (
   echo winget returned %ERRORLEVEL%. If winget is missing, install "Apple Devices"
   echo from the Microsoft Store instead, then retry.

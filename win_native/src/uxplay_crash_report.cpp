@@ -6,6 +6,8 @@ module;
 #include <windows.h>
 #include <dbghelp.h>
 
+#include "uxplay_version.h"
+
 module uxplay_crash_report;
 
 import std;
@@ -153,7 +155,7 @@ namespace uxplay::crash_report
                 return EXCEPTION_EXECUTE_HANDLER; // a second fault while recording: just end
             }
             record_text text;
-            text.add("UxPlay ended with an unhandled exception\r\ntime: ");
+            text.add(UXPLAY_PRODUCT_NAME " ended with an unhandled exception\r\ntime: ");
             add_time(text);
             text.add("\r\nexception code: ");
             text.add_hex(exception->ExceptionRecord->ExceptionCode);
@@ -181,7 +183,7 @@ namespace uxplay::crash_report
             if (!handling.exchange(true))
             {
                 record_text text;
-                text.add("UxPlay ended in std::terminate\r\ntime: ");
+                text.add(UXPLAY_PRODUCT_NAME " ended in std::terminate\r\ntime: ");
                 add_time(text);
                 if (std::exception_ptr const active = std::current_exception(); active)
                 {

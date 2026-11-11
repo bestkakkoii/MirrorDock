@@ -23,6 +23,13 @@ export namespace uxplay::settings
 
     // "Start with Windows": the program path registered for the current user
     // (std::nullopt when it is not registered).
+    // Once after the program changed its name (UxPlay up to 1.6): the settings
+    // stored under the earlier name are copied (the earlier key stays, for an
+    // earlier version that may still be used), and a "start with Windows"
+    // entry of the earlier name becomes one for this program.  The value says
+    // what was done, for the log; it is empty when there was nothing to do.
+    [[nodiscard]] outcome<std::string> adopt_legacy_settings();
+
     [[nodiscard]] outcome<std::optional<std::wstring>> autostart_command();
 
     // Registers this executable (quoted path) to start with Windows, or

@@ -940,7 +940,7 @@ namespace uxplay
                       media_source_name(source), stats.presented, stats.dropped,
                       static_cast<double>(timelines[source_index(source)].delay()) / 1e6, packets, empty_outputs,
                       failures, decoded_frames, level_text(peak), played.played_frames, played.gain,
-                      played.muted ? " (muted in UxPlay)" : "",
+                      played.muted ? " (muted here)" : "",
                       static_cast<double>(audio->device_latency_ns()) / 1e6);
         }
     }
@@ -1062,7 +1062,7 @@ namespace uxplay
                 engine->muted.store(now_muted);
                 engine->audio->set_muted(now_muted);
                 engine->window->set_muted(now_muted);
-                log::info("UxPlay audio output {}", now_muted ? "muted" : "unmuted");
+                log::info("audio output {} here (the phone's volume is not touched)", now_muted ? "muted" : "unmuted");
                 return;
             }
             if (engine->callbacks.on_tray_command)

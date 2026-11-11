@@ -1,11 +1,13 @@
-# UxPlay for Windows (native)
+# MirrorDock
 
 AirPlay screen mirroring and audio from an iPhone or iPad to a Windows PC —
 over Wi-Fi, or over the USB charging cable.
 
-This is a Windows-only build of [UxPlay](https://github.com/FDH2/UxPlay) with
-its own media engine: no GStreamer, no Bonjour service, no runtime to
-install. It ships as a single `uxplay.exe`.
+MirrorDock is a Windows-only AirPlay receiver built on the protocol core of
+[UxPlay](https://github.com/FDH2/UxPlay), with its own media engine: no
+GStreamer, no Bonjour service, no runtime to install. It ships as a single
+`mirror_dock.exe`. (Up to version 1.6 it was published as *UxPlay for Windows
+(native)*; settings are taken over automatically.)
 
 * **Video:** H.265 / H.264 decoded on the GPU that drives your monitor
   (Direct3D 11 video decoding through FFmpeg, zero-copy), presented on a
@@ -15,7 +17,7 @@ install. It ships as a single `uxplay.exe`.
 * **Audio:** WASAPI low-latency shared mode, one presentation timeline for
   picture and sound (lip sync by construction), soft limiter, local mute.
 * **USB cable:** with *Personal Hotspot* enabled, the iPhone's USB network
-  link carries AirPlay locally; UxPlay advertises itself on that link while
+  link carries AirPlay locally; MirrorDock advertises itself on that link while
   the cable is connected and moves back to Wi-Fi when it is unplugged. A
   one-click option keeps the PC's internet traffic off the phone's mobile
   data. "Prefer USB / Wi-Fi only" switches without touching the USB device,
@@ -40,7 +42,7 @@ install. It ships as a single `uxplay.exe`.
 * **Behaves like a desktop program:** one instance per receiver name, a
   notification-area menu, optional start with Windows, a dialog that names
   the reason when it cannot start, a timestamped log and a crash record in
-  `%LOCALAPPDATA%\UxPlay`.
+  `%LOCALAPPDATA%\MirrorDock`.
 * **Your language:** the interface (control bar, tray menu, notifications)
   follows the Windows display language — Traditional Chinese, Simplified
   Chinese, or English for every other language; `-ui` picks one.
@@ -52,18 +54,18 @@ GTX 960M).
 
 ## Download and use
 
-1. Download `uxplay_native_win64.zip` from
-   [Releases](https://github.com/bestkakkoii/UxPlay-USB/releases) and unzip it.
-2. Run `uxplay.exe` (allow it through Windows Firewall when asked).
-3. On the iPhone: Control Center → Screen Mirroring → *UxPlay@your-PC*.
+1. Download `mirror_dock_win64.zip` from
+   [Releases](https://github.com/bestkakkoii/MirrorDock/releases) and unzip it.
+2. Run `mirror_dock.exe` (allow it through Windows Firewall when asked).
+3. On the iPhone: Control Center → Screen Mirroring → *MirrorDock@your-PC*.
 
 For the USB cable: install Apple's driver once
 (`install_apple_usb_support.cmd`, or the *Apple Devices* app from the
 Microsoft Store), connect the cable, turn on *Settings → Personal Hotspot →
-Allow Others to Join*, then pick UxPlay in Screen Mirroring.
+Allow Others to Join*, then pick MirrorDock in Screen Mirroring.
 
 The Traditional Chinese user guide (`user_guide_zh_tw.txt`) in the zip covers
-setup, the control bar, options and troubleshooting. `uxplay.exe -h` lists all
+setup, the control bar, options and troubleshooting. `mirror_dock.exe -h` lists all
 options; common ones:
 
 | option | effect |
@@ -79,8 +81,8 @@ options; common ones:
 | `-pin`, `-pw` | require a PIN or password |
 | `-reset n` | reset after n seconds without client heartbeat |
 
-Options read from `%USERPROFILE%\.uxplayrc` (one per line, no leading `-`)
-are applied first. Options of other UxPlay builds that need GStreamer (HLS
+Options read from `%USERPROFILE%\.uxplayrc` (one per line, no leading `-`;
+the file keeps its UxPlay name) are applied first. Options of other UxPlay builds that need GStreamer (HLS
 video, MP4 recording, on-screen cover art, RTP re-streaming, flip/rotate) or
 other platforms (Bluetooth LE beacon, Raspberry Pi, D-Bus) are not part of
 this build; they are accepted and ignored with a warning.
@@ -107,7 +109,7 @@ inputs, tests and verification state.
 ## Licence
 
 The program is distributed under the **GNU General Public License v3**
-([LICENSE](LICENSE)): it is built from UxPlay's GPL-3.0 code. The Windows-native
+([LICENSE](LICENSE)): it is built on UxPlay's GPL-3.0 code. The Windows-native
 media engine in [`win_native/`](win_native) is original work under the **MIT
 licence** ([win_native/LICENSE](win_native/LICENSE)) and may be reused on its
 own under those terms. Files under `lib/` keep their upstream licences
@@ -119,7 +121,8 @@ the complete corresponding source.
 ## Credits
 
 * [UxPlay](https://github.com/FDH2/UxPlay) by F. Duncanh and contributors —
-  the AirPlay server this build is based on (`uxplay.cpp`, `lib/`).
+  the AirPlay server MirrorDock is based on (`uxplay.cpp`, `lib/`); internal
+  names in this tree keep the `uxplay` prefix.
 * [RPiPlay](https://github.com/FD-/RPiPlay) by Florian Draschbacher, and
   [shairplay](https://github.com/juhovh/shairplay) by Juho Vähä-Herttua — the
   protocol core UxPlay grew from.

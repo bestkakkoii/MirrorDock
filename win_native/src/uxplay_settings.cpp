@@ -5,6 +5,8 @@ module;
 #define NOMINMAX
 #include <windows.h>
 
+#include "uxplay_version.h"
+
 module uxplay_settings;
 
 import std;
@@ -15,9 +17,12 @@ namespace uxplay::settings
 {
     namespace
     {
-        constexpr wchar_t settings_key[] = L"Software\\UxPlay";
+        constexpr wchar_t settings_key[] = L"Software\\" UXPLAY_PRODUCT_NAME;
         constexpr wchar_t run_key[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-        constexpr wchar_t run_value[] = L"UxPlay";
+        constexpr wchar_t run_value[] = L"" UXPLAY_PRODUCT_NAME;
+        // the same under the name the program had up to 1.6
+        constexpr wchar_t legacy_settings_key[] = L"Software\\" UXPLAY_LEGACY_PRODUCT_NAME;
+        constexpr wchar_t legacy_run_value[] = L"" UXPLAY_LEGACY_PRODUCT_NAME;
 
         outcome<std::wstring> executable_path()
         {
@@ -93,6 +98,76 @@ namespace uxplay::settings
         {
             log::warning("settings: not saved: {}", stored.error().describe());
         }
+    }
+
+    outcome<std::string> adopt_legacy_settings()
+    {
+        std::string done;
+        HKEY current = nullptr;
+        LSTATUS result = RegOpenKeyExW(HKEY_CURRENT_USER, settings_key, 0, KEY_READ, &current);
+        if (result == ERROR_SUCCESS)
+        {
+            RegCloseKey(current); // this program has settings of its own already
+        }
+        else if (result != ERROR_FILE_NOT_FOUND)
+        {
+            return std::unexpected(make_win32_failure("RegOpenKeyExW(settings)", static_cast<unsigned long>(result)));
+        }
+        else
+        {
+            HKEY legacy = nullptr;
+            result = RegOpenKeyExW(HKEY_CURRENT_USER, legacy_settings_key, 0, KEY_READ, &legacy);
+            if (result == ERROR_SUCCESS)
+            {
+                HKEY created = nullptr;
+                result = RegCreateKeyExW(HKEY_CURRENT_USER, settings_key, 0, nullptr, 0, KEY_WRITE, nullptr, &created,
+                                         nullptr);
+                if (result == ERROR_SUCCESS)
+                {
+                    result = RegCopyTreeW(legacy, nullptr, created);
+                    RegCloseKey(created);
+                    if (result != ERROR_SUCCESS)
+                    {
+                        // no half-copied settings: the next start tries again
+                        RegDeleteTreeW(HKEY_CURRENT_USER, settings_key);
+                    }
+                }
+                RegCloseKey(legacy);
+                if (result != ERROR_SUCCESS)
+                {
+                    return std::unexpected(make_win32_failure("copying the settings of the earlier program name",
+                                                              static_cast<unsigned long>(result)));
+                }
+                done = "settings taken over from the earlier program name (HKCU\\Software\\" UXPLAY_LEGACY_PRODUCT_NAME
+                       ", which is left as it is)";
+            }
+            else if (result != ERROR_FILE_NOT_FOUND)
+            {
+                return std::unexpected(
+                    make_win32_failure("RegOpenKeyExW(earlier settings)", static_cast<unsigned long>(result)));
+            }
+        }
+
+        // "start with Windows" registered under the earlier name: it would
+        // start the earlier executable, so it becomes an entry for this one
+        DWORD size = 0;
+        if (RegGetValueW(HKEY_CURRENT_USER, run_key, legacy_run_value, RRF_RT_REG_SZ, nullptr, nullptr, &size) ==
+            ERROR_SUCCESS)
+        {
+            if (auto registered = set_autostart(true); !registered)
+            {
+                return std::unexpected(registered.error());
+            }
+            result = RegDeleteKeyValueW(HKEY_CURRENT_USER, run_key, legacy_run_value);
+            if (result != ERROR_SUCCESS && result != ERROR_FILE_NOT_FOUND)
+            {
+                return std::unexpected(
+                    make_win32_failure("RegDeleteKeyValueW(earlier Run entry)", static_cast<unsigned long>(result)));
+            }
+            done += done.empty() ? "" : "; ";
+            done += "\"start with Windows\" now starts this program instead of the earlier one";
+        }
+        return done;
     }
 
     outcome<std::optional<std::wstring>> autostart_command()

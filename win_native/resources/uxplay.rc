@@ -1,6 +1,6 @@
 ﻿// SPDX-License-Identifier: MIT
-// Resources of the Windows-native UxPlay executable.  The version comes from
-// win_native/include/uxplay_version.h, the one place it is written.
+// Resources of the executable.  Product name and version come from
+// win_native/include/uxplay_version.h, the one place they are written.
 #include <winver.h>
 #include "../include/uxplay_version.h"
 
@@ -20,13 +20,13 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "CompanyName", "UxPlay open-source project"
-            VALUE "FileDescription", "UxPlay screen mirroring receiver"
+            VALUE "CompanyName", UXPLAY_COMPANY_NAME
+            VALUE "FileDescription", UXPLAY_FILE_DESCRIPTION
             VALUE "FileVersion", UXPLAY_VERSION_TEXT
-            VALUE "InternalName", "uxplay"
-            VALUE "LegalCopyright", "UxPlay authors. GPL-3.0-or-later."
-            VALUE "OriginalFilename", "uxplay.exe"
-            VALUE "ProductName", "UxPlay"
+            VALUE "InternalName", UXPLAY_PRODUCT_FILE_NAME
+            VALUE "LegalCopyright", UXPLAY_COPYRIGHT
+            VALUE "OriginalFilename", UXPLAY_EXECUTABLE_NAME
+            VALUE "ProductName", UXPLAY_PRODUCT_NAME
             VALUE "ProductVersion", UXPLAY_VERSION_TEXT
         END
     END

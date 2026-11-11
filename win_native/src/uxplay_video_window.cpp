@@ -9,6 +9,8 @@ module;
 #include <shellapi.h>
 #include <windowsx.h>
 
+#include "uxplay_version.h"
+
 module uxplay_video_window;
 
 import std;
@@ -162,7 +164,7 @@ namespace uxplay
     {
         window_callbacks callbacks;
         std::wstring pending_title;
-        std::wstring status_text = L"UxPlay";
+        std::wstring status_text = L"" UXPLAY_PRODUCT_NAME;
         std::wstring notify_title;
         std::wstring notify_text;
         std::optional<tray_command> notify_action;

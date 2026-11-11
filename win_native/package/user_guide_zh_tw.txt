@@ -1,8 +1,9 @@
-﻿UxPlay for Windows 使用說明
-===========================
+﻿MirrorDock 使用說明
+===================
 
 把 iPhone／iPad 的畫面與聲音投到 Windows 電腦：可走 Wi-Fi，也可走 USB
-傳輸線。單一 uxplay.exe，不需要安裝其他元件。
+傳輸線。單一 mirror_dock.exe，不需要安裝其他元件。
+（1.6 以前的名稱是「UxPlay for Windows」；從舊版升級請看最後一節。）
 
 適用：Windows 10／11（x64）。程式會依「當下這台電腦」自動調整 —— 自動
 選用驅動螢幕的那張顯示卡（內顯、獨顯，Intel／AMD／NVIDIA 都可以；不支援
@@ -12,13 +13,13 @@
 
 一、啟動與結束
 --------------
-‧ 雙擊 uxplay.exe。不會出現黑色主控台視窗；右下角通知區域會出現圖示，
+‧ 雙擊 mirror_dock.exe。不會出現黑色主控台視窗；右下角通知區域會出現圖示，
   第一次啟動時會跳出「已就緒」通知。在還沒有手機連線之前，程式沒有視窗，
   所有功能都在通知區域圖示的選單裡（按左鍵或右鍵都會開啟選單）。
 ‧ 約 0.5 秒內就能在 iPhone 的「螢幕鏡像輸出」清單看到這台電腦。
 ‧ 若跳出「Windows 安全性警訊」，請按「允許」（家用網路屬於「私人網路」）。
   當時若按了取消，iPhone 會找不到這台電腦：到「Windows 安全性 → 防火牆與
-  網路保護 → 允許應用程式通過防火牆」，把 uxplay.exe 勾選起來。
+  網路保護 → 允許應用程式通過防火牆」，把 mirror_dock.exe 勾選起來。
 ‧ 同一個名稱只會執行一份：程式已經在執行時再開一次，只會由原本那一份跳出
   「已在執行中」的通知，不會開出第二份。
 ‧ 關閉畫面視窗只會中斷這次鏡像，程式仍在背景等待下一次連線。
@@ -33,7 +34,7 @@
 二、Wi-Fi 鏡像
 --------------
 iPhone 與電腦連同一個 Wi-Fi → 控制中心 →「螢幕鏡像輸出」→ 選
-「UxPlay@電腦名稱」。畫面視窗會自動出現並移到最前面。鎖定手機時 iOS 會
+「MirrorDock@電腦名稱」。畫面視窗會自動出現並移到最前面。鎖定手機時 iOS 會
 暫停畫面但聲音續播，解鎖即自動恢復（正常現象）。
 這條路不需要安裝任何驅動，也不耗行動數據。
 
@@ -41,7 +42,7 @@ iPhone 與電腦連同一個 Wi-Fi → 控制中心 →「螢幕鏡像輸出」�
 三、USB 投影（走傳輸線）
 ------------------------
 做法是「在 iPhone 的 USB 網路上跑 AirPlay」。只要那條 USB 網路存在，
-UxPlay 會優先用它，拔掉線就回到 Wi-Fi；程式開著時插拔都會在約 2 秒內自動
+MirrorDock 會優先用它，拔掉線就回到 Wi-Fi；程式開著時插拔都會在約 2 秒內自動
 切換（正在投影中則等這次投影結束才切換，不會打斷）。
 
   1. 安裝 Apple USB 驅動（只需一次）：執行隨附的
@@ -50,7 +51,7 @@ UxPlay 會優先用它，拔掉線就回到 Wi-Fi；程式開著時插拔都會�
   2. iPhone：設定 → 個人熱點 → 打開「允許其他人加入」，接上 USB 線。
      Windows 會多出一張「Apple Mobile Device Ethernet」網路卡（172.20.10.x）。
      iPhone 接上但熱點沒開時，約 8 秒後會跳通知提醒（每次執行只提醒一次）。
-  3. iPhone 控制中心 →「螢幕鏡像輸出」→ 選 UxPlay。
+  3. iPhone 控制中心 →「螢幕鏡像輸出」→ 選 MirrorDock。
      控制列與通知區域圖示會依實際走的路顯示「USB」或「Wi-Fi」。
   選單第二行是 USB 狀態：未接上／請開啟個人熱點／已就緒／網路卡已停用／
   僅充電。
@@ -134,18 +135,18 @@ UxPlay 會優先用它，拔掉線就回到 Wi-Fi；程式開著時插拔都會�
 
 六、記錄檔與當機紀錄
 --------------------
-‧ %LOCALAPPDATA%\UxPlay\uxplay.log（選單「開啟記錄檔」）。每行都有時間；
-  上一次執行的記錄保留為 uxplay.previous.log；單一檔案上限 8 MB。
+‧ %LOCALAPPDATA%\MirrorDock\mirror_dock.log（選單「開啟記錄檔」）。每行都有時間；
+  上一次執行的記錄保留為 mirror_dock.previous.log；單一檔案上限 8 MB。
 ‧ 每 10 秒記錄一行畫面與聲音統計，沒聲音或畫面不順時可以從這裡看出卡在
   哪一段。
-‧ 程式若異常結束，同一個資料夾會留下 uxplay_crash.txt（發生位置）與
-  uxplay_crash.dmp；回報問題時請一併附上。
-‧ 從命令列執行 uxplay.exe 時，記錄直接顯示在該命令列視窗。
+‧ 程式若異常結束，同一個資料夾會留下 mirror_dock_crash.txt（發生位置）與
+  mirror_dock_crash.dmp；回報問題時請一併附上。
+‧ 從命令列執行 mirror_dock.exe 時，記錄直接顯示在該命令列視窗。
 
 
 七、進階選項
 ------------
-建立 uxplay.exe 的捷徑，在「目標」後面加參數；或在
+建立 mirror_dock.exe 的捷徑，在「目標」後面加參數；或在
 %USERPROFILE%\.uxplayrc 每行寫一個選項（不加減號），例如：
     n 客廳電腦
     fs
@@ -168,7 +169,7 @@ UxPlay 會優先用它，拔掉線就回到 Wi-Fi；程式開著時插拔都會�
   -nc            iPhone 停止鏡像時保留最後畫面不關視窗
   -ca 檔名       播放音樂時把專輯封面存成檔案
   -d             詳細除錯記錄
-其餘 UxPlay 原有選項大多照舊可用（在命令列執行 uxplay.exe -h 會列出）。
+其餘 UxPlay 原有選項大多照舊可用（在命令列執行 mirror_dock.exe -h 會列出）。
 本程式不含需要 GStreamer 等其他平台元件的功能（HLS 影片投放、MP4 錄影、
 畫面上顯示封面、RTP 轉送、畫面翻轉／旋轉、藍牙 LE 廣播等）。舊設定檔裡
 若有這些選項，會在記錄檔註明「已忽略」，不影響啟動。
@@ -213,7 +214,19 @@ Windows 11）搭配 iPhone 16 Pro Max（iOS 26.6）量到的數字，僅供參�
   重開一次，請在 iPhone 重新選擇。短時間內連續發生時程式會停下來並顯示
   原因，請檢查顯示卡驅動。
 
-授權：程式整體為 GPL-3.0；其中 Windows 原生媒體引擎（win_native）為 MIT。
+十一、從 UxPlay for Windows（1.6 以前）升級
+------------------------------------------
+‧ 程式改名為 MirrorDock，執行檔是 mirror_dock.exe。請先結束舊的 uxplay.exe
+  再啟動新的；舊的執行檔可以刪除。
+‧ iPhone「螢幕鏡像輸出」清單上的名稱會從「UxPlay@電腦名稱」變成
+  「MirrorDock@電腦名稱」。想沿用舊名稱可加 -n UxPlay。
+‧ 原本的設定（USB 優先／僅 Wi-Fi、模式、視窗大小等）第一次啟動時會自動
+  帶過來；有設「開機時啟動」的話也會自動改成啟動新的執行檔。
+‧ 記錄檔資料夾改為 %LOCALAPPDATA%\MirrorDock（舊資料夾沒有程式在使用時會
+  直接改名沿用，裡面的舊記錄檔會留著）。
+‧ %USERPROFILE%\.uxplayrc 設定檔與配對金鑰檔的檔名不變，照舊可用。
+
+授權：程式整體為 GPL-3.0，AirPlay 協定核心來自開源專案 UxPlay；其中 Windows 原生媒體引擎（win_native）為 MIT。
 內含 FFmpeg（LGPL-2.1+ 組件）、OpenSSL（Apache-2.0）、libplist（LGPL-2.1+）、
 LLVM libc++（Apache-2.0 WITH LLVM-exception）、winpthreads（MIT）。原始碼
 與完整授權文字見 source 與 licenses 資料夾。

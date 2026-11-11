@@ -14,6 +14,7 @@
 #include <shellapi.h>
 
 #include "native_media.h"
+#include "uxplay_version.h"
 
 import std;
 import uxplay_status;
@@ -497,7 +498,7 @@ namespace
                                                {state.product_version, state.core_version, state.project_url});
         HWND const owner = ready != nullptr && ready->showing_video() ? static_cast<HWND>(ready->window_handle())
                                                                       : nullptr;
-        MessageBoxW(owner, text.c_str(), L"UxPlay",
+        MessageBoxW(owner, text.c_str(), L"" UXPLAY_PRODUCT_NAME,
                     MB_OK | MB_ICONINFORMATION | (owner == nullptr ? MB_SETFOREGROUND | MB_TOPMOST : 0U));
     }
 
@@ -745,6 +746,15 @@ extern "C" int native_media_start(const native_media_settings *settings)
     state.event_callback = settings->event_callback;
     state.event_user_data = settings->event_user_data;
     state.log_path = settings->log_path != nullptr ? uxplay::utf8_to_utf16(settings->log_path) : std::wstring{};
+    // the settings the program stored under its earlier name, once
+    if (auto adopted = uxplay::settings::adopt_legacy_settings(); !adopted)
+    {
+        uxplay::log::warning("settings of the earlier program name: {}", adopted.error().describe());
+    }
+    else if (!adopted->empty())
+    {
+        uxplay::log::info("{}", *adopted);
+    }
     // synchronous: uxplay.cpp reads these before the mDNS advertisement starts
     state.prefer_usb_link.store(load_prefer_usb_link());
     int const requested_mode = settings->performance_mode;
@@ -791,7 +801,7 @@ extern "C" int native_media_start(const native_media_settings *settings)
 
     uxplay::engine_settings engine_settings;
     engine_settings.window_title = uxplay::utf8_to_utf16(settings->window_title != nullptr ? settings->window_title
-                                                                                           : "UxPlay");
+                                                                                           : UXPLAY_PRODUCT_NAME);
     engine_settings.start_fullscreen = settings->start_fullscreen;
     engine_settings.timestamp_sync = settings->timestamp_sync;
     engine_settings.keep_window_on_stop = settings->keep_window_on_stop;
@@ -956,7 +966,8 @@ extern "C" void native_media_show_start_failure(const char *reason, const char *
         ui_text_with(uxplay::ui_text::start_failed_text,
                      {uxplay::utf8_to_utf16(reason != nullptr ? reason : ""),
                       uxplay::utf8_to_utf16(log_path != nullptr ? log_path : "")});
-    std::wstring const title = std::format(L"UxPlay · {}", uxplay::ui_string(uxplay::ui_text::start_failed_title));
+    std::wstring const title =
+        std::format(L"" UXPLAY_PRODUCT_NAME L" · {}", uxplay::ui_string(uxplay::ui_text::start_failed_title));
     MessageBoxW(nullptr, text.c_str(), title.c_str(), MB_OK | MB_ICONERROR | MB_SETFOREGROUND | MB_TOPMOST);
 }
 

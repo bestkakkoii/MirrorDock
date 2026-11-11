@@ -1,6 +1,7 @@
 ﻿cmake_minimum_required( VERSION 4.4 )
 
-# UxPlay, Windows-native build (see README_AI.md):
+# MirrorDock (up to 1.6: "UxPlay for Windows (native)"; see README_AI.md).
+# Internal names (targets, modules) keep the uxplay prefix:
 #   uxplay.cpp   program: options, AirPlay callbacks, main loop (GPL-3.0)
 #   lib/         AirPlay protocol core (upstream UxPlay; GPL-3.0 / LGPL-2.1+)
 #   win_native/  C++26 media engine: Direct3D 11 + FFmpeg D3D11VA, WASAPI (MIT)
@@ -31,8 +32,10 @@ add_subdirectory( win_native )
 add_executable( uxplay uxplay.cpp )
 set_property( SOURCE uxplay.cpp APPEND PROPERTY COMPILE_OPTIONS -Wall -Wextra -Wno-unused-parameter -Werror )
 target_link_libraries( uxplay uxplay_native airplay )
-# icon, DPI/UTF-8 manifest, version info; GUI subsystem (no console window:
-# the log goes to the launching terminal or %LOCALAPPDATA%/UxPlay/uxplay.log)
+# the product's executable name (win_native/include/uxplay_version.h)
+set_target_properties( uxplay PROPERTIES OUTPUT_NAME mirror_dock )
+# icon, DPI/UTF-8 manifest, version info; GUI subsystem (no console window: the
+# log goes to the launching terminal or %LOCALAPPDATA%/MirrorDock/mirror_dock.log)
 enable_language( RC )
 target_sources( uxplay PRIVATE win_native/resources/uxplay.rc )
 target_link_options( uxplay PRIVATE -mwindows )

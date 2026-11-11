@@ -1,4 +1,4 @@
-# README_AI — UxPlay Windows-native build (authority entry)
+# README_AI — MirrorDock (authority entry)
 
 This file is the entry point for maintainers and agents working on this
 tree. `README.md` is the user-facing overview; this file records the
@@ -6,13 +6,15 @@ architecture, invariants, build inputs and verification state.
 
 ## What this tree is
 
-UxPlay 1.74 (AirPlay mirroring / audio receiver) reduced to a single
-Windows-native program for the iPhone → Windows AirPlay use case. The tree
+**MirrorDock**: UxPlay 1.74 (AirPlay mirroring / audio receiver) reduced to a
+single Windows-native program for the iPhone → Windows AirPlay use case. The tree
 builds **only** this program (MSYS2 CLANG64; the top-level CMakeLists stops
-on other hosts). The program has its own version (`win_native/include/
-uxplay_version.h`, currently 1.6.0: the one place it is written — log,
-"About" and the version resource read it); `UXPLAY_CORE_VERSION` there is the
-upstream UxPlay release the protocol core derives from. It is
+on other hosts). The program has its own name and version (`win_native/include/
+uxplay_version.h`, currently MirrorDock 1.7.0: the one place they are written
+— log, "About", the version resource and the settings/log locations read it;
+only `uxplay.manifest`, `package_zip.py` and the CMake `OUTPUT_NAME` repeat
+them); `UXPLAY_CORE_VERSION` there is the upstream UxPlay release the
+protocol core derives from. It is
 **runtime-adaptive to any Windows 10/11 x64 PC** (see "Adaptivity &
 portability"), and tuned/verified on:
 
@@ -22,6 +24,37 @@ portability"), and tuned/verified on:
   Intel AC 7265 Wi-Fi.
 * Sender: iPhone 16 Pro Max (A18 Pro, USB-C, iOS 26.6), Wi-Fi AirPlay and
   AirPlay over the USB cable (Personal Hotspot link).
+
+## Names
+
+Up to 1.6 the program was published as "UxPlay for Windows (native)"; since
+1.7 the product is **MirrorDock** (owner's choice, 2026-11-11; repository
+`bestkakkoii/MirrorDock`, formerly `bestkakkoii/UxPlay-USB`).
+
+* **Renamed (what a user sees):** the executable (`mirror_dock.exe`, CMake
+  `OUTPUT_NAME` of target `uxplay`), the default receiver name on the iPhone
+  (`MirrorDock@<computer>`; `-n` still overrides), window/dialog titles, the
+  version resource and manifest, the settings key (`HKCU\Software\MirrorDock`),
+  the "start with Windows" Run value, the log folder
+  (`%LOCALAPPDATA%\MirrorDock`) and its files (`mirror_dock.log`,
+  `mirror_dock.previous.log`, `mirror_dock.start-failure.log`,
+  `mirror_dock_crash.txt/.dmp`), the package (`mirror_dock_win64.zip`, folder
+  `MirrorDock/`), README and user guide.
+* **Not renamed (internal or shared with UxPlay):** module, file, namespace
+  and CMake target names (`uxplay_*`, `uxplay`, `uxplay_native`), the
+  `UXPLAY_*` macros, the single-instance mutex / window class / message names
+  (`uxplay_native_*`), the startup file `.uxplayrc`, the pairing key and
+  register files (`.uxplay.pem`, `.uxplay.register`), `SALT_PK` in
+  `lib/crypto.c` (changing it would invalidate stored pairings), the
+  environment guard `UXPLAY_RESTARTED_AT`. "UxPlay" in comments and log text
+  refers to the upstream project or its protocol core.
+* **Taken over once from the earlier name:** `settings::adopt_legacy_settings`
+  copies `HKCU\Software\MirrorDock` to the new key when the new key does not exist
+  (the old key is left for an earlier version) and turns an "UxPlay" Run value
+  into one for this executable; `native_setup_output` renames
+  `%LOCALAPPDATA%\UxPlay` to the new folder when the new one does not exist
+  (it stays where it is while an earlier version has its log open; the new
+  version then starts its own folder).
 
 ## Repository layout and licences
 
@@ -89,8 +122,8 @@ at startup (and on change) and configures itself:
   has no window yet (still starting) is asked again for about 6 s; one that
   neither answers nor ends is reported in a dialog (exit 1). At exit the log
   file is closed before the mutex is released, so the next instance keeps it
-  as `uxplay.previous.log`; a start that fails before it became the instance
-  writes `uxplay.start-failure.log` instead of touching `uxplay.log`.
+  as `mirror_dock.previous.log`; a start that fails before it became the instance
+  writes `mirror_dock.start-failure.log` instead of touching `mirror_dock.log`.
 * **Failures the user must see:** every start-up error goes through
   `startup_message()` (logged as an error and kept as the reason);
   `startup_exit()` / `cleanup(non-zero)` show it in a dialog that names the log
@@ -99,13 +132,13 @@ at startup (and on change) and configures itself:
   results are checked at start, on relaunch and by the watchdog) and an engine
   that could not start (`NATIVE_MEDIA_EVENT_START_FAILED`).
 * **Log:** started from a terminal or with redirected output the log goes
-  there; otherwise to `%LOCALAPPDATA%\UxPlay\uxplay.log`. Every line carries
+  there; otherwise to `%LOCALAPPDATA%\MirrorDock\mirror_dock.log`. Every line carries
   the local time and passes one lock; lines written before the single-instance
-  check are held in memory, the previous run is kept as `uxplay.previous.log`,
+  check are held in memory, the previous run is kept as `mirror_dock.previous.log`,
   and the file starts over at 8 MB (`LOG_FILE_LIMIT`).
 * **Crash record** (`uxplay_crash_report`): an unhandled exception or
-  `std::terminate` writes `uxplay_crash.txt` (exception code, faulting address
-  as module+offset, thread) and `uxplay_crash.dmp` (dbghelp `MiniDumpWriteDump`,
+  `std::terminate` writes `mirror_dock_crash.txt` (exception code, faulting address
+  as module+offset, thread) and `mirror_dock_crash.dmp` (dbghelp `MiniDumpWriteDump`,
   loaded on demand) next to the log; the next start logs that a record exists.
 * **Main event loop** (`main_event_loop` in `uxplay.cpp`; GLib is not used):
   tasks posted from other threads (engine events, Ctrl+C) run on the main
@@ -163,7 +196,7 @@ Engine modules (`win_native/src`, C++26 named modules, `import std;`):
 | `uxplay_system_tuning` | EcoQoS/power-throttling opt-out, MMCSS, priority, DPI |
 | `uxplay_gpu_device` | D3D11 device on the GPU that physically scans out the monitor (QueryDisplayConfig LUID), DWM composition clock |
 | `uxplay_video_window` | Win32 window + UI thread: placement per orientation, aspect-locked resizing, borderless fullscreen toggle (double-click/F/F11/Alt+Enter, Esc), always on top (T), dark title bar, keep-awake while a stream plays, tray icon/menu (modes, link, mute, start with Windows, log, about), second-launch and session-end messages |
-| `uxplay_settings` | per-user settings in `HKCU\Software\UxPlay` (read/write with explicit outcomes) and the "start with Windows" Run entry |
+| `uxplay_settings` | per-user settings in `HKCU\Software\MirrorDock` (read/write with explicit outcomes) and the "start with Windows" Run entry |
 | `uxplay_crash_report` | unhandled-exception / terminate record and minidump next to the log |
 | `uxplay_video_overlay` | player-style control bar: layered, non-activating popup owned by the video window, Direct2D/DirectWrite (software rasterizer), Segoe Fluent/MDL2 icon glyphs; fades in on real pointer movement, out after 3 s idle (stays while hovered); link switch, mute, menu, fullscreen, alert chips |
 | `uxplay_video_decoder`, `uxplay_video_frame` | FFmpeg H.264/HEVC, D3D11VA, shader-readable decoder textures (zero copy); surface pool sized from the stream (below); falls back to the software decoder by itself and replays the units since the last parameter sets; `luma_reader` (CPU view of a picture's luma for the crop detector) |
@@ -294,7 +327,7 @@ Engine modules (`win_native/src`, C++26 named modules, `import std;`):
   UAC-confirmed actions on the iPhone's network adapter — the cellular-data
   guard (netsh) and re-enabling a disabled adapter (pnputil); see the USB
   section for exact values and how to undo. Per-user state: the values under
-  `HKCU\Software\UxPlay` (`prefer_usb_link`, `performance_mode`,
+  `HKCU\Software\MirrorDock` (`prefer_usb_link`, `performance_mode`,
   `always_on_top`, the window placement values, two "hint shown" flags) and,
   only when the user ticks "Start with Windows", the value `UxPlay` under
   `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` (the quoted path of the
@@ -462,7 +495,7 @@ MSYSTEM=CLANG64 bash -lc 'bash win_native/build_scripts/build_uxplay_native.sh <
 <build_dir>/win_native/ui_text_tests.exe
 <build_dir>/win_native/engine_smoke_test.exe <annexb stream> h264|h265 60 [auto|intel|nvidia] [quiet|loud] [zh-TW|zh-CN|en]
 # package (exe + guide + licences + complete corresponding source)
-python -I win_native/build_scripts/package_zip.py <build_dir> <uxplay_src> <msys2>/clang64 <src_root> dist/uxplay_native_win64.zip
+python -I win_native/build_scripts/package_zip.py <build_dir> <uxplay_src> <msys2>/clang64 <src_root> dist/mirror_dock_win64.zip
 ```
 
 Warnings are errors on all owned code: `win_native/` (`-Wall -Wextra
@@ -490,7 +523,7 @@ hwaccels h264/hevc d3d11va (+va2); swresample; w32threads.
 **Linking (single executable):** everything is linked statically
 (`-static`): the pinned FFmpeg/OpenSSL/libplist builds, libc++, libunwind and
 winpthreads (MSYS2 CLANG64 runtime, recorded exception: toolchain runtime, not
-a main-branch build). `uxplay.exe` imports only Windows system DLLs, so the
+a main-branch build). `mirror_dock.exe` imports only Windows system DLLs, so the
 package bundles no DLL. The UCRT (`api-ms-win-crt-*` → `ucrtbase.dll`) stays
 dynamic: the MinGW/clang UCRT target cannot link it statically (MSVC `/MT`
 can), but it is part of Windows 10/11, so deployment is the same single file.
@@ -603,3 +636,13 @@ What was observed, and what was not:
   `automatic crop:` lines, `refused an AirPlay connection ... "Wi-Fi only"`,
   and in the 10 s video line `decoded min/mean ... ms after its timestamp`
   (how early pictures are ready) next to `dropped ... overflow`.
+
+## State of 1.7 (2026-11-11)
+
+1.7 is 1.6 under its new name (see "Names"): no change to the media path.
+Observed: the whole tree builds with warnings as errors, and the packaged
+executable carries the new version resource. **Not run:** the renamed
+program itself, including the one-time take-over of the settings key, the
+"start with Windows" entry and the log folder from the UxPlay name. The
+measurements and the list of things never exercised on a device in "State of
+1.6" apply unchanged.

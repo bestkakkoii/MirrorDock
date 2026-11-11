@@ -62,7 +62,7 @@
 #define VERSION UXPLAY_CORE_VERSION
 
 #define SECOND_IN_USECS 1000000
-#define DEFAULT_NAME "UxPlay"
+#define DEFAULT_NAME UXPLAY_PRODUCT_NAME
 #define DEFAULT_DEBUG_LOG false
 #define LOWEST_ALLOWED_PORT 1024
 #define HIGHEST_PORT 65535
@@ -171,9 +171,9 @@ static HANDLE shutdown_complete_event = NULL;
 /* The native build is a GUI-subsystem program (a console window costs ~1.2 s
  * to appear on Windows 11).  Started from a terminal, or with its output
  * redirected, the log goes there.  Otherwise it goes to
- * %LOCALAPPDATA%\UxPlay\uxplay.log ("Open log file" in the menu): the log of
- * the previous run is kept as uxplay.previous.log, and the file starts over
- * when it reaches LOG_FILE_LIMIT.  Until open_log_file() is called (options
+ * %LOCALAPPDATA%\MirrorDock\mirror_dock.log ("Open log file" in the menu):
+ * the log of the previous run is kept as mirror_dock.previous.log, and the
+ * file starts over when it reaches LOG_FILE_LIMIT.  Until open_log_file() is called (options
  * parsed, single-instance check passed) the lines are held in memory, so a
  * second start never touches the log of the instance that is running.
  * Every line carries the local time; all sources (this file, lib/, the media
@@ -181,7 +181,7 @@ static HANDLE shutdown_complete_event = NULL;
 #define LOG_FILE_LIMIT (8u * 1024u * 1024u)
 #define PENDING_LOG_LIMIT (1024u * 1024u)
 
-static std::string native_log_directory;  /* %LOCALAPPDATA%\UxPlay ("" when unavailable) */
+static std::string native_log_directory;  /* %LOCALAPPDATA%\MirrorDock ("" when unavailable) */
 static std::string native_log_path;       /* the log file, once it is open */
 static std::mutex log_mutex;
 static bool log_to_file = false;          /* no terminal, no redirection: the log file is used */
@@ -192,7 +192,7 @@ static std::string last_error_line;       /* last ERROR-level message (start-up 
 /* The log is <directory>\<log_base_name>.log.  When that file is being
  * written by another running instance, this one changes to
  * log_alternate_name (set by main() from the receiver name). */
-static std::string log_base_name = "uxplay";
+static std::string log_base_name = UXPLAY_PRODUCT_FILE_NAME;
 static std::string log_alternate_name;
 
 /* opens (or starts over) the log file; log_mutex held */
@@ -268,7 +268,8 @@ static void write_log_line_locked(const std::string &line) {
     if (log_file_open) {
         log_file_bytes += line.size();
         if (log_file_bytes > LOG_FILE_LIMIT && reopen_log_file_locked()) {
-            fputs("the log reached its size limit and starts over; the earlier part is uxplay.previous.log\n",
+            fputs("the log reached its size limit and starts over; the earlier part is the .previous.log file "
+                  "next to it\n",
                   stdout);
         }
     }
@@ -305,12 +306,20 @@ static void log(int level, const char* format, ...) {
 static void native_setup_output(void) {
     const char *local_app_data = getenv("LOCALAPPDATA");
     if (local_app_data) {
-        native_log_directory = std::string(local_app_data) + "\\UxPlay";
+        native_log_directory = std::string(local_app_data) + "\\" UXPLAY_PRODUCT_NAME;
+        /* The folder the program used under its earlier name is taken over
+           once.  While an earlier version still runs, its open log keeps the
+           folder where it is: this version then starts a folder of its own. */
+        std::string const legacy_directory = std::string(local_app_data) + "\\" UXPLAY_LEGACY_PRODUCT_NAME;
+        if (GetFileAttributesA(native_log_directory.c_str()) == INVALID_FILE_ATTRIBUTES &&
+            GetFileAttributesA(legacy_directory.c_str()) != INVALID_FILE_ATTRIBUTES) {
+            MoveFileExA(legacy_directory.c_str(), native_log_directory.c_str(), 0);
+        }
         if (!CreateDirectoryA(native_log_directory.c_str(), NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
             native_log_directory.erase();
         }
     }
-    /* output redirected by the parent (uxplay.exe > file, pipes): keep it */
+    /* output redirected by the parent (mirror_dock.exe > file, pipes): keep it */
     HANDLE inherited = GetStdHandle(STD_OUTPUT_HANDLE);
     if (inherited != NULL && inherited != INVALID_HANDLE_VALUE && _fileno(stdout) >= 0) {
         DWORD type = GetFileType(inherited);
@@ -339,7 +348,7 @@ static std::string write_start_failure_log(void) {
     if (native_log_directory.empty()) {
         return "";
     }
-    std::string path = native_log_directory + "\\uxplay.start-failure.log";
+    std::string path = native_log_directory + "\\" UXPLAY_PRODUCT_FILE_NAME ".start-failure.log";
     FILE *file = fopen(path.c_str(), "w");
     if (file == NULL) {
         return "";
@@ -998,9 +1007,10 @@ static std::string random_mac () {
 }
 
 static void print_info (char *name) {
-    printf("UxPlay %s: an open-source AirPlay mirroring and audio-streaming server.\n", VERSION);
-    printf("Windows-native build: https://github.com/bestkakkoii/UxPlay-USB\n");
-    printf("(based on UxPlay, https://github.com/FDH2/UxPlay)\n");
+    printf(UXPLAY_PRODUCT_NAME " %s: an open-source AirPlay mirroring and audio receiver for Windows.\n",
+           UXPLAY_VERSION_TEXT);
+    printf(UXPLAY_PROJECT_URL "\n");
+    printf("(AirPlay protocol core: UxPlay %s, https://github.com/FDH2/UxPlay)\n", VERSION);
     printf("Usage: %s [-n name] [-s wxh] [-p [n]] [(other options)]\n", name);
     printf("Options:\n");
     printf("-n name   Specify network name of the AirPlay server (UTF-8/ascii)\n");
@@ -1052,14 +1062,14 @@ static void print_info (char *name) {
     printf("-nc no    Cancel the -nc option (DO close video window) \n");
     printf("-nohold   Drop current connection when new client connects.\n");
     printf("-restrict Restrict clients to those specified by \"-allow <deviceID>\"\n");
-    printf("          UxPlay displays deviceID when a client attempts to connect\n");
+    printf("          the deviceID is displayed when a client attempts to connect\n");
     printf("          Use \"-restrict no\" for no client restrictions (default)\n");
     printf("-allow <i>Permit deviceID = <i> to connect if restrictions are imposed\n");
     printf("-block <i>Always block connections from deviceID = <i>\n");
     printf("-FPSdata  Show video-streaming performance reports sent by client.\n");
     printf("-fps n    Set maximum allowed streaming framerate (default: refresh rate,\n");
     printf("          at most 60)\n");
-    printf("-m [mac]  Set MAC address (also Device ID);use for concurrent UxPlays\n");
+    printf("-m [mac]  Set MAC address (also Device ID);use for concurrent instances\n");
     printf("          if mac xx:xx:xx:xx:xx:xx is not given, a random MAC is used\n");
     printf("-key [fn] Store private key in ~/.uxplay.pem (or in file \"fn\")\n");
     printf("-dacp [fn]Export client DACP information to file ~/.uxplay.dacp\n");
@@ -1427,7 +1437,8 @@ static void parse_arguments (int argc, char *argv[]) {
             print_info(argv[0]);
             exit(0);
         } else if (arg == "-v") {
-            printf("UxPlay version %s; for help, use option \"-h\"\n", VERSION);
+            printf(UXPLAY_PRODUCT_NAME " version %s (UxPlay protocol core %s); for help, use option \"-h\"\n",
+                   UXPLAY_VERSION_TEXT, VERSION);
             exit(0);
         } else if (arg == "-vs" || arg == "-as") {
             /* GStreamer sink choices are ignored; "0" still means "no video
@@ -2914,7 +2925,8 @@ static bool claim_single_instance(void) {
     CloseHandle(instance_mutex);
     instance_mutex = NULL;
     if (notified == 0) {
-        startup_message("\"%s\" is already running but did not answer. End uxplay.exe in Task Manager, "
+        startup_message("\"%s\" is already running but did not answer. End " UXPLAY_EXECUTABLE_NAME
+                        " in Task Manager, "
                         "then start it again.", server_name.c_str());
         startup_exit(1);
     }
@@ -2961,7 +2973,8 @@ static bool restart_program(void) {
                         (unsigned long) GetLastError());
         return false;
     }
-    LOGI("restart: started process %lu (it writes %%LOCALAPPDATA%%\\UxPlay\\uxplay.log unless it can attach to "
+    LOGI("restart: started process %lu (it writes its log file in %%LOCALAPPDATA%%\\" UXPLAY_PRODUCT_NAME
+         " unless it can attach to "
          "this run's terminal; redirected output is not passed on)", (unsigned long) process.dwProcessId);
     CloseHandle(process.hThread);
     CloseHandle(process.hProcess);
@@ -3038,14 +3051,14 @@ int main (int argc, char *argv[]) {
     }
     /* the log file to fall back to when uxplay.log belongs to another
        running instance (a receiver with another name, an older version) */
-    log_alternate_name = "uxplay." + receiver_name_tag(server_name).substr(0, 8);
+    log_alternate_name = UXPLAY_PRODUCT_FILE_NAME "." + receiver_name_tag(server_name).substr(0, 8);
     if (!claim_single_instance()) {
         /* the log file belongs to the instance that is running: not opened */
         exit(0);
     }
     open_log_file();
 
-    LOGI("UxPlay for Windows %s (AirPlay protocol core: UxPlay %s), receiver name \"%s\"", UXPLAY_VERSION_TEXT,
+    LOGI(UXPLAY_PRODUCT_NAME " %s (AirPlay protocol core: UxPlay %s), receiver name \"%s\"", UXPLAY_VERSION_TEXT,
          VERSION, server_name.c_str());
 
     if (dump_video) {

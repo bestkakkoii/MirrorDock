@@ -38,4 +38,11 @@ set_target_properties( uxplay PROPERTIES OUTPUT_NAME mirror_dock )
 # log goes to the launching terminal or %LOCALAPPDATA%/MirrorDock/mirror_dock.log)
 enable_language( RC )
 target_sources( uxplay PRIVATE win_native/resources/uxplay.rc )
+# The RC rule does not scan what the script includes.  Named here, so that a
+# new version, manifest or icon rebuilds the resources (without this the
+# executable kept the version resource of the previous release).
+set_property( SOURCE win_native/resources/uxplay.rc APPEND PROPERTY OBJECT_DEPENDS
+  ${CMAKE_CURRENT_SOURCE_DIR}/win_native/include/uxplay_version.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/win_native/resources/uxplay.manifest
+  ${CMAKE_CURRENT_SOURCE_DIR}/win_native/resources/uxplay.ico )
 target_link_options( uxplay PRIVATE -mwindows )

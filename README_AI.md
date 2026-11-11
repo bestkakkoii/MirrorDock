@@ -10,7 +10,7 @@ architecture, invariants, build inputs and verification state.
 single Windows-native program for the iPhone → Windows AirPlay use case. The tree
 builds **only** this program (MSYS2 CLANG64; the top-level CMakeLists stops
 on other hosts). The program has its own name and version (`win_native/include/
-uxplay_version.h`, currently MirrorDock 1.7.0: the one place they are written
+uxplay_version.h`, currently MirrorDock 1.8.0: the one place they are written
 — log, "About", the version resource and the settings/log locations read it;
 only `uxplay.manifest`, `package_zip.py` and the CMake `OUTPUT_NAME` repeat
 them); `UXPLAY_CORE_VERSION` there is the upstream UxPlay release the
@@ -49,9 +49,13 @@ Up to 1.6 the program was published as "UxPlay for Windows (native)"; since
   environment guard `UXPLAY_RESTARTED_AT`. "UxPlay" in comments and log text
   refers to the upstream project or its protocol core.
 * **Taken over once from the earlier name:** `settings::adopt_legacy_settings`
-  copies `HKCU\Software\MirrorDock` to the new key when the new key does not exist
-  (the old key is left for an earlier version) and turns an "UxPlay" Run value
-  into one for this executable; `native_setup_output` renames
+  copies every DWORD value of `HKCU\Software\UxPlay` that
+  `HKCU\Software\MirrorDock` lacks (a value the user has set since under the
+  new name stays; the old key is left for an earlier version), marks that with
+  the value `legacy_settings_adopted`, and turns an "UxPlay" Run value into
+  one for this executable. (1.7 used `RegCopyTreeW`, which was refused with
+  "access denied" on the owner's PC: the settings were not carried over. The
+  first start of 1.8 makes up for it.) `native_setup_output` renames
   `%LOCALAPPDATA%\UxPlay` to the new folder when the new one does not exist
   (it stays where it is while an earlier version has its log open; the new
   version then starts its own folder).
@@ -195,7 +199,7 @@ Engine modules (`win_native/src`, C++26 named modules, `import std;`):
 | `uxplay_status`, `uxplay_log`, `uxplay_clock` | explicit failure outcomes, log sink, QPC-ns timeline |
 | `uxplay_system_tuning` | EcoQoS/power-throttling opt-out, MMCSS, priority, DPI |
 | `uxplay_gpu_device` | D3D11 device on the GPU that physically scans out the monitor (QueryDisplayConfig LUID), DWM composition clock |
-| `uxplay_video_window` | Win32 window + UI thread: placement per orientation, aspect-locked resizing, borderless fullscreen toggle (double-click/F/F11/Alt+Enter, Esc), always on top (T), dark title bar, keep-awake while a stream plays, tray icon/menu (modes, link, mute, start with Windows, log, about), second-launch and session-end messages |
+| `uxplay_video_window` | Win32 window + UI thread: placement per orientation, aspect-locked resizing, borderless fullscreen toggle (double-click/F/F11/Alt+Enter, Esc), always on top (T), dark title bar, keep-awake while a stream plays, tray icon/menu (modes, link, mute, start with Windows, log, about), the same menu on a right click anywhere on the picture (`WM_CONTEXTMENU`; a right click that cancels a frame opens none), second-launch and session-end messages |
 | `uxplay_settings` | per-user settings in `HKCU\Software\MirrorDock` (read/write with explicit outcomes) and the "start with Windows" Run entry |
 | `uxplay_crash_report` | unhandled-exception / terminate record and minidump next to the log |
 | `uxplay_video_overlay` | player-style control bar: layered, non-activating popup owned by the video window, Direct2D/DirectWrite (software rasterizer), Segoe Fluent/MDL2 icon glyphs; fades in on real pointer movement, out after 3 s idle (stays while hovered); link switch, mute, menu, fullscreen, alert chips |
@@ -205,7 +209,7 @@ Engine modules (`win_native/src`, C++26 named modules, `import std;`):
 | `uxplay_audio_decoder`, `uxplay_audio_output` | AAC-ELD/ALAC/AAC-LC/LPCM -> float32 at device rate; WASAPI IAudioClient3 low-latency period, per-sample scheduling with ≤0.3 % cubic-resampling drift correction, mute, soft limiter; the stream runs only while a source has audio queued (stopped after 3 s of silence, endpoint released 2 s later when no source is in use), endpoint failures are retried with back-off |
 | `uxplay_media_engine` | the AirPlay pipeline and the shared presentation timeline |
 | `uxplay_media_types` | media source identity (AirPlay), `performance_mode` |
-| `uxplay_ui_text` | interface text table (Traditional Chinese, Simplified Chinese, English; completeness checked at compile time), Windows display-language detection, DirectWrite locale |
+| `uxplay_ui_text` | interface text table in ten languages (completeness and `{}` placeholder counts checked at compile time), Windows display-language detection, DirectWrite locale |
 | `uxplay_usb_link` | iPhone USB network link (AirPlay over the Personal Hotspot cable): attach/link detection, tray status and hints, link classification for the window label, cellular-data guard |
 | `native_media_bridge.cpp` | C API (`win_native/include/native_media.h`) used by `uxplay.cpp` |
 
@@ -247,7 +251,7 @@ Engine modules (`win_native/src`, C++26 named modules, `import std;`):
   | video delay margin | refresh + 4 ms | refresh/2 + 4 ms | refresh/2 + 2 ms |
   | audio buffering floor | max(latency + 12 ms, 3 refresh) | latency + 12 ms | latency + 8 ms |
   | late frames | shown in order, dropped when > 2 periods late | in order, > 1 period | newest wins |
-  | presenter queue / delay limit | 13 pictures / 220 ms | 8 / 135 ms | 5 / 85 ms |
+  | presenter queue / delay limit | 13 pictures / 220 ms | 8 / 135 ms | 8 / 135 ms |
   | stream size asked from the phone | monitor | monitor (1920x1080 box without a hardware decoder) | 1920x1080 box |
 
   The delay limit is the queue expressed in frame intervals of a 60 fps
@@ -255,11 +259,26 @@ Engine modules (`win_native/src`, C++26 named modules, `import std;`):
   presenter evict pictures unseen, i.e. freeze the picture while sound goes
   on. For the same reason no picture waits longer than that limit from the
   moment it is decoded (`present = min(pts + delay, ready + limit)`), also
-  when pictures are ready earlier than their timestamps say. A stream starts at `min(limit, max(resting, min(50 ms, resting + 28
-  ms)))`, close enough to its resting delay that easing down stays within
-  what the audio output follows without a skip (0.3 % correction, hard resync
-  at 30 ms). A switch to quality in mid-stream gets its deeper queue with the
-  next stream (the surface pool is sized when a stream starts).
+  when pictures are ready earlier than their timestamps say. A stream starts
+  at its resting delay; late pictures raise it at once. A switch to quality
+  in mid-stream gets its deeper queue with the next stream (the surface pool
+  is sized when a stream starts).
+
+  **The sender's timestamps lead** (owner's iPhone 16 Pro Max, 1.7 log,
+  2026-11-11): pictures are decoded 75 to 95 ms *before* their timestamps
+  (`decoded min -94 mean -78 ms after its timestamp`), so at the resting
+  delay every picture waits about 100 ms in the presenter queue (5 to 7
+  pictures at 60 fps) whatever the mode. That is why performance mode no
+  longer has a shorter queue and limit: with 5 pictures / 85 ms (1.6, 1.7) the
+  queue overflowed and pictures were shown by arrival instead of by
+  timestamp; and why a stream no longer starts above its resting delay (46 ms
+  of start delay plus the lead exceeded the queue: `overflow +36` in the
+  first interval). The modes now differ in margins, late-frame policy and
+  stream size. Not done: letting the timeline run ahead of the timestamps
+  (a negative delay from the lateness tails of both streams) would take about
+  70 ms off the delay and most of the queue; it needs the audio lateness
+  figures the 10 s audio line now logs (`arrived min/mean/max ... ms after
+  their timestamps`).
 
   The engine part (`media_engine::apply_performance_mode` → presenter) applies
   at once. The stream size (`choose_stream_geometry` in `uxplay.cpp`,
@@ -278,11 +297,23 @@ Engine modules (`win_native/src`, C++26 named modules, `import std;`):
     what remains must be ≥ 1/5 of the picture each way. A crop starts after
     the same bars were seen for 1.5 s **and** the content inside changed three
     times (moving content, not a still screen); tightening an existing crop
-    takes 8 s. Content inside a bar is acted on at the next examination (every
-    100 ms while a crop is in force): when the picture still has a pair of
-    smaller bars the crop is loosened to them, otherwise the whole picture is
-    shown; either way the next attempt to crop or tighten is delayed (3 s,
-    doubling to 30 s, reset after a crop lasted a minute). The shown region stays 2 px inside the measured
+    takes 8 s. Content inside a bar ends the crop (examined every 100 ms
+    while a crop is in force): when the picture still has a pair of smaller
+    bars the crop is loosened to them, otherwise the whole picture is shown.
+    *When* depends on the age of the crop. Younger than 5 s it was probably
+    wrong: it ends at once and the next attempt is delayed (3 s, doubling to
+    30 s, back to 3 s once a crop has lasted 5 s). A crop that has lasted 5 s
+    was right for the film that played, and what crosses its bars is most
+    likely the change to the next film: it is tolerated for 1.2 s (every
+    picture is examined meanwhile; a black picture ends the tolerance, nothing
+    is in the bars then), after which the crop ends without any delay for the
+    next one. When no picture comes for 250 ms after those 1.2 s the stream
+    has gone still with content in a bar: the decode thread's wait times out
+    (`crop_detector::grace_deadline` / `expire`) and the whole picture is
+    shown. (Up to 1.7 every change of film counted as a wrong crop: the
+    delay doubled to 30 s and was reset only by a crop that lasted a minute,
+    so with short films the crop seemed never to come back - reported by the
+    owner.) The shown region stays 2 px inside the measured
     edge and is even (4:2:0). The engine applies a decision under the video
     pipeline lock after re-checking the session, and tells the presenter again
     when what it shows differs from the detector's region at two examinations
@@ -303,8 +334,14 @@ Engine modules (`win_native/src`, C++26 named modules, `import std;`):
 * **GPU memory:** the D3D11VA surface pool is sized as *pictures the stream
   keeps + 4* (H.264: `refs + has_b_frames`; H.265: `sps_max_dec_pic_buffering
   - 1` from the active SPS, else libavcodec's 17) *+ the presenter's hold*
-  (queue limit + 3: 8 / 11 / 16 for performance / balanced / quality), where
-  it used to be a fixed 23 surfaces (170 MB at 3130x1440). libavcodec's
+  (queue limit + 3: 11 / 11 / 16 for performance / balanced / quality), where
+  it used to be a fixed 23 surfaces (170 MB at 3130x1440). **This saves
+  memory only for streams that keep few pictures.** The synthetic test stream
+  keeps 2 (pool 17); the owner's iPhone declares far more (1.7 log: `26
+  surfaces of 768x1536 (15 for the decoder, 11 for presentation)` upright,
+  `22 surfaces of 3200x1536 (11 for the decoder, 11 for presentation)`
+  sideways), so a real landscape stream gets about the pool it had before.
+  libavcodec's
   D3D11VA cannot grow a pool, so it is right-sized, not dynamic; the log line
   `D3D11VA surface pool: N surfaces of WxH (X for the decoder, Y for
   presentation)` shows the result. At the end of a session the presenter
@@ -328,8 +365,9 @@ Engine modules (`win_native/src`, C++26 named modules, `import std;`):
   guard (netsh) and re-enabling a disabled adapter (pnputil); see the USB
   section for exact values and how to undo. Per-user state: the values under
   `HKCU\Software\MirrorDock` (`prefer_usb_link`, `performance_mode`,
-  `always_on_top`, the window placement values, two "hint shown" flags) and,
-  only when the user ticks "Start with Windows", the value `UxPlay` under
+  `crop_mode`, `always_on_top`, the window placement values, two "hint shown"
+  flags, `legacy_settings_adopted`) and, only when the user ticks "Start with
+  Windows", the value `MirrorDock` under
   `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` (the quoted path of the
   running exe, refreshed at start so a moved copy keeps working). A declined
   prompt or a failed tool is logged with its code and reported in a balloon;
@@ -356,12 +394,30 @@ Engine modules (`win_native/src`, C++26 named modules, `import std;`):
 * **Interface language:** chosen once in `native_media_start`, before the
   engine thread creates the window, tray menu and control bar:
   `native_media_settings::ui_language` (`-ui`) or else the first entry of
-  `GetUserPreferredUILanguages` — zh-TW/HK/MO and `zh-Hant` → Traditional,
-  other `zh` → Simplified, anything else → English (detection failure is
-  logged and falls back to English). All user-visible strings come from
-  `ui_string(ui_text)`; the control bar measures label widths, and its
-  DirectWrite locale (zh-TW / zh-CN / en-US) selects the matching CJK font.
-  Log messages and `-h` stay English.
+  `GetUserPreferredUILanguages`. Ten languages (`ui_language`, in this
+  order, which is also the order of the texts in every table row and, plus
+  one, the numbering of the C API): Traditional Chinese (zh-TW/HK/MO and
+  `zh-Hant`), Simplified Chinese (other `zh`), English, Japanese, Korean,
+  Spanish, German, French, Vietnamese, Thai — chosen by the primary language
+  subtag; anything else → English (a detection failure is logged and falls
+  back to English). All user-visible strings come from `ui_string(ui_text)`;
+  two `static_assert`s make a missing text, or a text whose number of `{}`
+  placeholders differs from the English one, a compile error. The control
+  bar measures label widths, and its DirectWrite locale (zh-TW, zh-CN, en-US,
+  ja-JP, ko-KR, es-ES, de-DE, fr-FR, vi-VN, th-TH) selects matching fonts;
+  scripts the UI font lacks (Thai, for example) come from DirectWrite's font
+  fallback. Log messages and `-h` stay English.
+* **Translated documents:** `README.md` (English) is the master of
+  `README.<lang>.md` (zh-TW, zh-CN, ja, ko, es, de, fr, vi, th), and
+  `win_native/package/user_guide/user_guide_en.txt` the master of the nine
+  other guides there; `package_zip.py` refuses to build a package without all
+  ten guides. A translation is the same document in another language: same
+  sections, tables, lists, code blocks, links and emoji (checked with a
+  structure comparison when they were written), menu items quoted exactly as
+  in the interface texts of that language. Change the master first, then
+  every translation in the same commit. The table in `uxplay_ui_text.cpp` is
+  maintained by hand; this file (README_AI.md) and CHANGELOG.md exist in
+  English only.
 * **Failures** are explicit `uxplay::outcome` values with stage, original
   code and system/library message; nothing fails silently.
 * **Audio output:** UxPlay's own mute (control bar / tray) is engine-owned and
@@ -547,8 +603,9 @@ Recorded exceptions, each observed with the consuming tool on 2026-11-11:
 | `*.cmd` | ASCII, CRLF, no BOM | they run on the user's cmd.exe: this Windows 11 build skipped a BOM, but cmd.exe of other Windows 10/11 builds is reported to read it as part of the first command, and that cannot be tested here |
 | `lib/llhttp/`, `lib/playfair/` | as published | vendored third-party code, not edited |
 
-`win_native/package/user_guide_zh_tw.txt` ships with BOM and CRLF so that
-every Windows editor shows it correctly.
+The user guides (`win_native/package/user_guide/user_guide_*.txt`) ship with
+BOM and CRLF so that every Windows editor shows them correctly. The READMEs
+and CHANGELOG.md are Markdown: UTF-8 without BOM.
 
 ## Code protection (assessment)
 
@@ -566,7 +623,8 @@ used; the pairing keys the program generates stay in the user's profile
 
 `-gpu auto|integrated|discrete|software` (aliases `intel`, `nvidia`, `warp`),
 `-mode quality|balanced|performance` (default: the mode saved by the menu,
-else balanced), `-ui auto|zh-TW|zh-CN|en` (interface language),
+else balanced), `-crop auto|off`, `-ui auto|en|zh-TW|zh-CN|ja|ko|es|de|fr|vi|th`
+(interface language),
 `-h264` / `-h265` (by default H.265 is offered only with HEVC hardware
 decode). Display geometry/refresh are advertised from the monitor (per mode)
 unless `-s`/`-fps` are given. `-ca <file>` writes cover art to a file
@@ -646,3 +704,50 @@ program itself, including the one-time take-over of the settings key, the
 "start with Windows" entry and the log folder from the UxPlay name. The
 measurements and the list of things never exercised on a device in "State of
 1.6" apply unchanged.
+
+## State of 1.8 (2026-11-11)
+
+1.8 adds seven interface languages (ten in all), the README and the user
+guide in all ten, the repository front (logo, badges, changelog), the menu on
+a right click anywhere on the picture, and the fixes that the owner's first
+session with 1.7 called for.
+
+**The owner's 1.7 session** (2026-11-11, iPhone 16 Pro Max, iOS 26.6, Wi-Fi
+only, read from `%LOCALAPPDATA%\MirrorDock\mirror_dock.log` and the process
+counters while it ran; nothing was started or stopped for it):
+
+* The program ran under its new name: connections, HEVC hardware decoding,
+  sound, automatic crop, mode changes. Resting sync delay 17.8 ms (balanced)
+  and 13.8 ms (performance).
+* The settings of the earlier name were **not** taken over (`RegCopyTreeW`
+  failed with code 5) - fixed, see "Names". The log folder was taken over.
+* The automatic crop stopped coming back after changes of film - reported by
+  the owner; cause and fix under "Crop".
+* Performance mode overflowed its queue, and the first seconds of a stream
+  did so in every mode - cause and fix under "Performance modes" (the
+  sender's timestamps lead by about 85 ms).
+* Memory with the landscape stream (3200x1536 coded, automatic crop on):
+  working set 312.8 MB, private bytes 288.9 MB, GPU shared memory of the
+  process 198.1 MB, 14 threads. The figures noted for 1.5 in an earlier
+  device session were 271 MB, 311 MB, 243 MB and 20 threads, but window size
+  and content were not the same, so this is no like-for-like comparison. What
+  the log does show is that the surface pool of a real stream is no smaller
+  than before (see "GPU memory"): **"lower memory while mirroring", as the
+  1.6 notes put it, holds for the test stream, not for this phone.** The
+  README no longer carries that comparison.
+
+**Observed for 1.8:** the whole tree builds with warnings as errors (which
+includes the compile-time checks of the text table); the translated READMEs
+match the master's structure (`readme_consistency.py`, 0 differences each).
+
+**Not run:** 1.8 itself. In particular the crop across changes of film (the
+fix follows from reading the log and the detector, not from a repeat of the
+owner's session), the take-over of settings by value, the changed start delay
+and performance queue, the right-click menu, and the program in any of the
+seven new languages - how the texts fit the control bar and the menu has not
+been looked at, and the translations were written and cross-read by language
+models, not by native speakers. Whether iOS offers media remote control
+(DACP) while mirroring is still unknown: the log line `the client offers
+media remote control` appears once per session if it does. Everything listed
+as untested for 1.6 and 1.7 still applies, except what the session above
+showed working.

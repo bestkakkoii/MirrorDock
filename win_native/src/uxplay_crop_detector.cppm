@@ -13,8 +13,15 @@
 //   * A crop starts only after the same bars were seen for a while and the
 //     picture inside them changed meanwhile (moving content, not a still
 //     screen); tightening an existing crop takes longer.
-//   * Anything appearing inside a bar ends the crop at once (nothing stays
-//     hidden), and each such correction delays the next attempt longer.
+//   * Content inside a bar ends the crop.  While the crop is new that
+//     happens at once: it was probably wrong, and each such correction delays
+//     the next attempt longer.  A crop that has lasted was right for the film
+//     that played, and what crosses its bars is most likely the change to the
+//     next film: it is kept for a short grace, so that the window does not
+//     open up and close in again at every change.  When the content is still
+//     there after the grace, the crop ends (or follows the smaller bars of
+//     the next film); a stream that went still meanwhile is covered by
+//     grace_deadline / expire.  Nothing stays hidden.
 //
 // Pure logic without any dependency on the GPU or the window; one detector is
 // used from one thread.
@@ -63,6 +70,20 @@ export namespace uxplay
         // the region in force (empty: the whole picture)
         [[nodiscard]] picture_region region() const;
 
+        // Set while content crosses a bar of a crop that has lasted (the
+        // grace described above).  While it is set every picture should be
+        // examined: the first one after the grace settles the matter.  The
+        // time is the grace plus the time within which a running stream
+        // brings its next picture; if none was examined by then, expire()
+        // must be called, because the stream has gone still with content
+        // hidden in a bar.
+        [[nodiscard]] std::optional<std::int64_t> grace_deadline() const;
+
+        // No picture settled the matter by grace_deadline(): the whole
+        // picture is shown.  Returns the region when that changes it (nothing
+        // before that time).
+        [[nodiscard]] std::optional<picture_region> expire(std::int64_t time_ns);
+
     private:
         struct candidate
         {
@@ -75,9 +96,14 @@ export namespace uxplay
             int content_changes = 0;
         };
 
+        // content in a bar ended the crop, or loosened it to smaller bars
+        [[nodiscard]] picture_region release(content_margins const &measured, std::int64_t time_ns, bool settled);
+
         int picture_width = 0;
         int picture_height = 0;
         content_margins applied;          // zero: the whole picture is shown
+        // content has been crossing a bar of a settled crop since then
+        std::optional<std::int64_t> content_in_bar_since_ns;
         std::int64_t applied_since_ns = 0;
         std::optional<candidate> pending;
         std::int64_t hold_off_until_ns = 0;

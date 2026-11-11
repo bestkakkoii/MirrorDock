@@ -1,0 +1,330 @@
+﻿Hướng dẫn sử dụng MirrorDock
+============================
+
+MirrorDock hiển thị hình ảnh và phát âm thanh của iPhone hoặc iPad trên máy
+tính Windows, qua Wi-Fi hoặc qua cáp USB. Chương trình chỉ gồm một tệp duy
+nhất là mirror_dock.exe: không phải cài thêm gì khác.
+(Cho đến phiên bản 1.6, chương trình có tên “UxPlay for Windows”; nếu bạn
+nâng cấp từ bản cũ, hãy xem mục cuối cùng.)
+
+Yêu cầu: Windows 10 hoặc 11 (x64). Chương trình tự thích ứng với máy tính
+đang chạy nó: dùng card đồ họa đang xuất hình ra màn hình (tích hợp hoặc
+rời; Intel, AMD hoặc NVIDIA; giải mã bằng phần mềm khi card không giải mã
+được video), đọc độ phân giải và tần số quét của màn hình (và nhận biết khi
+một màn hình được cắm vào hoặc rút ra), đồng thời dùng độ trễ thấp nhất mà
+thiết bị âm thanh cho phép. Sang máy tính khác cũng không phải thiết lập
+lại gì.
+
+
+1. Khởi động và thoát
+---------------------
+- Bấm đúp vào mirror_dock.exe. Không có cửa sổ dòng lệnh nào mở ra; một
+  biểu tượng xuất hiện ở khu vực thông báo (cạnh đồng hồ), và ở lần chạy
+  đầu tiên sẽ có thông báo “Sẵn sàng”. Chừng nào chưa có điện thoại kết nối
+  thì chưa có cửa sổ: mọi chức năng đều nằm trong menu của biểu tượng đó
+  (bấm chuột trái hoặc phải).
+- Trong khoảng nửa giây, máy tính sẽ xuất hiện trong mục Phản chiếu màn
+  hình trên iPhone.
+- Nếu hộp thoại “Cảnh báo Bảo mật Windows” xuất hiện, hãy chọn “Cho phép”
+  (mạng gia đình là “mạng riêng”). Nếu bạn đã hủy hộp thoại đó, iPhone sẽ
+  không tìm thấy máy tính: hãy mở “Bảo mật Windows > Tường lửa & bảo vệ
+  mạng > Cho phép ứng dụng vượt qua tường lửa” rồi đánh dấu chọn
+  mirror_dock.exe.
+- Mỗi tên chỉ chạy một bản: khởi động chương trình lần nữa chỉ khiến bản
+  đang chạy hiện thông báo “Chương trình đã chạy sẵn”.
+- Đóng cửa sổ video chỉ kết thúc phiên phản chiếu đó; chương trình vẫn chạy
+  trong nền để chờ phiên tiếp theo.
+- Để thoát: menu của biểu tượng ở khu vực thông báo > “Thoát” (iPhone được
+  báo cho biết, và máy tính biến mất khỏi danh sách của nó).
+- Để chương trình khởi động cùng Windows: menu > “Khởi động cùng Windows”
+  (chọn lần nữa để tắt; thiết lập này chỉ áp dụng cho tài khoản người dùng
+  của bạn và không cần quyền quản trị viên).
+- Nếu chương trình không khởi động được (một cổng đang bị dùng, một tùy
+  chọn viết sai), một hộp thoại sẽ nêu lý do và vị trí của tệp nhật ký.
+
+
+2. Phản chiếu qua Wi-Fi
+-----------------------
+Kết nối iPhone và máy tính vào cùng một mạng Wi-Fi, sau đó trên iPhone mở
+Trung tâm điều khiển > Phản chiếu màn hình rồi chọn
+“MirrorDock@tên-máy-tính”. Cửa sổ video xuất hiện và được đưa lên phía
+trước. Khi điện thoại bị khóa, iOS tạm dừng hình ảnh trong khi âm thanh vẫn
+tiếp tục; hình ảnh trở lại khi bạn mở khóa (điều này là bình thường).
+Cách này không cần trình điều khiển và không tốn dữ liệu di động.
+
+
+3. Phản chiếu qua cáp USB
+-------------------------
+AirPlay chạy trên kết nối mạng mà iPhone cung cấp qua cáp USB. Hễ có kết
+nối đó là MirrorDock ưu tiên dùng, và khi rút cáp thì chương trình quay về
+Wi-Fi. Trong lúc chương trình chạy, việc cắm và rút cáp được nhận biết
+trong khoảng 2 giây (phiên đang diễn ra không bị ngắt: việc chuyển đổi chỉ
+diễn ra khi phiên đó kết thúc).
+
+  1. Cài trình điều khiển USB của Apple (một lần): chạy tệp
+     install_apple_usb_support.cmd đi kèm (tệp này cài Apple Mobile Device
+     Support bằng winget), hoặc cài “Thiết bị Apple” từ Microsoft Store.
+  2. Trên iPhone: Cài đặt > Điểm truy cập cá nhân > bật “Cho phép người
+     khác kết nối”, rồi cắm cáp USB. Windows sẽ có thêm một bộ điều hợp
+     mạng tên là “Apple Mobile Device Ethernet” (172.20.10.x). Nếu iPhone
+     đã cắm mà điểm truy cập chưa bật, một thông báo sẽ nhắc bạn sau khoảng
+     8 giây (mỗi lần chạy chỉ nhắc một lần).
+  3. Trên iPhone: Trung tâm điều khiển > Phản chiếu màn hình > MirrorDock.
+     Thanh điều khiển và biểu tượng ở khu vực thông báo hiện “USB” hoặc
+     “Wi-Fi”, tùy theo kết nối thực sự đang được dùng.
+  Dòng thứ hai của menu cho biết trạng thái của kết nối USB: chưa cắm cáp /
+  hãy bật Điểm truy cập cá nhân / sẵn sàng / bộ điều hợp mạng đã bị tắt /
+  chỉ sạc.
+
+Chuyển giữa USB và Wi-Fi (vẫn có thể cắm cáp để sạc):
+  Chọn một trong hai mục trên thanh điều khiển hoặc trong menu:
+    - “Ưu tiên USB”: dùng USB khi iPhone đang cắm và Điểm truy cập cá nhân
+      đang bật (mặc định).
+    - “Chỉ Wi-Fi”: việc phản chiếu luôn dùng Wi-Fi; cáp chỉ để sạc.
+  Lựa chọn được ghi nhớ. Chuyển đổi giữa chừng một phiên sẽ kết thúc phiên
+  đó: hãy chọn lại máy tính trong mục Phản chiếu màn hình trên iPhone.
+
+  “Chỉ Wi-Fi” thực sự loại USB ra: chương trình không trả lời trên kết nối
+  USB, và kết nối nào vẫn đến qua đó sẽ bị từ chối. Vì vậy bạn không cần
+  tắt thiết bị hay bộ điều hợp mạng của nó để chuyển đổi (xin đừng làm thế:
+  việc đó làm hỏng tính năng phản chiếu qua USB và, với một số loại cáp,
+  còn làm ngừng sạc). Nếu trước đây “Apple Mobile Device Ethernet” đã bị
+  tắt, chương trình sẽ báo khi bạn chọn “Ưu tiên USB”: hãy bấm vào thông
+  báo (hoặc “Bật bộ điều hợp mạng USB…”) rồi chọn “Có” trong hộp thoại xin
+  quyền quản trị viên.
+
+Về dữ liệu di động:
+- Bản thân việc phản chiếu là truyền cục bộ từ điện thoại sang máy tính qua
+  cáp. Dữ liệu không đi qua nhà mạng và không tốn dữ liệu di động.
+- Tuy nhiên, khi Điểm truy cập cá nhân đang bật, Windows có thể chuyển lưu
+  lượng Internet của chính máy tính qua dữ liệu di động của iPhone (thường
+  gặp khi Wi-Fi ở nhà không có IPv6 còn iPhone lại cung cấp IPv6 của nhà
+  mạng).
+- Khi nhận thấy điều này, chương trình sẽ hiện một thông báo: hãy bấm vào
+  đó (hoặc “Tiết kiệm dữ liệu di động…”) rồi chọn “Có” trong hộp thoại xin
+  quyền quản trị viên. Chỉ cần làm một lần. Từ đó trở đi, cáp chỉ truyền
+  nội dung phản chiếu còn máy tính tiếp tục dùng mạng của chính nó; ngay cả
+  khi Wi-Fi rớt, máy tính cũng không chuyển sang dùng dữ liệu của điện
+  thoại.
+- Hãy để “Dữ liệu di động” trên iPhone ở trạng thái bật: tắt mục này cũng
+  làm mất Điểm truy cập cá nhân, kể cả kết nối cục bộ qua cáp, và việc
+  phản chiếu qua USB sẽ dừng.
+- Nếu sau này bạn muốn máy tính lại dùng Internet của điện thoại qua cáp,
+  hãy hoàn tác trong Dấu nhắc Lệnh chạy với quyền quản trị viên (<n> là số
+  giao diện của bộ điều hợp Apple; lệnh
+  “netsh interface ipv4 show interfaces” sẽ liệt kê số này):
+    netsh interface ipv4 set interface <n> ignoredefaultroutes=disabled
+    netsh interface ipv6 set interface <n> routerdiscovery=enabled ignoredefaultroutes=disabled
+
+Lưu ý: từ iOS 16, Apple đã tắt cơ chế thu màn hình qua dây kiểu “QuickTime”
+cũ (loại không cần điểm truy cập), nên chương trình này không dùng nó; cách
+mô tả ở trên là cách phản chiếu qua dây hoạt động được với iOS hiện nay.
+
+
+4. Cửa sổ, thanh điều khiển và toàn màn hình
+--------------------------------------------
+- Kích thước cửa sổ: khi điện thoại để dọc, cửa sổ cao khoảng 90 % chiều
+  cao màn hình; khi xoay ngang, cửa sổ rộng khoảng một nửa chiều rộng màn
+  hình chứ không chiếm gần hết màn hình. Kéo viền cửa sổ để đổi kích thước;
+  hình ảnh vẫn giữ nguyên tỉ lệ. Kích thước và vị trí bạn chọn được ghi
+  nhớ, riêng cho chiều dọc và chiều ngang.
+- Di chuột lên hình ảnh, một thanh điều khiển sẽ hiện ra ở phía dưới; thanh
+  này ẩn đi sau 3 giây không có chuyển động (trừ khi con trỏ đang nằm trên
+  nó).
+- Bên trái thanh điều khiển: USB hoặc Wi-Fi, và độ phân giải hình ảnh.
+  Bên phải: “Ưu tiên USB | Chỉ Wi-Fi”, tắt tiếng (chỉ riêng chương trình
+  này; âm lượng của iPhone không đổi), tùy chọn khác (menu đầy đủ) và toàn
+  màn hình. Khi cần, các nút màu vàng sẽ xuất hiện: “Tiết kiệm dữ liệu di
+  động”, “Bật bộ điều hợp USB”.
+- Bấm chuột phải vào bất kỳ đâu trên hình ảnh cũng mở menu đầy đủ.
+- Toàn màn hình: bấm đúp vào hình ảnh, hoặc nhấn F, F11 hay Alt+Enter; nhấn
+  Esc để thoát. Ở chế độ toàn màn hình, con trỏ và thanh điều khiển cùng ẩn
+  đi sau 3 giây không có chuyển động.
+- Cắt viền đen: khi màn hình điện thoại rộng hơn bộ phim (ví dụ một phim
+  16:9 phát toàn màn hình trên iPhone), điện thoại phản chiếu toàn bộ màn
+  hình của nó, gồm cả các vùng đen. Có thể cắt bỏ các vùng này để cửa sổ ôm
+  sát hình ảnh ở cả bốn cạnh:
+    Tự động:  nhấn C, hoặc chọn “Tự động cắt viền đen” trong menu. Viền đen
+              quanh hình ảnh được cắt bỏ và cửa sổ thu lại cho vừa. Vùng cắt
+              vẫn được giữ khi phim này nối tiếp phim khác; còn khi có
+              nội dung khác xuất hiện trong viền và ở lại đó (ví dụ khi thoát
+              chế độ phát toàn màn hình), toàn bộ hình ảnh lại được hiển thị
+              trong vòng khoảng một giây. Để cảnh tối không bị nhầm là viền,
+              chương trình chỉ cắt những viền giống nhau ở hai bên, tồn tại
+              khoảng 1,5 giây và bao quanh một hình ảnh đang chuyển động.
+              Lựa chọn được ghi nhớ.
+    Thủ công: nhấn X, hoặc chọn “Chọn vùng hiển thị…” trong menu. Con trỏ
+              biến thành hình chữ thập: kéo một khung quanh phần bạn muốn
+              giữ lại rồi thả ra. Nhấn Esc hoặc nút chuột phải để hủy.
+              Khung vẽ tay chỉ áp dụng cho hình ảnh hiện tại; nó mất đi khi
+              điện thoại xoay hoặc kết nối lại.
+    Hoàn tác: chọn “Không cắt” trong menu (hoặc nhấn C lần nữa khi đang ở
+              chế độ tự động).
+- Luôn ở trên cùng: nhấn T, hoặc chọn “Luôn ở trên cùng” trong menu. Tắt
+  tiếng: nhấn M.
+- Trong lúc phản chiếu, máy tính không tự chuyển sang chế độ ngủ hay tự tắt
+  màn hình.
+- Giao diện đi theo ngôn ngữ hiển thị của Windows: tiếng Anh, tiếng Trung
+  phồn thể, tiếng Trung giản thể, tiếng Nhật, tiếng Hàn, tiếng Tây Ban Nha,
+  tiếng Đức, tiếng Pháp, tiếng Việt và tiếng Thái; mọi ngôn ngữ khác sẽ
+  dùng tiếng Anh. Để cố định một ngôn ngữ, hãy dùng tùy chọn -ui (mục 7).
+
+
+5. Chế độ chất lượng và hiệu năng
+---------------------------------
+Chọn một trong ba chế độ trong menu; lựa chọn được ghi nhớ:
+  - “Chất lượng”: yêu cầu điện thoại gửi độ phân giải đầy đủ, giữ bộ đệm
+    nhiều hơn một chút và không bỏ khung hình nào. Phù hợp với phim, trang
+    trình chiếu và văn bản. Độ trễ cao hơn một chút so với Cân bằng.
+  - “Cân bằng (tự điều chỉnh)”: mặc định. Giữ độ trễ thấp nhất có thể mà
+    không bị giật, tùy theo màn hình, card đồ họa và mạng; khi card không
+    giải mã được video bằng phần cứng, chế độ này yêu cầu một luồng nhẹ
+    hơn.
+  - “Hiệu năng”: yêu cầu luồng nhẹ hơn (tối đa 1920x1080), giữ bộ đệm ở mức
+    tối thiểu và thay các khung hình đến quá muộn bằng khung hình mới nhất.
+    Độ trễ thấp nhất, tốn ít bộ nhớ và ít tải đồ họa nhất: dành cho trò
+    chơi hoặc máy tính đời cũ.
+Độ trễ và độ mượt thay đổi ngay. Độ phân giải luồng do điện thoại quyết
+định lúc kết nối, nên thay đổi về độ phân giải (và bộ đệm sâu hơn của “Chất
+lượng”) chỉ có hiệu lực đầy đủ từ lần kết nối tiếp theo (chương trình sẽ
+báo điều này).
+
+
+6. Tệp nhật ký và bản ghi sự cố
+-------------------------------
+- %LOCALAPPDATA%\MirrorDock\mirror_dock.log (“Mở tệp nhật ký” trong menu).
+  Mỗi dòng đều có ghi thời gian; nhật ký của lần chạy trước được giữ lại
+  dưới tên mirror_dock.previous.log; mỗi tệp tối đa 8 MB.
+- Cứ 10 giây, một dòng thống kê hình ảnh và âm thanh được ghi lại. Khi
+  không có âm thanh hoặc hình ảnh không mượt, dòng này cho biết vấn đề nằm
+  ở đâu.
+- Nếu chương trình kết thúc bất thường, mirror_dock_crash.txt (vị trí xảy
+  ra lỗi) và mirror_dock_crash.dmp sẽ được để lại trong cùng thư mục; vui
+  lòng đính kèm các tệp này khi bạn báo lỗi.
+- Khi mirror_dock.exe được chạy từ Dấu nhắc Lệnh, nhật ký được in ra ngay
+  tại đó.
+
+
+7. Tùy chọn nâng cao
+--------------------
+Tạo một lối tắt đến mirror_dock.exe rồi thêm tùy chọn vào sau ô “Đích”,
+hoặc ghi mỗi tùy chọn một dòng (không có dấu trừ) vào
+%USERPROFILE%\.uxplayrc, ví dụ:
+    n Máy tính phòng khách
+    fs
+
+Các tùy chọn thường dùng:
+  -n tên         tên hiển thị trên iPhone
+  -nh            không thêm @tên-máy-tính vào sau tên
+  -fs            khởi động ở chế độ toàn màn hình
+  -mode m        quality, balanced (mặc định) hoặc performance; nếu không
+                 có tùy chọn này, lựa chọn gần nhất trong menu được dùng
+  -crop auto     tự động cắt viền đen (off = không cắt); nếu không có tùy
+                 chọn này, lựa chọn gần nhất trong menu được dùng
+  -gpu auto      GPU dùng để giải mã và hiển thị: auto (mặc định: GPU đang
+                 xuất hình ra màn hình), integrated, discrete, software
+  -h264          chỉ dùng H.264 (theo mặc định, iPhone có thể dùng H.265
+                 khi card đồ họa giải mã được bằng phần cứng)
+  -s RxC         yêu cầu độ phân giải luồng này (khi đó các chế độ không
+                 thay đổi nó)
+  -ui en         ngôn ngữ giao diện: auto (mặc định), en, zh-TW, zh-CN, ja,
+                 ko, es, de, fr, vi, th
+  -vsync 20      phát âm thanh chậm hơn hình ảnh 20 mili giây (có thể là số
+                 âm; dùng để tinh chỉnh độ khớp khẩu hình)
+  -vsync no      tắt đồng bộ theo dấu thời gian (đến đâu phát đó)
+  -pin           phải nhập mã PIN mới kết nối được (mã hiện trong một thông
+                 báo)
+  -nc            giữ lại hình ảnh cuối cùng và cửa sổ khi iPhone dừng phản
+                 chiếu
+  -ca tệp        lưu ảnh bìa album vào một tệp trong lúc phát nhạc
+  -d             nhật ký chi tiết để chẩn đoán sự cố
+Phần lớn các tùy chọn khác của UxPlay vẫn hoạt động (chạy
+mirror_dock.exe -h trong Dấu nhắc Lệnh để liệt kê). Những chức năng cần
+GStreamer hoặc nền tảng khác không có trong chương trình này (truyền video
+HLS, ghi MP4, hiện ảnh bìa trên màn hình, chuyển tiếp RTP, lật hoặc xoay
+hình ảnh, beacon Bluetooth LE). Nếu một tệp cài đặt cũ có chứa các tùy chọn
+như vậy, nhật ký sẽ ghi rằng chúng đã bị bỏ qua và chương trình vẫn khởi
+động bình thường.
+
+
+8. Số liệu tham khảo
+--------------------
+Đo trên một laptop đời 2016 (Core i7-6700HQ, card tích hợp Intel HD
+Graphics 530 xuất hình ra màn hình, Windows 11). Các số liệu chỉ để tham
+khảo và sẽ khác nhau tùy từng máy tính:
+- Sẵn sàng nhận kết nối khoảng 0,5 giây sau khi chạy (lần chạy đầu tiên của
+  bản vừa tải về chậm hơn vì phần mềm diệt vi-rút quét tệp); thoát trong
+  khoảng 0,05 giây.
+- Phản chiếu với giải mã H.265 bằng phần cứng: độ trễ giữa âm thanh và hình
+  ảnh ổn định ở khoảng 18 mili giây, đồng bộ.
+- Âm thanh dùng WASAPI ở chế độ độ trễ thấp, hình ảnh dùng swap chain DXGI
+  kiểu flip-model, và cả hai dùng chung một trục thời gian.
+
+
+9. Khuyến nghị
+--------------
+- Khi hai màn hình cùng nhân đôi màn hình nền với tần số quét khác nhau (ví
+  dụ 60 Hz và 50 Hz), Windows chỉ đồng bộ theo một trong hai, và chuyển
+  động trên màn hình còn lại hơi không đều. Nếu bạn chỉ xem một màn hình,
+  hãy vào “Cài đặt > Hệ thống > Màn hình” để chỉ hiển thị màn hình nền trên
+  màn hình đó.
+- Laptop hoạt động tốt nhất khi cắm điện.
+
+
+10. Khắc phục sự cố
+-------------------
+- iPhone không liệt kê máy tính: cả hai phải ở trên cùng một mạng Wi-Fi và
+  tường lửa phải cho phép chương trình (mục 1); hãy tắt rồi bật lại Wi-Fi
+  trên iPhone.
+- Đã cắm cáp nhưng USB không được dùng: hãy xem trạng thái USB ở dòng thứ
+  hai của menu. “Hãy bật Điểm truy cập cá nhân”: bật mục này trên iPhone.
+  “Bộ điều hợp mạng đã bị tắt”: chọn “Bật bộ điều hợp mạng USB…”. Hãy chắc
+  chắn rằng “Ưu tiên USB” đang được chọn. Trong một phiên, việc chuyển sang
+  USB sẽ chờ đến khi phiên kết thúc: hãy dừng phản chiếu trên iPhone rồi
+  chọn lại máy tính.
+- Sau khi chọn “Chỉ Wi-Fi”, iPhone không kết nối được: điện thoại có thể
+  vẫn còn nhớ đường USB. Hãy dừng phản chiếu trên iPhone, đợi vài giây rồi
+  chọn lại máy tính; nếu vẫn không được, hãy tắt rồi bật lại Wi-Fi trên
+  iPhone.
+- Không có âm thanh: kiểm tra xem nút loa trên thanh điều khiển có đang ở
+  trạng thái tắt tiếng không, sau đó xem các số liệu “audio” ở dòng ghi mỗi
+  10 giây trong nhật ký (có gói tin, có mức đỉnh và có khung đã phát nghĩa
+  là âm lượng hoặc bộ trộn của chính máy tính đang bị vặn nhỏ).
+- Đừng thay trình điều khiển của iPhone bằng libusb (Zadig và các công cụ
+  tương tự): việc đó gỡ trình điều khiển của Apple và tính năng phản chiếu
+  qua USB sẽ ngừng hoạt động.
+- Khẩu hình và lời nói không khớp: tinh chỉnh bằng -vsync kèm số mili giây
+  (số dương = âm thanh trễ hơn).
+- Hình ảnh bị giật: trước tiên hãy thử chế độ “Hiệu năng”; nếu đang nhân
+  đôi màn hình, xem mục 9.
+- Hình ảnh chuyển sang màu đen và chương trình tự khởi động lại: trình điều
+  khiển đồ họa đã bị đặt lại hoặc được cập nhật. Chương trình khởi động lại
+  một lần; hãy chọn lại máy tính trên iPhone. Nếu việc này lặp lại nhiều
+  lần trong thời gian ngắn, chương trình sẽ dừng và hiện lý do: hãy kiểm
+  tra trình điều khiển đồ họa.
+
+
+11. Nâng cấp từ UxPlay for Windows (1.6 trở về trước)
+-----------------------------------------------------
+- Chương trình nay có tên MirrorDock và tệp thực thi là mirror_dock.exe.
+  Hãy thoát uxplay.exe cũ trước khi chạy bản mới; có thể xóa tệp thực thi
+  cũ.
+- Trên iPhone, tên trong mục Phản chiếu màn hình đổi từ
+  “UxPlay@tên-máy-tính” thành “MirrorDock@tên-máy-tính”. Để giữ tên cũ, hãy
+  thêm -n UxPlay.
+- Các thiết lập của bạn (Ưu tiên USB / Chỉ Wi-Fi, chế độ, kích thước cửa sổ
+  v.v.) được chuyển sang ở lần chạy đầu tiên; “Khởi động cùng Windows”, nếu
+  đang bật, sẽ được chuyển sang tệp thực thi mới.
+- Thư mục nhật ký nay là %LOCALAPPDATA%\MirrorDock (thư mục cũ được đổi tên
+  và dùng lại khi không có chương trình nào đang dùng nó; các tệp nhật ký
+  cũ vẫn nằm trong đó).
+- Tệp cài đặt %USERPROFILE%\.uxplayrc và các tệp khóa ghép đôi vẫn giữ
+  nguyên tên và tiếp tục hoạt động.
+
+
+Giấy phép: toàn bộ chương trình theo GPL-3.0; lõi giao thức AirPlay của nó
+đến từ dự án mã nguồn mở UxPlay, còn bộ máy xử lý đa phương tiện cho
+Windows (win_native) theo MIT. Chương trình có chứa FFmpeg (các thành phần
+LGPL-2.1+), OpenSSL (Apache-2.0), libplist (LGPL-2.1+), LLVM libc++
+(Apache-2.0 WITH LLVM-exception) và winpthreads (MIT). Mã nguồn và toàn văn
+các giấy phép nằm trong thư mục “source” và “licenses”.

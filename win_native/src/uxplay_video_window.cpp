@@ -217,6 +217,8 @@ namespace uxplay
         std::array<HWND, 8> frame_edges{}; // light ring, dark ring; created on first use
         bool frame_failure_logged = false;
         bool detached = false; // UI thread only: the owner wants no callback any more
+        // the right button just cancelled a frame: its release opens no menu
+        bool right_click_consumed = false;
 
         [[nodiscard]] RECT picture_rectangle() const;
         void begin_framing();
@@ -1342,6 +1344,23 @@ namespace uxplay
             if (framing)
             {
                 end_framing();
+                right_click_consumed = true;
+                return 0;
+            }
+            break;
+        case WM_RBUTTONUP:
+            if (std::exchange(right_click_consumed, false))
+            {
+                return 0; // no WM_CONTEXTMENU for the click that cancelled a frame
+            }
+            break;
+        case WM_CONTEXTMENU:
+            // right click anywhere on the picture (or the Menu key): the same
+            // menu as the notification-area icon and the control bar's "more"
+            if (!framing)
+            {
+                show_cursor_again();
+                show_tray_menu();
                 return 0;
             }
             break;

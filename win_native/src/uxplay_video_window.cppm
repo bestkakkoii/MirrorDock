@@ -8,7 +8,8 @@
 // latency path, identical to exclusive fullscreen but instant to toggle.
 // A player-style control bar (uxplay_video_overlay) appears when the
 // pointer moves over the video and hides after a few idle seconds, in
-// windowed and fullscreen mode alike.
+// windowed and fullscreen mode alike.  A right click anywhere on the picture
+// opens the menu of the notification-area icon.
 //
 // Size: a portrait picture uses most of the monitor height, a landscape one
 // about half its width; the window keeps the picture's aspect ratio while it

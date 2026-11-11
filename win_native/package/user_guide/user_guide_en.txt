@@ -1,0 +1,320 @@
+﻿MirrorDock User Guide
+=====================
+
+MirrorDock shows the picture and plays the sound of an iPhone or iPad on a
+Windows PC, over Wi-Fi or over the USB cable. It is a single file,
+mirror_dock.exe: there is nothing else to install.
+(Up to version 1.6 it was called "UxPlay for Windows"; if you are upgrading,
+see the last section.)
+
+Requirements: Windows 10 or 11 (x64). The program adapts to the PC it runs
+on: it uses the graphics card that drives the monitor (integrated or
+dedicated; Intel, AMD or NVIDIA; software decoding when the card cannot
+decode the video), reads the monitor's resolution and refresh rate (and
+notices when a monitor is plugged in or removed), and uses the lowest delay
+the audio device offers. Nothing has to be set up again on another PC.
+
+
+1. Starting and exiting
+-----------------------
+- Double-click mirror_dock.exe. No console window opens; an icon appears in
+  the notification area (next to the clock), and the first time a "Ready"
+  notification is shown. Until a phone connects there is no window: every
+  function is in the menu of that icon (left or right click).
+- Within about half a second the PC is listed under Screen Mirroring on the
+  iPhone.
+- If a "Windows Security Alert" appears, choose "Allow" (a home network is a
+  "private network"). If you cancelled it, the iPhone cannot find the PC:
+  open "Windows Security > Firewall & network protection > Allow an app
+  through firewall" and tick mirror_dock.exe.
+- Only one copy runs per name: starting the program again only makes the
+  running copy show an "Already running" notification.
+- Closing the video window ends that mirroring session only; the program
+  keeps waiting in the background for the next one.
+- To exit: the menu of the notification-area icon > "Exit" (the iPhone is
+  told, and the PC disappears from its list).
+- To start it together with Windows: menu > "Start with Windows" (choose it
+  again to turn it off; it is set for your user account only and needs no
+  administrator rights).
+- If the program cannot start (a port is in use, an option is misspelled),
+  a dialog names the reason and the location of the log file.
+
+
+2. Mirroring over Wi-Fi
+-----------------------
+Connect the iPhone and the PC to the same Wi-Fi network, then on the iPhone
+open Control Center > Screen Mirroring and choose "MirrorDock@computer-name".
+The video window appears and comes to the front. When the phone is locked,
+iOS pauses the picture while the sound goes on; it resumes when you unlock
+(this is normal).
+This way needs no driver and uses no mobile data.
+
+
+3. Mirroring over the USB cable
+-------------------------------
+AirPlay runs over the network link the iPhone offers on its USB cable.
+Whenever that link exists MirrorDock prefers it, and when the cable is
+unplugged it goes back to Wi-Fi. While the program runs, plugging and
+unplugging are followed within about 2 seconds (a session that is in
+progress is not interrupted: the switch happens when it ends).
+
+  1. Install Apple's USB driver (once): run the enclosed
+     install_apple_usb_support.cmd (it installs Apple Mobile Device Support
+     with winget), or install "Apple Devices" from the Microsoft Store.
+  2. On the iPhone: Settings > Personal Hotspot > turn on "Allow Others to
+     Join", then plug in the USB cable. Windows gets a network adapter
+     called "Apple Mobile Device Ethernet" (172.20.10.x). If the iPhone is
+     plugged in but the hotspot is off, a notification reminds you after
+     about 8 seconds (once per run).
+  3. On the iPhone: Control Center > Screen Mirroring > MirrorDock.
+     The control bar and the notification-area icon show "USB" or "Wi-Fi",
+     whichever is really in use.
+  The second line of the menu shows the state of the USB link: not plugged
+  in / turn on Personal Hotspot / ready / network adapter disabled /
+  charging only.
+
+Switching between USB and Wi-Fi (the cable can stay plugged in to charge):
+  Choose one of the two in the control bar or in the menu:
+    - "Prefer USB": USB is used while the iPhone is plugged in and Personal
+      Hotspot is on (the default).
+    - "Wi-Fi only": mirroring always uses Wi-Fi; the cable only charges.
+  The choice is remembered. Switching during a session ends that session:
+  choose the PC again under Screen Mirroring on the iPhone.
+
+  "Wi-Fi only" really keeps USB out: the program does not answer on the USB
+  link, and a connection that still arrives over it is refused. So there is
+  no need to disable the device or its network adapter in order to switch
+  (please do not: it breaks USB mirroring and, with some cables, stops the
+  charging). If "Apple Mobile Device Ethernet" was disabled earlier, the
+  program says so when you choose "Prefer USB": click the notification (or
+  "Enable USB network adapter...") and answer "Yes" in the administrator
+  prompt.
+
+About mobile data:
+- Mirroring itself is a local transfer from the phone to the PC over the
+  cable. It does not go through the carrier and uses no mobile data.
+- But while Personal Hotspot is on, Windows may send the PC's own internet
+  traffic through the iPhone's mobile data (typically when the home Wi-Fi
+  has no IPv6 and the iPhone offers the carrier's IPv6).
+- When the program notices this, it shows a notification: click it (or
+  "Save mobile data..."), and answer "Yes" in the administrator prompt. This
+  is needed only once. From then on the cable carries only the mirroring and
+  the PC keeps using its own network; even if the Wi-Fi drops, the PC does
+  not fall back to the phone's data.
+- Leave "Mobile Data" on the iPhone turned on: turning it off also removes
+  Personal Hotspot, including the local link on the cable, and USB
+  mirroring stops.
+- If you later want the PC to use the phone's internet over the cable again,
+  undo it from an administrator command prompt (<n> is the interface number
+  of the Apple adapter; "netsh interface ipv4 show interfaces" lists it):
+    netsh interface ipv4 set interface <n> ignoredefaultroutes=disabled
+    netsh interface ipv6 set interface <n> routerdiscovery=enabled ignoredefaultroutes=disabled
+
+Note: since iOS 16 Apple has switched off the older "QuickTime" wired screen
+capture (the one that needed no hotspot), so this program does not use it;
+the way described above is the wired mirroring that works with current iOS.
+
+
+4. The window, the control bar and full screen
+----------------------------------------------
+- Window size: with the phone upright the window is about 90 % of the screen
+  height; turned sideways it is about half the screen width, not nearly the
+  whole screen. Drag the window border to resize it; the picture keeps its
+  proportions. The size and position you choose are remembered, separately
+  for upright and sideways.
+- Move the mouse over the picture and a control bar appears at the bottom;
+  it hides after 3 seconds without movement (not while the pointer is on
+  it).
+- Left side of the control bar: USB or Wi-Fi, and the picture resolution.
+  Right side: "Prefer USB | Wi-Fi only", mute (this program only; the
+  iPhone's volume is not changed), more (the full menu) and full screen.
+  When needed, yellow buttons appear: "Save mobile data", "Enable USB
+  adapter".
+- A right click anywhere on the picture opens the full menu as well.
+- Full screen: double-click the picture, or press F, F11 or Alt+Enter; Esc
+  leaves it. In full screen the pointer and the control bar hide together
+  after 3 seconds without movement.
+- Cropping black bars: when the phone's screen is wider than the film (a
+  16:9 film played full screen on an iPhone, for example), the phone mirrors
+  its whole screen, black areas included. They can be cut off so that the
+  window hugs the picture on all four sides:
+    Automatic: press C, or choose "Crop black bars automatically" in the
+               menu. Black bars around the picture are cut off and the
+               window shrinks to fit. The crop stays when one film follows
+               another; when something else appears in a bar and stays
+               (leaving full-screen playback, for example), the whole
+               picture is shown again within about a second. So that a
+               dark scene is not mistaken for bars, only bars that are the
+               same on both sides, last about 1.5 seconds and surround a
+               moving picture are cut. The choice is remembered.
+    By hand:   press X, or choose "Select the area to show..." in the menu.
+               The pointer becomes a cross: drag a frame around the part
+               you want to keep and release. Esc or the right mouse button
+               cancels. A frame drawn by hand applies to the current
+               picture only; it is gone when the phone is rotated or
+               reconnects.
+    Undo:      choose "No cropping" in the menu (or press C again in
+               automatic mode).
+- Always on top: press T, or choose "Always on top" in the menu. Mute:
+  press M.
+- While mirroring, the PC does not go to sleep or turn the screen off by
+  itself.
+- The interface follows the Windows display language: English, Traditional
+  Chinese, Simplified Chinese, Japanese, Korean, Spanish, German, French,
+  Vietnamese and Thai; any other language gets English. To fix one, use the
+  -ui option (section 7).
+
+
+5. Quality and performance modes
+--------------------------------
+Choose one of three in the menu; it is remembered:
+  - "Quality": asks the phone for the full resolution, keeps a little more
+    buffering and skips no frame. Good for films, slides and text. The delay
+    is slightly higher than in Balanced.
+  - "Balanced (adaptive)": the default. Keeps the delay as low as it can
+    without stutter, according to the monitor, the graphics card and the
+    network; when the card cannot decode the video in hardware it asks for
+    a lighter stream.
+  - "Performance": asks for a lighter stream (at most 1920x1080), keeps
+    buffering to a minimum and replaces frames that come too late with the
+    newest one. Lowest delay, least memory and graphics load: for games, or
+    for an older PC.
+Delay and smoothness change at once. The stream resolution is decided by the
+phone when it connects, so a change of resolution (and the deeper buffering
+of "Quality") takes full effect with the next connection (the program says
+so).
+
+
+6. Log file and crash record
+----------------------------
+- %LOCALAPPDATA%\MirrorDock\mirror_dock.log ("Open log file" in the menu).
+  Every line carries the time; the log of the previous run is kept as
+  mirror_dock.previous.log; a file is at most 8 MB.
+- Every 10 seconds one line of picture and sound statistics is written. When
+  there is no sound or the picture is not smooth, it shows where the problem
+  is.
+- If the program ends abnormally, mirror_dock_crash.txt (where it happened)
+  and mirror_dock_crash.dmp are left in the same folder; please attach them
+  when you report a problem.
+- When mirror_dock.exe is started from a command prompt, the log is printed
+  there.
+
+
+7. Advanced options
+-------------------
+Create a shortcut to mirror_dock.exe and add options after the "Target", or
+write one option per line (without the minus sign) into
+%USERPROFILE%\.uxplayrc, for example:
+    n Living room PC
+    fs
+
+Common options:
+  -n name        the name shown on the iPhone
+  -nh            do not append @computer-name to the name
+  -fs            start in full screen
+  -mode m        quality, balanced (the default) or performance; without
+                 it, the last choice in the menu is used
+  -crop auto     crop black bars automatically (off = no cropping); without
+                 it, the last choice in the menu is used
+  -gpu auto      the GPU for decoding and display: auto (the default: the
+                 one that drives the monitor), integrated, discrete,
+                 software
+  -h264          use H.264 only (by default the iPhone may use H.265 when
+                 the graphics card decodes it in hardware)
+  -s WxH         ask for this stream resolution (modes then leave it alone)
+  -ui en         interface language: auto (the default), en, zh-TW, zh-CN,
+                 ja, ko, es, de, fr, vi, th
+  -vsync 20      play the sound 20 milliseconds later than the picture (may
+                 be negative; for fine-tuning lip sync)
+  -vsync no      switch off timestamp synchronization (play on arrival)
+  -pin           a PIN must be entered to connect (it is shown in a
+                 notification)
+  -nc            keep the last picture and the window when the iPhone stops
+                 mirroring
+  -ca file       save the album cover to a file while music plays
+  -d             detailed log for troubleshooting
+Most other UxPlay options still work (mirror_dock.exe -h in a command prompt
+lists them). Functions that need GStreamer or another platform are not part
+of this program (HLS video casting, MP4 recording, cover art on screen, RTP
+forwarding, flipping or rotating the picture, Bluetooth LE beacon). If an
+old settings file contains such options, the log notes that they were
+ignored and the program starts normally.
+
+
+8. Reference figures
+--------------------
+Measured on one laptop from 2016 (Core i7-6700HQ, the integrated Intel HD
+Graphics 530 drives the monitor, Windows 11). They are for orientation only
+and differ from PC to PC:
+- Ready for a connection about 0.5 seconds after launch (the first start of
+  a newly downloaded copy is slower while antivirus scans it); exits in
+  about 0.05 seconds.
+- Mirroring with hardware H.265 decoding: the delay between sound and
+  picture rests at about 18 milliseconds, in sync.
+- Sound uses WASAPI in low-latency mode, the picture a DXGI flip-model swap
+  chain, and both share one timeline.
+
+
+9. Recommendations
+------------------
+- When two monitors duplicate the desktop with different refresh rates
+  (60 Hz and 50 Hz, for example), Windows follows only one of them and
+  motion on the other is slightly uneven. If you watch only one monitor, set
+  "Settings > System > Display" to show the desktop on that monitor only.
+- A laptop works best on mains power.
+
+
+10. Troubleshooting
+-------------------
+- The iPhone does not list the PC: both must be on the same Wi-Fi network
+  and the firewall must allow the program (section 1); turn the iPhone's
+  Wi-Fi off and on again.
+- The cable is plugged in but USB is not used: look at the USB state in the
+  second line of the menu. "Turn on Personal Hotspot": turn it on on the
+  iPhone. "Network adapter disabled": choose "Enable USB network
+  adapter...". Make sure "Prefer USB" is chosen. During a session the switch
+  to USB waits until it ends: stop mirroring on the iPhone and choose the
+  PC again.
+- After choosing "Wi-Fi only" the iPhone cannot connect: the phone may
+  still remember the USB path. Stop mirroring on the iPhone, wait a few
+  seconds and choose the PC again; if that does not help, turn the iPhone's
+  Wi-Fi off and on.
+- No sound: check whether the speaker button in the control bar shows mute,
+  then look at the "audio" figures in the 10-second line of the log
+  (packets, a peak and frames played mean that the PC's own volume or mixer
+  is turned down).
+- Do not replace the iPhone's driver with libusb (Zadig and similar tools):
+  that removes Apple's driver and USB mirroring stops working.
+- Lips and voice do not match: fine-tune with -vsync and a number of
+  milliseconds (positive = sound later).
+- The picture stutters: try "Performance" mode first; with duplicated
+  monitors see section 9.
+- The picture goes black and the program restarts by itself: the graphics
+  driver was reset or updated. The program restarts once; choose the PC
+  again on the iPhone. If it happens repeatedly within a short time the
+  program stops and shows the reason: check the graphics driver.
+
+
+11. Upgrading from UxPlay for Windows (1.6 or earlier)
+------------------------------------------------------
+- The program is now called MirrorDock and its executable is
+  mirror_dock.exe. Exit the old uxplay.exe before starting the new one; the
+  old executable can be deleted.
+- On the iPhone the name under Screen Mirroring changes from
+  "UxPlay@computer-name" to "MirrorDock@computer-name". To keep the old
+  name, add -n UxPlay.
+- Your settings (Prefer USB / Wi-Fi only, mode, window size and so on) are
+  taken over at the first start; "Start with Windows", if it was on, is
+  switched to the new executable.
+- The log folder is now %LOCALAPPDATA%\MirrorDock (the old folder is renamed
+  and reused when no program is using it; the old log files stay in it).
+- The settings file %USERPROFILE%\.uxplayrc and the pairing key files keep
+  their names and keep working.
+
+
+Licence: the program as a whole is GPL-3.0; its AirPlay protocol core comes
+from the open-source project UxPlay, and the Windows media engine
+(win_native) is MIT. It contains FFmpeg (LGPL-2.1+ components), OpenSSL
+(Apache-2.0), libplist (LGPL-2.1+), LLVM libc++ (Apache-2.0 WITH
+LLVM-exception) and winpthreads (MIT). The source code and the full licence
+texts are in the folders "source" and "licenses".

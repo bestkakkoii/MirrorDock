@@ -23,6 +23,8 @@ namespace uxplay::settings
         // the same under the name the program had up to 1.6
         constexpr wchar_t legacy_settings_key[] = L"Software\\" UXPLAY_LEGACY_PRODUCT_NAME;
         constexpr wchar_t legacy_run_value[] = L"" UXPLAY_LEGACY_PRODUCT_NAME;
+        // set in this program's key once the earlier key was looked at
+        constexpr wchar_t legacy_adopted_value[] = L"legacy_settings_adopted";
 
         outcome<std::wstring> executable_path()
         {
@@ -104,49 +106,99 @@ namespace uxplay::settings
     {
         std::string done;
         HKEY current = nullptr;
-        LSTATUS result = RegOpenKeyExW(HKEY_CURRENT_USER, settings_key, 0, KEY_READ, &current);
-        if (result == ERROR_SUCCESS)
+        LSTATUS result = RegCreateKeyExW(HKEY_CURRENT_USER, settings_key, 0, nullptr, 0, KEY_READ | KEY_WRITE, nullptr,
+                                         &current, nullptr);
+        if (result != ERROR_SUCCESS)
         {
-            RegCloseKey(current); // this program has settings of its own already
+            return std::unexpected(make_win32_failure("RegCreateKeyExW(settings)", static_cast<unsigned long>(result)));
         }
-        else if (result != ERROR_FILE_NOT_FOUND)
+        DWORD adopted = 0;
+        DWORD adopted_size = sizeof(adopted);
+        bool const taken_over_before = RegGetValueW(current, nullptr, legacy_adopted_value, RRF_RT_REG_DWORD, nullptr,
+                                                    &adopted, &adopted_size) == ERROR_SUCCESS;
+        if (!taken_over_before)
         {
-            return std::unexpected(make_win32_failure("RegOpenKeyExW(settings)", static_cast<unsigned long>(result)));
-        }
-        else
-        {
+            // Every value the earlier key holds and this one lacks is copied;
+            // a value the user has set since under the new name stays.  (Value
+            // by value: RegCopyTreeW was refused with "access denied" for a
+            // key opened with the rights this needs.)
             HKEY legacy = nullptr;
             result = RegOpenKeyExW(HKEY_CURRENT_USER, legacy_settings_key, 0, KEY_READ, &legacy);
             if (result == ERROR_SUCCESS)
             {
-                HKEY created = nullptr;
-                result = RegCreateKeyExW(HKEY_CURRENT_USER, settings_key, 0, nullptr, 0, KEY_WRITE, nullptr, &created,
-                                         nullptr);
-                if (result == ERROR_SUCCESS)
+                int copied = 0;
+                std::optional<failure> problem;
+                for (DWORD index = 0; !problem; ++index)
                 {
-                    result = RegCopyTreeW(legacy, nullptr, created);
-                    RegCloseKey(created);
-                    if (result != ERROR_SUCCESS)
+                    wchar_t name[256]{};
+                    DWORD name_length = 256;
+                    DWORD type = 0;
+                    DWORD data = 0;
+                    DWORD data_size = sizeof(data);
+                    LSTATUS const enumerated = RegEnumValueW(legacy, index, name, &name_length, nullptr, &type,
+                                                             reinterpret_cast<BYTE *>(&data), &data_size);
+                    if (enumerated == ERROR_NO_MORE_ITEMS)
                     {
-                        // no half-copied settings: the next start tries again
-                        RegDeleteTreeW(HKEY_CURRENT_USER, settings_key);
+                        break;
                     }
+                    if (enumerated == ERROR_MORE_DATA || (enumerated == ERROR_SUCCESS && type != REG_DWORD))
+                    {
+                        continue; // not one of this program's settings (all are numbers)
+                    }
+                    if (enumerated != ERROR_SUCCESS)
+                    {
+                        problem = make_win32_failure("RegEnumValueW(earlier settings)",
+                                                     static_cast<unsigned long>(enumerated));
+                        break;
+                    }
+                    DWORD present = 0;
+                    DWORD present_size = sizeof(present);
+                    if (RegGetValueW(current, nullptr, name, RRF_RT_REG_DWORD, nullptr, &present, &present_size) ==
+                        ERROR_SUCCESS)
+                    {
+                        continue;
+                    }
+                    LSTATUS const stored = RegSetValueExW(current, name, 0, REG_DWORD,
+                                                          reinterpret_cast<BYTE const *>(&data), sizeof(data));
+                    if (stored != ERROR_SUCCESS)
+                    {
+                        problem = make_win32_failure("RegSetValueExW(setting taken over)",
+                                                     static_cast<unsigned long>(stored));
+                        break;
+                    }
+                    ++copied;
                 }
                 RegCloseKey(legacy);
-                if (result != ERROR_SUCCESS)
+                if (problem)
                 {
-                    return std::unexpected(make_win32_failure("copying the settings of the earlier program name",
-                                                              static_cast<unsigned long>(result)));
+                    RegCloseKey(current);
+                    return std::unexpected(*problem); // not marked as done: the next start tries again
                 }
-                done = "settings taken over from the earlier program name (HKCU\\Software\\" UXPLAY_LEGACY_PRODUCT_NAME
-                       ", which is left as it is)";
+                if (copied > 0)
+                {
+                    done = std::format("{} setting(s) taken over from the earlier program name (HKCU\\Software\\"
+                                       UXPLAY_LEGACY_PRODUCT_NAME ", which is left as it is)",
+                                       copied);
+                }
             }
             else if (result != ERROR_FILE_NOT_FOUND)
             {
+                RegCloseKey(current);
                 return std::unexpected(
                     make_win32_failure("RegOpenKeyExW(earlier settings)", static_cast<unsigned long>(result)));
             }
+            // done, or nothing to take over: not looked at again
+            DWORD const flag = 1;
+            result = RegSetValueExW(current, legacy_adopted_value, 0, REG_DWORD, reinterpret_cast<BYTE const *>(&flag),
+                                    sizeof(flag));
+            if (result != ERROR_SUCCESS)
+            {
+                RegCloseKey(current);
+                return std::unexpected(
+                    make_win32_failure("RegSetValueExW(settings taken over)", static_cast<unsigned long>(result)));
+            }
         }
+        RegCloseKey(current);
 
         // "start with Windows" registered under the earlier name: it would
         // start the earlier executable, so it becomes an entry for this one

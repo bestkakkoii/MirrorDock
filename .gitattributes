@@ -23,7 +23,8 @@ lib/playfair/** -text
 # documentation
 *.md    text
 *.txt   text
-win_native/package/*.txt text eol=crlf
+win_native/package/user_guide/*.txt text eol=crlf
+*.svg   text
 
 *.ico   binary
 *.zip   binary

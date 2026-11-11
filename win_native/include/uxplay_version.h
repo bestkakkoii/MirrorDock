@@ -26,9 +26,9 @@
 #define UXPLAY_LEGACY_PRODUCT_NAME "UxPlay"
 
 #define UXPLAY_VERSION_MAJOR 1
-#define UXPLAY_VERSION_MINOR 7
+#define UXPLAY_VERSION_MINOR 8
 #define UXPLAY_VERSION_PATCH 0
-#define UXPLAY_VERSION_TEXT "1.7.0"
+#define UXPLAY_VERSION_TEXT "1.8.0"
 #define UXPLAY_CORE_VERSION "1.74"
 #define UXPLAY_PROJECT_URL "https://github.com/bestkakkoii/MirrorDock"
 

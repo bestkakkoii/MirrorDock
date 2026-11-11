@@ -45,12 +45,20 @@ namespace uxplay
         constexpr int required_content_changes = 3;
         // examinations further apart than this do not belong to one observation
         constexpr std::int64_t longest_gap_ns = 1500 * ns_per_ms;
-        // after content showed up inside a bar: no new crop for this long,
-        // doubling with every such correction, back to the start once a crop
-        // has lasted a minute
+        // A crop that has lasted this long was right for what played.
+        constexpr std::int64_t settled_crop_ns = 5000 * ns_per_ms;
+        // Content crossing a bar of a settled crop is tolerated this long: the
+        // change from one film to the next takes a fraction of a second, while
+        // controls or a menu that appear stay for seconds.
+        constexpr std::int64_t transition_grace_ns = 1200 * ns_per_ms;
+        // A stream that still runs brings its next picture within this time
+        // (4 pictures per second and more); one that does not has gone still.
+        constexpr std::int64_t still_stream_ns = 250 * ns_per_ms;
+        // after content showed up inside a bar of a crop that was not settled
+        // (a wrong crop): no new crop for this long, doubling with every such
+        // correction, back to the start once a crop has settled
         constexpr std::int64_t first_penalty_ns = 3000 * ns_per_ms;
         constexpr std::int64_t longest_penalty_ns = 30'000 * ns_per_ms;
-        constexpr std::int64_t proven_crop_ns = 60'000 * ns_per_ms;
 
         // content change is judged on the mean brightness of an 8 x 8 grid of
         // cells: a cell changed when its mean moved by this much, the content
@@ -292,9 +300,77 @@ namespace uxplay
         picture_height = 0;
         applied = {};
         applied_since_ns = 0;
+        content_in_bar_since_ns.reset();
         pending.reset();
         hold_off_until_ns = 0;
         penalty_ns = 0;
+    }
+
+    std::optional<std::int64_t> crop_detector::grace_deadline() const
+    {
+        if (!content_in_bar_since_ns)
+        {
+            return std::nullopt;
+        }
+        return *content_in_bar_since_ns + transition_grace_ns + still_stream_ns;
+    }
+
+    std::optional<picture_region> crop_detector::expire(std::int64_t time_ns)
+    {
+        if (!content_in_bar_since_ns || time_ns - *content_in_bar_since_ns < transition_grace_ns + still_stream_ns)
+        {
+            return std::nullopt;
+        }
+        // The last pictures had content in a bar and no later one cleared it:
+        // the stream went still that way.  Everything is shown; the crop is
+        // judged afresh when pictures come again.
+        content_in_bar_since_ns.reset();
+        pending.reset();
+        applied = {};
+        hold_off_until_ns = time_ns;
+        penalty_ns = first_penalty_ns;
+        return picture_region{};
+    }
+
+    picture_region crop_detector::release(content_margins const &measured, std::int64_t time_ns, bool settled)
+    {
+        pending.reset();
+        // Still a letterbox, only with smaller bars (another film, or a crop
+        // that had been tightened during a dark shot): show up to the bars of
+        // this picture.  Nothing stays hidden - they are black in it - and the
+        // window changes once instead of opening up and closing in again.
+        content_margins const smaller = letterbox_margins(measured, picture_width, picture_height);
+        bool const loosened = has_bars(smaller) && smaller.left <= applied.left + edge_jitter_pixels &&
+                              smaller.top <= applied.top + edge_jitter_pixels &&
+                              smaller.right <= applied.right + edge_jitter_pixels &&
+                              smaller.bottom <= applied.bottom + edge_jitter_pixels;
+        if (loosened)
+        {
+            applied.left = std::min(applied.left, smaller.left);
+            applied.top = std::min(applied.top, smaller.top);
+            applied.right = std::min(applied.right, smaller.right);
+            applied.bottom = std::min(applied.bottom, smaller.bottom);
+            applied_since_ns = time_ns;
+        }
+        else
+        {
+            applied = {};
+        }
+        if (settled)
+        {
+            // the crop was right while it lasted: what follows is judged
+            // afresh, without delay
+            hold_off_until_ns = time_ns;
+            penalty_ns = first_penalty_ns;
+        }
+        else
+        {
+            // the crop (or its tightening) was wrong: the next attempt waits,
+            // longer each time
+            hold_off_until_ns = time_ns + penalty_ns;
+            penalty_ns = std::min(penalty_ns * 2, longest_penalty_ns);
+        }
+        return region_for(applied, picture_width, picture_height);
     }
 
     picture_region crop_detector::region() const
@@ -329,46 +405,42 @@ namespace uxplay
         content_margins const measured = measure_black_margins(picture);
         if (measured.blank)
         {
-            return std::nullopt; // a fade or a black screen says nothing about the bars
+            // a fade or a black screen says nothing about the bars, and
+            // nothing is in them either
+            content_in_bar_since_ns.reset();
+            return std::nullopt;
         }
 
         if (has_bars(applied))
         {
-            // content inside a bar that is cut off: show everything at once
+            // content inside a bar that is cut off
             bool const content_in_bar = measured.left < applied.left - edge_jitter_pixels ||
                                         measured.top < applied.top - edge_jitter_pixels ||
                                         measured.right < applied.right - edge_jitter_pixels ||
                                         measured.bottom < applied.bottom - edge_jitter_pixels;
+            bool const settled = time_ns - applied_since_ns >= settled_crop_ns;
             if (content_in_bar)
             {
                 pending.reset();
-                // Still a letterbox, only with smaller bars (the crop had been
-                // tightened during a dark shot): show up to the bars of this
-                // picture.  Nothing stays hidden - they are black in it - and
-                // the window changes once instead of opening up and closing
-                // in again.
-                content_margins const smaller = letterbox_margins(measured, picture_width, picture_height);
-                if (has_bars(smaller) && smaller.left <= applied.left + edge_jitter_pixels &&
-                    smaller.top <= applied.top + edge_jitter_pixels &&
-                    smaller.right <= applied.right + edge_jitter_pixels &&
-                    smaller.bottom <= applied.bottom + edge_jitter_pixels)
+                if (settled)
                 {
-                    applied.left = std::min(applied.left, smaller.left);
-                    applied.top = std::min(applied.top, smaller.top);
-                    applied.right = std::min(applied.right, smaller.right);
-                    applied.bottom = std::min(applied.bottom, smaller.bottom);
-                    applied_since_ns = time_ns;
-                    // the tightening was wrong: the next one waits, longer each time
-                    hold_off_until_ns = time_ns + penalty_ns;
-                    penalty_ns = std::min(penalty_ns * 2, longest_penalty_ns);
-                    return region_for(applied, picture_width, picture_height);
+                    // most likely a passing transition: the crop stays for a
+                    // moment (see transition_grace_ns)
+                    if (!content_in_bar_since_ns)
+                    {
+                        content_in_bar_since_ns = time_ns;
+                    }
+                    if (time_ns - *content_in_bar_since_ns < transition_grace_ns)
+                    {
+                        return std::nullopt;
+                    }
                 }
-                applied = {};
-                hold_off_until_ns = time_ns + penalty_ns;
-                penalty_ns = std::min(penalty_ns * 2, longest_penalty_ns);
-                return picture_region{};
+                content_in_bar_since_ns.reset();
+                return release(measured, time_ns, settled);
             }
-            if (time_ns - applied_since_ns >= proven_crop_ns)
+            // the bars are black (again)
+            content_in_bar_since_ns.reset();
+            if (settled)
             {
                 penalty_ns = first_penalty_ns;
             }

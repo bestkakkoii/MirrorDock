@@ -1,0 +1,356 @@
+﻿Guide d’utilisation de MirrorDock
+=================================
+
+MirrorDock affiche l’image et diffuse le son d’un iPhone ou d’un iPad sur un
+PC Windows, en Wi-Fi ou par le câble USB. Il tient en un seul fichier,
+mirror_dock.exe : il n’y a rien d’autre à installer.
+(Jusqu’à la version 1.6, il s’appelait « UxPlay for Windows » ; si vous
+faites la mise à niveau, reportez-vous à la dernière section.)
+
+Configuration requise : Windows 10 ou 11 (x64). Le programme s’adapte au PC
+sur lequel il tourne : il utilise la carte graphique qui pilote l’écran
+(intégrée ou dédiée ; Intel, AMD ou NVIDIA ; décodage logiciel quand la
+carte ne sait pas décoder la vidéo), lit la résolution et la fréquence
+d’actualisation de l’écran (et détecte le branchement ou le retrait d’un
+écran), et utilise la latence la plus faible que propose le périphérique
+audio. Rien n’est à reconfigurer sur un autre PC.
+
+
+1. Démarrage et arrêt
+---------------------
+- Double-cliquez sur mirror_dock.exe. Aucune fenêtre de console ne s’ouvre ;
+  une icône apparaît dans la zone de notification (à côté de l’horloge) et,
+  la première fois, une notification « Prêt » s’affiche. Tant qu’aucun
+  téléphone n’est connecté, il n’y a pas de fenêtre : toutes les fonctions
+  se trouvent dans le menu de cette icône (clic gauche ou droit).
+- En une demi-seconde environ, le PC figure dans « Recopie de l’écran » sur
+  l’iPhone.
+- Si une « Alerte de sécurité Windows » apparaît, choisissez « Autoriser »
+  (un réseau domestique est un « réseau privé »). Si vous l’avez annulée,
+  l’iPhone ne trouve pas le PC : ouvrez « Sécurité Windows > Pare-feu et
+  protection du réseau > Autoriser une application via le pare-feu » et
+  cochez mirror_dock.exe.
+- Une seule copie s’exécute par nom : relancer le programme amène seulement
+  la copie déjà lancée à afficher une notification « Déjà en cours
+  d’exécution ».
+- Fermer la fenêtre vidéo ne met fin qu’à cette session de recopie ; le
+  programme continue d’attendre la suivante en arrière-plan.
+- Pour quitter : menu de l’icône de la zone de notification > « Quitter »
+  (l’iPhone est prévenu et le PC disparaît de sa liste).
+- Pour le lancer en même temps que Windows : menu > « Lancer au démarrage de
+  Windows » (choisissez-le de nouveau pour le désactiver ; le réglage ne
+  concerne que votre compte d’utilisateur et ne demande pas de droits
+  d’administrateur).
+- Si le programme ne peut pas démarrer (port déjà utilisé, option mal
+  orthographiée), une boîte de dialogue en indique la raison ainsi que
+  l’emplacement du fichier journal.
+
+
+2. Recopie en Wi-Fi
+-------------------
+Connectez l’iPhone et le PC au même réseau Wi-Fi puis, sur l’iPhone, ouvrez
+le centre de contrôle > « Recopie de l’écran » et choisissez
+« MirrorDock@nom-du-PC ». La fenêtre vidéo apparaît et passe au premier
+plan. Quand le téléphone est verrouillé, iOS met l’image en pause tandis que
+le son continue ; l’image reprend au déverrouillage (c’est normal).
+Cette méthode ne demande aucun pilote et ne consomme pas de données mobiles.
+
+
+3. Recopie par le câble USB
+---------------------------
+AirPlay passe par la liaison réseau que l’iPhone propose sur son câble USB.
+Dès que cette liaison existe, MirrorDock la privilégie ; quand le câble est
+débranché, il revient au Wi-Fi. Tant que le programme tourne, branchements
+et débranchements sont pris en compte en 2 secondes environ (une session en
+cours n’est pas interrompue : la bascule se fait quand elle se termine).
+
+  1. Installez le pilote USB d’Apple (une seule fois) : lancez le fichier
+     install_apple_usb_support.cmd fourni (il installe Apple Mobile Device
+     Support avec winget), ou installez « Appareils Apple » depuis le
+     Microsoft Store.
+  2. Sur l’iPhone : Réglages > Partage de connexion > activez « Autoriser
+     d’autres utilisateurs », puis branchez le câble USB. Windows voit
+     apparaître une carte réseau nommée « Apple Mobile Device Ethernet »
+     (172.20.10.x). Si l’iPhone est branché alors que le partage de
+     connexion est désactivé, une notification vous le rappelle au bout de
+     8 secondes environ (une fois par exécution).
+  3. Sur l’iPhone : centre de contrôle > Recopie de l’écran > MirrorDock.
+     La barre de contrôle et l’icône de la zone de notification indiquent
+     « USB » ou « Wi-Fi », selon la liaison réellement utilisée.
+  La deuxième ligne du menu indique l’état de la liaison USB : non branché /
+  activez le partage de connexion / prêt / carte réseau désactivée / charge
+  uniquement.
+
+Basculer entre USB et Wi-Fi (le câble peut rester branché pour la charge) :
+  Choisissez l’un des deux dans la barre de contrôle ou dans le menu :
+    - « USB en priorité » : l’USB est utilisé tant que l’iPhone est branché
+      et que le partage de connexion est activé (choix par défaut).
+    - « Wi-Fi uniquement » : la recopie passe toujours par le Wi-Fi ; le
+      câble ne sert qu’à la charge.
+  Le choix est mémorisé. Basculer pendant une session y met fin :
+  choisissez de nouveau le PC dans « Recopie de l’écran » sur l’iPhone.
+
+  « Wi-Fi uniquement » écarte réellement l’USB : le programme ne répond pas
+  sur la liaison USB, et une connexion qui arriverait malgré tout par ce
+  chemin est refusée. Il est donc inutile de désactiver le périphérique ou
+  sa carte réseau pour basculer (ne le faites surtout pas : cela empêche la
+  recopie par USB et, avec certains câbles, interrompt la charge). Si
+  « Apple Mobile Device Ethernet » a été désactivée auparavant, le programme
+  le signale quand vous choisissez « USB en priorité » : cliquez sur la
+  notification (ou sur « Activer la carte réseau USB… ») et répondez « Oui »
+  à la demande d’autorisation d’administrateur.
+
+À propos des données mobiles :
+- La recopie elle-même est un transfert local du téléphone vers le PC, par
+  le câble. Elle ne passe pas par l’opérateur et ne consomme pas de données
+  mobiles.
+- En revanche, tant que le partage de connexion est activé, Windows peut
+  faire passer le trafic Internet du PC lui-même par les données mobiles de
+  l’iPhone (typiquement quand le Wi-Fi de la maison n’a pas d’IPv6 et que
+  l’iPhone fournit l’IPv6 de l’opérateur).
+- Quand le programme s’en aperçoit, il affiche une notification : cliquez
+  dessus (ou sur « Économiser les données mobiles… ») et répondez « Oui » à
+  la demande d’autorisation d’administrateur. Une seule fois suffit. Dès
+  lors, le câble ne transporte plus que la recopie et le PC continue
+  d’utiliser son propre réseau ; même si le Wi-Fi tombe, le PC ne se rabat
+  pas sur les données du téléphone.
+- Laissez « Données cellulaires » activé sur l’iPhone : le désactiver
+  supprime aussi le partage de connexion, y compris la liaison locale par
+  le câble, et la recopie par USB s’arrête.
+- Si, plus tard, vous voulez que le PC utilise de nouveau l’accès Internet
+  du téléphone par le câble, annulez le réglage depuis une invite de
+  commandes ouverte en tant qu’administrateur (<n> est le numéro d’interface
+  de la carte Apple ; « netsh interface ipv4 show interfaces » l’affiche) :
+    netsh interface ipv4 set interface <n> ignoredefaultroutes=disabled
+    netsh interface ipv6 set interface <n> routerdiscovery=enabled ignoredefaultroutes=disabled
+
+Remarque : depuis iOS 16, Apple a désactivé l’ancienne capture d’écran
+filaire « QuickTime » (celle qui se passait du partage de connexion) ; ce
+programme ne l’utilise donc pas. La méthode décrite ci-dessus est la recopie
+filaire qui fonctionne avec les versions actuelles d’iOS.
+
+
+4. La fenêtre, la barre de contrôle et le plein écran
+-----------------------------------------------------
+- Taille de la fenêtre : téléphone à la verticale, la fenêtre occupe environ
+  90 % de la hauteur de l’écran ; à l’horizontale, environ la moitié de sa
+  largeur, et non la quasi-totalité de l’écran. Faites glisser le bord de la
+  fenêtre pour la redimensionner ; l’image garde ses proportions. La taille
+  et la position choisies sont mémorisées, séparément pour la verticale et
+  pour l’horizontale.
+- Déplacez la souris sur l’image : une barre de contrôle apparaît en bas ;
+  elle se masque après 3 secondes sans mouvement (sauf si le pointeur est
+  dessus).
+- À gauche de la barre de contrôle : USB ou Wi-Fi, et la résolution de
+  l’image. À droite : « USB en priorité | Wi-Fi uniquement », couper le son
+  (de ce programme seulement ; le volume de l’iPhone ne change pas), plus
+  (le menu complet) et plein écran. Si nécessaire, des boutons jaunes
+  apparaissent : « Économiser les données mobiles », « Activer la carte
+  réseau USB ».
+- Un clic droit n’importe où sur l’image ouvre lui aussi le menu complet.
+- Plein écran : double-cliquez sur l’image, ou appuyez sur F, F11 ou
+  Alt+Enter ; Esc permet d’en sortir. En plein écran, le pointeur et la
+  barre de contrôle se masquent ensemble après 3 secondes sans mouvement.
+- Rognage des bandes noires : quand l’écran du téléphone est plus large que
+  le film (un film en 16:9 lu en plein écran sur un iPhone, par exemple), le
+  téléphone recopie tout son écran, zones noires comprises. On peut les
+  rogner pour que la fenêtre épouse l’image sur ses quatre côtés :
+    Automatique : appuyez sur C, ou choisissez « Rogner automatiquement les
+                  bandes noires » dans le menu. Les bandes noires autour de
+                  l’image sont rognées et la fenêtre se resserre d’autant.
+                  Le rognage est conservé d’un film au suivant ; quand autre
+                  chose apparaît dans une bande et y reste (à la sortie de
+                  la lecture en plein écran, par exemple), l’image entière
+                  est de nouveau affichée en une seconde environ. Pour
+                  qu’une scène sombre ne soit pas prise pour des bandes,
+                  seules sont rognées les bandes identiques des deux côtés,
+                  présentes depuis 1,5 seconde environ et entourant une
+                  image qui bouge. Le choix est mémorisé.
+    À la main :   appuyez sur X, ou choisissez « Sélectionner la zone à
+                  afficher… » dans le menu. Le pointeur devient une croix :
+                  tracez un cadre autour de la partie à conserver, puis
+                  relâchez. Esc ou le bouton droit de la souris annule. Un
+                  cadre tracé à la main ne vaut que pour l’image en cours ;
+                  il disparaît quand le téléphone pivote ou se reconnecte.
+    Annuler :     choisissez « Aucun rognage » dans le menu (ou appuyez de
+                  nouveau sur C en mode automatique).
+- Toujours au premier plan : appuyez sur T, ou choisissez « Toujours au
+  premier plan » dans le menu. Couper le son : appuyez sur M.
+- Pendant la recopie, le PC ne se met pas en veille et n’éteint pas l’écran
+  de lui-même.
+- L’interface suit la langue d’affichage de Windows : anglais, chinois
+  traditionnel, chinois simplifié, japonais, coréen, espagnol, allemand,
+  français, vietnamien et thaï ; dans toute autre langue, l’interface est en
+  anglais. Pour en imposer une, utilisez l’option -ui (section 7).
+
+
+5. Modes qualité et performances
+--------------------------------
+Choisissez l’un des trois dans le menu ; le choix est mémorisé :
+  - « Qualité » : demande au téléphone la pleine résolution, garde un peu
+    plus de mise en tampon et ne saute aucune image. Idéal pour les films,
+    les présentations et le texte. La latence est légèrement supérieure à
+    celle du mode Équilibré.
+  - « Équilibré (adaptatif) » : le mode par défaut. Maintient la latence
+    aussi basse que possible sans saccades, en fonction de l’écran, de la
+    carte graphique et du réseau ; quand la carte ne peut pas décoder la
+    vidéo matériellement, il demande un flux allégé.
+  - « Performances » : demande un flux allégé (1920x1080 au maximum), réduit
+    la mise en tampon au minimum et remplace les images arrivées trop tard
+    par la plus récente. Latence la plus faible, mémoire et charge graphique
+    les plus basses : pour les jeux, ou pour un PC ancien.
+La latence et la fluidité changent aussitôt. La résolution du flux est
+décidée par le téléphone à la connexion ; un changement de résolution (ainsi
+que la mise en tampon plus profonde de « Qualité ») ne prend donc pleinement
+effet qu’à la connexion suivante (le programme le signale).
+
+
+6. Fichier journal et rapport de plantage
+-----------------------------------------
+- %LOCALAPPDATA%\MirrorDock\mirror_dock.log (« Ouvrir le fichier journal »
+  dans le menu). Chaque ligne est horodatée ; le journal de l’exécution
+  précédente est conservé sous le nom mirror_dock.previous.log ; un fichier
+  ne dépasse pas 8 Mo.
+- Toutes les 10 secondes, une ligne de statistiques sur l’image et le son
+  est écrite. Quand il n’y a pas de son ou que l’image n’est pas fluide,
+  elle montre où se situe le problème.
+- Si le programme se termine anormalement, mirror_dock_crash.txt (l’endroit
+  où cela s’est produit) et mirror_dock_crash.dmp sont laissés dans le même
+  dossier ; merci de les joindre quand vous signalez un problème.
+- Quand mirror_dock.exe est lancé depuis une invite de commandes, le journal
+  s’y affiche.
+
+
+7. Options avancées
+-------------------
+Créez un raccourci vers mirror_dock.exe et ajoutez les options à la suite de
+la « Cible », ou écrivez une option par ligne (sans le signe moins) dans
+%USERPROFILE%\.uxplayrc, par exemple :
+    n PC du salon
+    fs
+
+Options courantes :
+  -n nom         le nom affiché sur l’iPhone
+  -nh            ne pas ajouter @nom-du-PC au nom
+  -fs            démarrer en plein écran
+  -mode mode     quality, balanced (par défaut) ou performance ; sans cette
+                 option, le dernier choix fait dans le menu est repris
+  -crop auto     rogner automatiquement les bandes noires (off = aucun
+                 rognage) ; sans cette option, le dernier choix fait dans le
+                 menu est repris
+  -gpu auto      le GPU chargé du décodage et de l’affichage : auto (par
+                 défaut : celui qui pilote l’écran), integrated, discrete,
+                 software
+  -h264          n’utiliser que H.264 (par défaut, l’iPhone peut utiliser
+                 H.265 quand la carte graphique le décode matériellement)
+  -s LxH         demander cette résolution de flux (les modes n’y touchent
+                 alors plus)
+  -ui en         langue de l’interface : auto (par défaut), en, zh-TW,
+                 zh-CN, ja, ko, es, de, fr, vi, th
+  -vsync 20      diffuser le son 20 millisecondes après l’image (valeur
+                 négative possible ; pour affiner la synchronisation
+                 labiale)
+  -vsync no      désactiver la synchronisation par horodatage (lecture à
+                 l’arrivée)
+  -pin           un code PIN doit être saisi pour se connecter (il s’affiche
+                 dans une notification)
+  -nc            conserver la dernière image et la fenêtre quand l’iPhone
+                 arrête la recopie
+  -ca fichier    enregistrer la pochette de l’album dans un fichier pendant
+                 la lecture de musique
+  -d             journal détaillé pour le dépannage
+La plupart des autres options d’UxPlay fonctionnent toujours
+(mirror_dock.exe -h, dans une invite de commandes, en donne la liste). Les
+fonctions qui nécessitent GStreamer ou une autre plateforme ne font pas
+partie de ce programme (diffusion vidéo HLS, enregistrement MP4, pochette à
+l’écran, retransmission RTP, retournement ou rotation de l’image, balise
+Bluetooth LE). Si un ancien fichier de réglages contient de telles options,
+le journal note qu’elles ont été ignorées et le programme démarre
+normalement.
+
+
+8. Chiffres de référence
+------------------------
+Mesurés sur un portable de 2016 (Core i7-6700HQ, la puce graphique intégrée
+Intel HD Graphics 530 pilote l’écran, Windows 11). Ils ne sont donnés qu’à
+titre indicatif et varient d’un PC à l’autre :
+- Prêt à recevoir une connexion environ 0,5 seconde après le lancement (le
+  premier démarrage d’une copie fraîchement téléchargée est plus lent, le
+  temps que l’antivirus l’analyse) ; fermeture en 0,05 seconde environ.
+- Recopie avec décodage matériel H.265 : le décalage entre le son et l’image
+  se stabilise autour de 18 millisecondes, son et image synchronisés.
+- Le son utilise WASAPI en mode faible latence, l’image une swap chain DXGI
+  en mode flip, et les deux partagent une même ligne de temps.
+
+
+9. Recommandations
+------------------
+- Quand deux écrans dupliquent le bureau avec des fréquences d’actualisation
+  différentes (60 Hz et 50 Hz, par exemple), Windows n’en suit qu’un et le
+  mouvement est légèrement irrégulier sur l’autre. Si vous ne regardez qu’un
+  seul écran, réglez « Paramètres > Système > Affichage » pour n’afficher le
+  bureau que sur celui-ci.
+- Un portable donne le meilleur de lui-même sur secteur.
+
+
+10. Dépannage
+-------------
+- L’iPhone n’affiche pas le PC dans la liste : les deux doivent être sur le
+  même réseau Wi-Fi et le pare-feu doit autoriser le programme (section 1) ;
+  désactivez puis réactivez le Wi-Fi de l’iPhone.
+- Le câble est branché mais l’USB n’est pas utilisé : regardez l’état de
+  l’USB sur la deuxième ligne du menu. « Activez le partage de connexion » :
+  activez-le sur l’iPhone. « Carte réseau désactivée » : choisissez
+  « Activer la carte réseau USB… ». Vérifiez que « USB en priorité » est
+  bien sélectionné. Pendant une session, le passage à l’USB attend qu’elle
+  se termine : arrêtez la recopie sur l’iPhone, puis choisissez de nouveau
+  le PC.
+- Après avoir choisi « Wi-Fi uniquement », l’iPhone n’arrive pas à se
+  connecter : le téléphone se souvient peut-être encore du chemin USB.
+  Arrêtez la recopie sur l’iPhone, attendez quelques secondes et choisissez
+  de nouveau le PC ; si cela ne suffit pas, désactivez puis réactivez le
+  Wi-Fi de l’iPhone.
+- Pas de son : vérifiez si le bouton haut-parleur de la barre de contrôle
+  indique que le son est coupé, puis regardez les valeurs « audio » de la
+  ligne écrite toutes les 10 secondes dans le journal (des paquets, une
+  crête et des trames lues signifient que c’est le volume ou le mélangeur du
+  PC lui-même qui est baissé).
+- Ne remplacez pas le pilote de l’iPhone par libusb (Zadig et outils
+  similaires) : cela supprime le pilote d’Apple et la recopie par USB cesse
+  de fonctionner.
+- Les lèvres et la voix sont décalées : affinez avec -vsync et un nombre de
+  millisecondes (positif = son plus tard).
+- L’image saccade : essayez d’abord le mode « Performances » ; avec des
+  écrans dupliqués, voir la section 9.
+- L’image devient noire et le programme redémarre de lui-même : le pilote
+  graphique a été réinitialisé ou mis à jour. Le programme redémarre une
+  fois ; choisissez de nouveau le PC sur l’iPhone. Si cela se répète à bref
+  intervalle, le programme s’arrête et en affiche la raison : vérifiez le
+  pilote graphique.
+
+
+11. Mise à niveau depuis UxPlay for Windows (1.6 ou antérieur)
+--------------------------------------------------------------
+- Le programme s’appelle désormais MirrorDock et son exécutable est
+  mirror_dock.exe. Quittez l’ancien uxplay.exe avant de lancer le nouveau ;
+  l’ancien exécutable peut être supprimé.
+- Sur l’iPhone, le nom affiché dans « Recopie de l’écran » passe de
+  « UxPlay@nom-du-PC » à « MirrorDock@nom-du-PC ». Pour garder l’ancien nom,
+  ajoutez -n UxPlay.
+- Vos réglages (USB en priorité / Wi-Fi uniquement, mode, taille de la
+  fenêtre, etc.) sont repris au premier démarrage ; « Lancer au démarrage de
+  Windows », s’il était activé, est basculé sur le nouvel exécutable.
+- Le dossier des journaux est désormais %LOCALAPPDATA%\MirrorDock (l’ancien
+  dossier est renommé et réutilisé quand aucun programme ne s’en sert ; les
+  anciens fichiers journaux y restent).
+- Le fichier de réglages %USERPROFILE%\.uxplayrc et les fichiers de clés de
+  jumelage gardent leur nom et continuent de fonctionner.
+
+
+Licence : le programme dans son ensemble est sous GPL-3.0 ; son cœur de
+protocole AirPlay provient du projet open source UxPlay, et le moteur
+multimédia Windows (win_native) est sous MIT. Il contient FFmpeg (composants
+LGPL-2.1+), OpenSSL (Apache-2.0), libplist (LGPL-2.1+), LLVM libc++
+(Apache-2.0 WITH LLVM-exception) et winpthreads (MIT). Le code source et le
+texte intégral des licences se trouvent dans les dossiers « source » et
+« licenses ».

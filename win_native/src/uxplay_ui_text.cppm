@@ -1,9 +1,10 @@
 ﻿// SPDX-License-Identifier: MIT
 // User-interface text (tray menu, control bar, window status, notifications)
 // in the Windows display language: Traditional Chinese (zh-TW, zh-HK, zh-MO,
-// zh-Hant), Simplified Chinese (zh-CN, zh-SG, zh-Hans, zh) or English (every
-// other language).  The language is chosen once, before the engine creates
-// its window (native_media_start); log messages stay English.
+// zh-Hant), Simplified Chinese (zh-CN, zh-SG, zh-Hans, zh), Japanese, Korean,
+// Spanish, German, French, Vietnamese, Thai, or English (also for every other
+// language).  The language is chosen once, before the engine creates its
+// window (native_media_start); log messages stay English.
 export module uxplay_ui_text;
 
 import std;
@@ -11,11 +12,21 @@ import uxplay_status;
 
 export namespace uxplay
 {
-    enum class ui_language
+    // The order is the order of the texts in every row of the table, and
+    // (plus one) the numbering of native_media_settings::ui_language.
+    enum class ui_language : std::size_t
     {
         traditional_chinese,
         simplified_chinese,
-        english
+        english,
+        japanese,
+        korean,
+        spanish,
+        german,
+        french,
+        vietnamese,
+        thai,
+        count
     };
 
     enum class ui_text : std::size_t
@@ -105,6 +116,10 @@ export namespace uxplay
     // pure mapping of a BCP-47 language name to the interface language
     [[nodiscard]] ui_language ui_language_for(std::wstring_view windows_language);
 
+    // the language of an option value such as "ja" or "zh-TW" (the codes of
+    // ui_language_name, also "zh-TW"/"zh-CN"; case-insensitive), if it is one
+    [[nodiscard]] std::optional<ui_language> ui_language_from_code(std::string_view code);
+
     // the user's Windows display language (GetUserPreferredUILanguages)
     [[nodiscard]] outcome<ui_language_detection> detect_ui_language();
 
@@ -121,6 +136,7 @@ export namespace uxplay
     // locale for DirectWrite text formats (selects the matching CJK fallback font)
     [[nodiscard]] std::wstring_view ui_locale_name();
 
-    // short name for the log: "zh-Hant", "zh-Hans" or "en"
+    // short name for the log: "zh-Hant", "zh-Hans", "en", "ja", "ko", "es",
+    // "de", "fr", "vi" or "th"
     [[nodiscard]] std::string_view ui_language_name(ui_language language);
 }

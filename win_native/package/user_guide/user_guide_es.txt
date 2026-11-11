@@ -1,0 +1,349 @@
+﻿Guía de usuario de MirrorDock
+=============================
+
+MirrorDock muestra la imagen y reproduce el sonido de un iPhone o iPad en un
+equipo con Windows, por Wi-Fi o por el cable USB. Es un único archivo,
+mirror_dock.exe: no hay que instalar nada más.
+(Hasta la versión 1.6 se llamaba «UxPlay for Windows»; si actualiza desde
+esa versión, consulte la última sección.)
+
+Requisitos: Windows 10 u 11 (x64). El programa se adapta al equipo en el que
+se ejecuta: usa la tarjeta gráfica que controla el monitor (integrada o
+dedicada; Intel, AMD o NVIDIA; decodificación por software cuando la
+tarjeta no puede decodificar el video), lee la resolución y la frecuencia
+de actualización del monitor (y detecta cuándo se conecta o se retira uno),
+y usa el menor retardo que ofrece el dispositivo de audio. En otro equipo
+no hay que volver a configurar nada.
+
+
+1. Inicio y salida
+------------------
+- Haga doble clic en mirror_dock.exe. No se abre ninguna ventana de consola;
+  aparece un icono en el área de notificación (junto al reloj) y, la primera
+  vez, se muestra la notificación «Listo». Mientras no se conecte un
+  teléfono no hay ventana: todas las funciones están en el menú de ese
+  icono (clic izquierdo o derecho).
+- En aproximadamente medio segundo, el equipo aparece en «Duplicar
+  pantalla» en el iPhone.
+- Si aparece una «Alerta de seguridad de Windows», elija «Permitir» (una red
+  doméstica es una «red privada»). Si la canceló, el iPhone no puede
+  encontrar el equipo: abra «Seguridad de Windows > Firewall y protección de
+  red > Permitir una aplicación a través del firewall» y marque
+  mirror_dock.exe.
+- Solo se ejecuta una copia por nombre: si inicia el programa otra vez, la
+  copia que ya está en marcha se limita a mostrar la notificación «Ya se
+  está ejecutando».
+- Cerrar la ventana de video solo termina esa sesión de duplicación; el
+  programa sigue esperando la siguiente en segundo plano.
+- Para salir: menú del icono del área de notificación > «Salir» (se avisa al
+  iPhone y el equipo desaparece de su lista).
+- Para que se inicie junto con Windows: menú > «Iniciar con Windows» (elíjalo
+  de nuevo para desactivarlo; se configura solo para su cuenta de usuario y
+  no requiere permisos de administrador).
+- Si el programa no puede iniciarse (un puerto está en uso, una opción está
+  mal escrita), un cuadro de diálogo indica el motivo y la ubicación del
+  archivo de registro.
+
+
+2. Duplicación por Wi-Fi
+------------------------
+Conecte el iPhone y el equipo a la misma red Wi-Fi; después, en el iPhone,
+abra el Centro de control > «Duplicar pantalla» y elija
+«MirrorDock@nombre-del-equipo». La ventana de video aparece y pasa a primer
+plano. Cuando el teléfono se bloquea, iOS detiene la imagen mientras el
+sonido continúa; la imagen se reanuda al desbloquearlo (es normal).
+Este método no necesita ningún controlador ni gasta datos móviles.
+
+
+3. Duplicación por el cable USB
+-------------------------------
+AirPlay funciona a través de la conexión de red que el iPhone ofrece por su
+cable USB. Siempre que esa conexión existe, MirrorDock la prefiere, y cuando
+se desconecta el cable vuelve al Wi-Fi. Con el programa en marcha, las
+conexiones y desconexiones del cable se detectan en unos 2 segundos (una
+sesión en curso no se interrumpe: el cambio se hace cuando termina).
+
+  1. Instale el controlador USB de Apple (una sola vez): ejecute el archivo
+     install_apple_usb_support.cmd incluido (instala Apple Mobile Device
+     Support con winget), o instale «Dispositivos Apple» desde Microsoft
+     Store.
+  2. En el iPhone: Ajustes > Punto de acceso personal > active «Permitir a
+     otros conectarse» (en un iPhone en español de Latinoamérica:
+     Configuración > Compartir Internet) y, después, conecte el cable USB.
+     En Windows aparece un adaptador de red llamado «Apple Mobile Device
+     Ethernet» (172.20.10.x). Si el iPhone está conectado pero el punto de
+     acceso está desactivado, una notificación se lo recuerda al cabo de
+     unos 8 segundos (una vez por ejecución).
+  3. En el iPhone: Centro de control > Duplicar pantalla > MirrorDock.
+     La barra de control y el icono del área de notificación muestran «USB»
+     o «Wi-Fi», según la conexión que realmente se esté usando.
+  La segunda línea del menú muestra el estado de la conexión USB: no
+  conectado / active Punto de acceso personal / listo / adaptador de red
+  deshabilitado / solo carga.
+
+Cambiar entre USB y Wi-Fi (el cable puede seguir conectado para cargar):
+  Elija una de las dos opciones en la barra de control o en el menú:
+    - «Preferir USB»: se usa USB mientras el iPhone esté conectado y Punto
+      de acceso personal esté activado (es la opción predeterminada).
+    - «Solo Wi-Fi»: la duplicación siempre usa Wi-Fi; el cable solo carga.
+  La elección se recuerda. Si cambia durante una sesión, esa sesión termina:
+  vuelva a elegir el equipo en «Duplicar pantalla» en el iPhone.
+
+  «Solo Wi-Fi» deja el USB realmente fuera: el programa no responde por la
+  conexión USB, y si aun así llega una conexión por ella, se rechaza. Por
+  eso no hace falta deshabilitar el dispositivo ni su adaptador de red para
+  cambiar (no lo haga, por favor: impide la duplicación por USB y, con
+  algunos cables, corta la carga). Si «Apple Mobile Device Ethernet» se
+  deshabilitó antes, el programa lo indica cuando usted elige «Preferir
+  USB»: haga clic en la notificación (o en «Habilitar adaptador de red
+  USB…») y responda «Sí» en la solicitud de permisos de administrador.
+
+Sobre los datos móviles:
+- La duplicación en sí es una transferencia local del teléfono al equipo por
+  el cable. No pasa por el operador ni gasta datos móviles.
+- Sin embargo, mientras Punto de acceso personal está activado, Windows
+  puede enviar el tráfico de Internet del propio equipo por los datos
+  móviles del iPhone (suele ocurrir cuando el Wi-Fi de casa no tiene IPv6 y
+  el iPhone ofrece el IPv6 del operador).
+- Cuando el programa lo detecta, muestra una notificación: haga clic en ella
+  (o en «Ahorrar datos móviles…») y responda «Sí» en la solicitud de
+  permisos de administrador. Solo hace falta una vez. A partir de entonces,
+  por el cable solo viaja la duplicación y el equipo sigue usando su propia
+  red; aunque se pierda la conexión Wi-Fi, el equipo no recurre a los
+  datos del teléfono.
+- Deje activado «Datos móviles» en el iPhone («Datos celulares» en un iPhone
+  en español de Latinoamérica): al desactivarlo también desaparece Punto de
+  acceso personal, incluida la conexión local por el cable, y la
+  duplicación por USB se detiene.
+- Si más adelante quiere que el equipo vuelva a usar Internet del teléfono
+  por el cable, deshaga el cambio desde un símbolo del sistema abierto como
+  administrador (<n> es el número de interfaz del adaptador de Apple; lo
+  muestra «netsh interface ipv4 show interfaces»):
+    netsh interface ipv4 set interface <n> ignoredefaultroutes=disabled
+    netsh interface ipv6 set interface <n> routerdiscovery=enabled ignoredefaultroutes=disabled
+
+Nota: desde iOS 16, Apple desactivó la antigua captura de pantalla por cable
+«QuickTime» (la que no necesitaba punto de acceso), así que este programa no
+la usa; el método descrito arriba es la duplicación por cable que funciona
+con las versiones actuales de iOS.
+
+
+4. La ventana, la barra de control y la pantalla completa
+---------------------------------------------------------
+- Tamaño de la ventana: con el teléfono en vertical, la ventana ocupa cerca
+  del 90 % de la altura de la pantalla; en horizontal, alrededor de la mitad
+  del ancho, y no casi toda la pantalla. Arrastre el borde de la ventana
+  para cambiar su tamaño; la imagen mantiene sus proporciones. El tamaño y
+  la posición que elija se recuerdan, por separado para vertical y
+  horizontal.
+- Mueva el mouse sobre la imagen y aparecerá una barra de control en la
+  parte inferior; se oculta tras 3 segundos sin movimiento (no mientras el
+  puntero esté sobre ella).
+- Lado izquierdo de la barra de control: USB o Wi-Fi, y la resolución de la
+  imagen. Lado derecho: «Preferir USB | Solo Wi-Fi», silenciar (solo este
+  programa; el volumen del iPhone no cambia), más (el menú completo) y
+  pantalla completa. Cuando hace falta, aparecen botones amarillos:
+  «Ahorrar datos móviles», «Habilitar adaptador USB».
+- Un clic con el botón derecho en cualquier punto de la imagen también abre
+  el menú completo.
+- Pantalla completa: haga doble clic en la imagen, o presione F, F11 o
+  Alt+Enter; con Esc se sale. En pantalla completa, el puntero y la barra de
+  control se ocultan a la vez tras 3 segundos sin movimiento.
+- Recorte de las barras negras: cuando la pantalla del teléfono es más ancha
+  que la película (una película en 16:9 a pantalla completa en un iPhone,
+  por ejemplo), el teléfono duplica toda su pantalla, zonas negras
+  incluidas. Se pueden recortar para que la ventana se ajuste a la imagen
+  por los cuatro lados:
+    Automático: presione C, o elija «Recortar barras negras automáticamente»
+                en el menú. Las barras negras que rodean la imagen se
+                recortan y la ventana se reduce para ajustarse. El recorte
+                se mantiene al pasar de una película a la siguiente; cuando
+                en una barra aparece otra cosa y permanece (al salir de la
+                reproducción a pantalla completa, por ejemplo), la imagen
+                entera vuelve a mostrarse en aproximadamente un segundo.
+                Para no confundir una escena oscura con las barras, solo se
+                recortan las que son iguales en ambos lados, duran alrededor
+                de 1.5 segundos y rodean una imagen en movimiento. La
+                elección se recuerda.
+    A mano:     presione X, o elija «Seleccionar el área visible…» en el
+                menú. El puntero se convierte en una cruz: arrastre un
+                recuadro alrededor de la parte que quiere conservar y
+                suelte. Esc o el botón derecho del mouse cancelan. Un
+                recuadro trazado a mano solo vale para la imagen actual;
+                desaparece cuando el teléfono se gira o vuelve a conectarse.
+    Deshacer:   elija «Sin recorte» en el menú (o presione C otra vez en el
+                modo automático).
+- Siempre visible: presione T, o elija «Siempre visible» en el menú.
+  Silenciar: presione M.
+- Durante la duplicación, el equipo no entra en suspensión ni apaga la
+  pantalla por sí solo.
+- La interfaz sigue el idioma para mostrar de Windows: inglés, chino
+  tradicional, chino simplificado, japonés, coreano, español, alemán,
+  francés, vietnamita y tailandés; con cualquier otro idioma se muestra en
+  inglés. Para fijar uno, use la opción -ui (sección 7).
+
+
+5. Modos de calidad y rendimiento
+---------------------------------
+Elija uno de los tres en el menú; la elección se recuerda:
+  - «Calidad»: pide al teléfono la resolución completa, mantiene un poco más
+    de búfer y no omite ningún fotograma. Adecuado para películas,
+    presentaciones y texto. El retardo es algo mayor que en Equilibrado.
+  - «Equilibrado (adaptativo)»: el modo predeterminado. Mantiene el retardo
+    tan bajo como puede sin que la imagen se entrecorte, según el monitor,
+    la tarjeta gráfica y la red; cuando la tarjeta no puede decodificar el
+    video por hardware, pide una transmisión más ligera.
+  - «Rendimiento»: pide una transmisión más ligera (como máximo 1920x1080),
+    reduce el búfer al mínimo y sustituye los fotogramas que llegan tarde
+    por el más reciente. El menor retardo y el menor uso de memoria y de
+    tarjeta gráfica: para juegos, o para un equipo antiguo.
+El retardo y la fluidez cambian al instante. La resolución de la transmisión
+la decide el teléfono al conectarse, así que un cambio de resolución (y el
+búfer más amplio de «Calidad») surte pleno efecto en la siguiente conexión
+(el programa lo indica).
+
+
+6. Archivo de registro e informe de fallos
+------------------------------------------
+- %LOCALAPPDATA%\MirrorDock\mirror_dock.log («Abrir archivo de registro» en
+  el menú). Cada línea lleva la hora; el registro de la ejecución anterior
+  se conserva como mirror_dock.previous.log; un archivo ocupa como máximo
+  8 MB.
+- Cada 10 segundos se escribe una línea con estadísticas de imagen y sonido.
+  Cuando no hay sonido o la imagen no va fluida, esa línea indica dónde está
+  el problema.
+- Si el programa termina de forma anómala, en la misma carpeta quedan
+  mirror_dock_crash.txt (dónde ocurrió) y mirror_dock_crash.dmp; adjúntelos
+  cuando informe de un problema.
+- Cuando mirror_dock.exe se inicia desde un símbolo del sistema, el registro
+  se muestra allí.
+
+
+7. Opciones avanzadas
+---------------------
+Cree un acceso directo a mirror_dock.exe y agregue las opciones después del
+«Destino», o escriba una opción por línea (sin el signo menos) en
+%USERPROFILE%\.uxplayrc, por ejemplo:
+    n PC de la sala
+    fs
+
+Opciones habituales:
+  -n nombre      el nombre que se muestra en el iPhone
+  -nh            no agregar @nombre-del-equipo al nombre
+  -fs            iniciar en pantalla completa
+  -mode modo     quality, balanced (predeterminado) o performance; sin esta
+                 opción, se usa la última elección hecha en el menú
+  -crop auto     recortar barras negras automáticamente (off = sin recorte);
+                 sin esta opción, se usa la última elección hecha en el menú
+  -gpu auto      la GPU para decodificar y mostrar: auto (predeterminado: la
+                 que controla el monitor), integrated, discrete, software
+  -h264          usar solo H.264 (de forma predeterminada, el iPhone puede
+                 usar H.265 cuando la tarjeta gráfica lo decodifica por
+                 hardware)
+  -s AnchoxAlto  pedir esta resolución de transmisión (los modos ya no la
+                 modifican)
+  -ui en         idioma de la interfaz: auto (predeterminado), en, zh-TW,
+                 zh-CN, ja, ko, es, de, fr, vi, th
+  -vsync 20      reproducir el sonido 20 milisegundos después que la imagen
+                 (puede ser negativo; sirve para afinar la sincronización
+                 labial)
+  -vsync no      desactivar la sincronización por marcas de tiempo
+                 (reproducir según llega)
+  -pin           hay que escribir un PIN para conectarse (se muestra en una
+                 notificación)
+  -nc            conservar la última imagen y la ventana cuando el iPhone
+                 deja de duplicar
+  -ca archivo    guardar la portada del álbum en un archivo mientras suena
+                 música
+  -d             registro detallado para diagnosticar problemas
+La mayoría de las demás opciones de UxPlay siguen funcionando
+(mirror_dock.exe -h en un símbolo del sistema las muestra). Las funciones
+que necesitan GStreamer u otra plataforma no forman parte de este programa
+(transmisión de video HLS, grabación en MP4, portada en pantalla, reenvío
+RTP, voltear o girar la imagen, baliza Bluetooth LE). Si un archivo de
+configuración antiguo contiene esas opciones, el registro anota que se
+ignoraron y el programa se inicia con normalidad.
+
+
+8. Cifras de referencia
+-----------------------
+Medidas en un equipo portátil de 2016 (Core i7-6700HQ, la gráfica integrada
+Intel HD Graphics 530 controla el monitor, Windows 11). Son solo
+orientativas y varían de un equipo a otro:
+- Listo para recibir una conexión unos 0.5 segundos después de iniciarse (el
+  primer inicio de una copia recién descargada es más lento mientras el
+  antivirus la analiza); se cierra en unos 0.05 segundos.
+- Duplicación con decodificación H.265 por hardware: el retardo entre sonido
+  e imagen se estabiliza en unos 18 milisegundos, en sincronía.
+- El sonido usa WASAPI en modo de baja latencia y la imagen, una swap chain
+  DXGI de modelo flip; ambos comparten una misma línea de tiempo.
+
+
+9. Recomendaciones
+------------------
+- Cuando dos monitores duplican el escritorio con frecuencias de
+  actualización distintas (60 Hz y 50 Hz, por ejemplo), Windows solo sigue a
+  uno de ellos y el movimiento en el otro resulta algo irregular. Si solo
+  mira uno de los monitores, ajuste «Configuración > Sistema > Pantalla»
+  para que el escritorio se muestre solo en ese monitor.
+- Un equipo portátil rinde mejor conectado a la corriente.
+
+
+10. Solución de problemas
+-------------------------
+- El iPhone no muestra el equipo en la lista: ambos deben estar en la misma
+  red Wi-Fi y el firewall debe permitir el programa (sección 1); desactive
+  el Wi-Fi del iPhone y vuelva a activarlo.
+- El cable está conectado pero no se usa USB: mire el estado de USB en la
+  segunda línea del menú. «Active Punto de acceso personal»: actívelo en el
+  iPhone. «Adaptador de red deshabilitado»: elija «Habilitar adaptador de
+  red USB…». Asegúrese de que esté elegido «Preferir USB». Durante una
+  sesión, el cambio a USB espera a que termine: detenga la duplicación en
+  el iPhone y vuelva a elegir el equipo.
+- Tras elegir «Solo Wi-Fi», el iPhone no logra conectarse: puede que el
+  teléfono aún recuerde la ruta por USB. Detenga la duplicación en el
+  iPhone, espere unos segundos y vuelva a elegir el equipo; si no basta,
+  desactive y vuelva a activar el Wi-Fi del iPhone.
+- No hay sonido: revise si el botón del altavoz de la barra de control
+  indica silencio y, después, mire las cifras «audio» en la línea que el
+  registro escribe cada 10 segundos (si hay paquetes, un pico y tramas
+  reproducidas, lo que está bajado es el volumen o el mezclador del propio
+  equipo).
+- No sustituya el controlador del iPhone por libusb (Zadig y herramientas
+  similares): eso elimina el controlador de Apple y la duplicación por USB
+  deja de funcionar.
+- La voz no coincide con los labios: ajústelo con -vsync y un número de
+  milisegundos (positivo = el sonido se retrasa).
+- La imagen se entrecorta: pruebe primero el modo «Rendimiento»; con
+  monitores duplicados, consulte la sección 9.
+- La imagen se queda en negro y el programa se reinicia solo: el controlador
+  gráfico se restableció o se actualizó. El programa se reinicia una vez;
+  vuelva a elegir el equipo en el iPhone. Si ocurre varias veces en poco
+  tiempo, el programa se detiene y muestra el motivo: revise el controlador
+  gráfico.
+
+
+11. Actualizar desde UxPlay for Windows (1.6 o anterior)
+--------------------------------------------------------
+- El programa se llama ahora MirrorDock y su ejecutable es mirror_dock.exe.
+  Cierre el antiguo uxplay.exe antes de iniciar el nuevo; el ejecutable
+  antiguo se puede eliminar.
+- En el iPhone, el nombre que aparece en «Duplicar pantalla» pasa de
+  «UxPlay@nombre-del-equipo» a «MirrorDock@nombre-del-equipo». Para
+  conservar el nombre anterior, agregue -n UxPlay.
+- Su configuración (Preferir USB / Solo Wi-Fi, modo, tamaño de la ventana,
+  etc.) se traslada en el primer inicio; «Iniciar con Windows», si estaba
+  activado, pasa a apuntar al nuevo ejecutable.
+- La carpeta de registros es ahora %LOCALAPPDATA%\MirrorDock (la carpeta
+  antigua se renombra y se reutiliza cuando ningún programa la está usando;
+  los archivos de registro antiguos se quedan en ella).
+- El archivo de configuración %USERPROFILE%\.uxplayrc y los archivos de
+  claves de emparejamiento conservan sus nombres y siguen funcionando.
+
+
+Licencia: el programa en su conjunto es GPL-3.0; su núcleo del protocolo
+AirPlay procede del proyecto de código abierto UxPlay, y el motor multimedia
+para Windows (win_native) es MIT. Contiene FFmpeg (componentes LGPL-2.1+),
+OpenSSL (Apache-2.0), libplist (LGPL-2.1+), LLVM libc++ (Apache-2.0 WITH
+LLVM-exception) y winpthreads (MIT). El código fuente y los textos completos
+de las licencias están en las carpetas «source» y «licenses».

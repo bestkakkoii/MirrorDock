@@ -14,7 +14,7 @@
 //                   it is more than 2 refresh periods late; queue of 13
 //     balanced    - in order; more than 1 refresh period late; queue of 8
 //     performance - the newest due picture, older due ones are dropped;
-//                   queue of 5; bilinear scaling only
+//                   queue of 8; bilinear scaling only
 //   A picture that is late but has no due successor is still shown: the
 //   newest picture always reaches the screen.  A picture beyond the queue
 //   limit evicts the oldest one.

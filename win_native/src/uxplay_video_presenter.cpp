@@ -55,7 +55,10 @@ namespace uxplay
             case performance_mode::quality:
                 return presentation_policy{13, 2, false, false};
             case performance_mode::performance:
-                return presentation_policy{5, 0, true, true};
+                // the same queue as balanced: an iPhone's pictures arrive
+                // about 85 ms before their timestamps, i.e. 5 to 7 of them wait
+                // at 60 fps whatever the mode (a queue of 5 evicted them unseen)
+                return presentation_policy{8, 0, true, true};
             case performance_mode::balanced:
                 break;
             }

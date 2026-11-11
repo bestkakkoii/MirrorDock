@@ -43,17 +43,18 @@ namespace uxplay
         // bar must be noticed quickly
         constexpr std::int64_t crop_examination_interval_ns = 200 * clock::ns_per_ms;
         constexpr std::int64_t cropped_examination_interval_ns = 100 * clock::ns_per_ms;
-        // A stream starts this far above its resting delay at most: enough
-        // for its first pictures, and close enough that easing down stays
-        // within what the audio output follows without a skip (it corrects
-        // 0.3 % and resynchronizes hard at 30 ms).
-        constexpr std::int64_t start_headroom_ns = 28 * clock::ns_per_ms;
-        // Upper limit of the delay per mode: the presenter queues 13 / 8 / 5
-        // pictures (quality / balanced / performance), i.e. that many frame
-        // intervals of a 60 fps stream.  A larger delay would only make it
-        // evict pictures unseen: the picture would freeze while sound goes on.
-        constexpr std::int64_t balanced_delay_limit_ns = 135 * clock::ns_per_ms;
-        constexpr std::int64_t performance_delay_limit_ns = 85 * clock::ns_per_ms;
+        // Upper limit of the delay, and of the time a decoded picture waits
+        // for its presentation time: the presenter queues 13 pictures in
+        // quality mode and 8 otherwise, i.e. that many frame intervals of a
+        // 60 fps stream.  Waiting longer would only make it evict pictures
+        // unseen: the picture would freeze while sound goes on.
+        //
+        // What a picture normally waits is the delay plus the lead of the
+        // sender's timestamps: an iPhone stamps its pictures about 85 ms ahead
+        // of the moment they arrive (measured: 75 to 95 ms), so they wait
+        // about 100 ms at the resting delay.  The limit must stay above that,
+        // or pictures would be shown by arrival time instead of by timestamp.
+        constexpr std::int64_t standard_delay_limit_ns = 135 * clock::ns_per_ms;
         // a part framed by hand: not smaller than this (pixels of the picture),
         // and a frame around (nearly) everything shown changes nothing
         constexpr int smallest_crop_edge = 32;
@@ -147,12 +148,14 @@ namespace uxplay
             }
 
         private:
-            // the delay a stream starts with (mutex held)
+            // The delay a stream starts with (mutex held): its resting value.
+            // Pictures that come late raise it at once (update); starting
+            // higher only made the first pictures wait longer than the
+            // presenter queue is deep, and easing down afterwards is faster
+            // than the audio output can follow without a skip.
             [[nodiscard]] std::int64_t start_delay() const
             {
-                std::int64_t const resting =
-                    std::clamp(std::max(audio_floor_ns, video_margin_ns), minimum_delay_ns, delay_limit_ns);
-                return std::min(delay_limit_ns, std::max(resting, std::min(initial_delay_ns, resting + start_headroom_ns)));
+                return std::clamp(std::max(audio_floor_ns, video_margin_ns), minimum_delay_ns, delay_limit_ns);
             }
 
             void update(std::int64_t now_ns)
@@ -226,6 +229,7 @@ namespace uxplay
             // (time a picture was decoded - its timestamp) since the last
             // statistics line: negative when pictures are ready early
             std::int64_t lateness_minimum_ns = std::numeric_limits<std::int64_t>::max();
+            std::int64_t lateness_maximum_ns = std::numeric_limits<std::int64_t>::min();
             std::int64_t lateness_sum_ns = 0;
             std::uint64_t lateness_count = 0;
         };
@@ -246,6 +250,12 @@ namespace uxplay
             std::uint64_t empty_outputs = 0; // decoder accepted the packet but produced nothing
             std::uint64_t decoded_frames = 0;
             float peak = 0.0F; // largest |sample| decoded
+            // (time a packet arrived - its timestamp) since the last
+            // statistics line: negative when the sound arrives early
+            std::int64_t lateness_minimum_ns = std::numeric_limits<std::int64_t>::max();
+            std::int64_t lateness_maximum_ns = std::numeric_limits<std::int64_t>::min();
+            std::int64_t lateness_sum_ns = 0;
+            std::uint64_t lateness_count = 0;
         };
 
         // Automatic crop, per decode thread: the CPU copy of a picture's
@@ -265,6 +275,8 @@ namespace uxplay
             std::uint64_t failures = 0;
             int disagreements = 0;   // examinations in a row at which the presenter showed something else
             int reconciliations = 0; // times in a row the presenter was told again
+            int picture_width = 0;   // of the picture examined last
+            int picture_height = 0;
         };
 
         std::string level_text(float peak)
@@ -351,7 +363,7 @@ namespace uxplay
         applied_audio_latency.store(audio_latency);
         std::int64_t video_margin = refresh / 2 + 4 * clock::ns_per_ms;
         std::int64_t audio_floor = audio_latency + 12 * clock::ns_per_ms;
-        std::int64_t delay_limit = balanced_delay_limit_ns;
+        std::int64_t delay_limit = standard_delay_limit_ns;
         switch (selected)
         {
         case performance_mode::quality:
@@ -363,7 +375,6 @@ namespace uxplay
         case performance_mode::performance:
             video_margin = refresh / 2 + 2 * clock::ns_per_ms;
             audio_floor = audio_latency + 8 * clock::ns_per_ms;
-            delay_limit = performance_delay_limit_ns;
             break;
         case performance_mode::balanced:
             break;
@@ -478,11 +489,15 @@ namespace uxplay
             inspection.reconciliations = 0;
         }
         std::int64_t const now_ns = clock::now_ns();
-        if (now_ns < inspection.next_examination_ns)
+        // every picture while the detector tolerates content in a bar: the
+        // next one may settle it
+        if (now_ns < inspection.next_examination_ns && !inspection.detector.grace_deadline())
         {
             return std::nullopt;
         }
         inspection.reading = true;
+        inspection.picture_width = picture.width();
+        inspection.picture_height = picture.height();
         std::optional<picture_region> decision;
         status const read = inspection.luma.read(picture, [&inspection, &decision, now_ns](luma_view const &view)
         {
@@ -654,18 +669,45 @@ namespace uxplay
             video_codec codec = video_codec::h264;
             bool release_now = false;
             bool more_input_ready = false;
+            bool crop_grace_ended = false;
+            // the crop detector tolerates content in a bar until then, and
+            // must be told when no picture came by that time
+            std::optional<std::int64_t> const crop_deadline =
+                crop.load() == crop_mode::automatic ? inspection.detector.grace_deadline() : std::nullopt;
             {
                 std::unique_lock lock{pipeline.mutex};
-                pipeline.wake.wait(lock, [&pipeline, &flush_needed]
+                auto const work_waits = [&pipeline, &flush_needed]
                 {
                     // a pause holds the stream back, but not the one unit
                     // that brings out pictures the decoder still holds
                     return pipeline.stopping || pipeline.release_decoder ||
                            (!pipeline.queue.empty() && (!pipeline.paused || flush_needed));
-                });
+                };
+                if (crop_deadline)
+                {
+                    std::int64_t const remaining_ns = std::max<std::int64_t>(*crop_deadline - clock::now_ns(), 0);
+                    crop_grace_ended = !pipeline.wake.wait_for(lock, std::chrono::nanoseconds{remaining_ns}, work_waits);
+                }
+                else
+                {
+                    pipeline.wake.wait(lock, work_waits);
+                }
                 if (pipeline.stopping)
                 {
                     return;
+                }
+                if (crop_grace_ended)
+                {
+                    // The stream went still with content in a bar of the crop:
+                    // the whole picture is shown (applied under this lock, so
+                    // not for a session that ended).
+                    if (std::optional<picture_region> const whole = inspection.detector.expire(clock::now_ns());
+                        whole && pipeline.codec && pipeline.generation == decoder_generation)
+                    {
+                        apply_detected_crop(source, *whole, inspection.generation, inspection.picture_width,
+                                            inspection.picture_height);
+                    }
+                    continue;
                 }
                 if (pipeline.release_decoder)
                 {
@@ -782,6 +824,7 @@ namespace uxplay
                     std::int64_t const lateness_ns = ready_ns - decoded.pts_ns;
                     timeline.observe_video(ready_ns, lateness_ns);
                     pipeline.lateness_minimum_ns = std::min(pipeline.lateness_minimum_ns, lateness_ns);
+                    pipeline.lateness_maximum_ns = std::max(pipeline.lateness_maximum_ns, lateness_ns);
                     pipeline.lateness_sum_ns += lateness_ns;
                     ++pipeline.lateness_count;
                     // bounded from now: a picture never waits longer than the
@@ -877,6 +920,7 @@ namespace uxplay
             bool video_hardware = false;
             bool video_session = false;
             std::int64_t lateness_minimum_ns = 0;
+            std::int64_t lateness_maximum_ns = 0;
             std::int64_t lateness_mean_ns = 0;
             {
                 video_pipeline &flow = video[source_index(source)];
@@ -891,9 +935,11 @@ namespace uxplay
                 if (flow.lateness_count > 0)
                 {
                     lateness_minimum_ns = flow.lateness_minimum_ns;
+                    lateness_maximum_ns = flow.lateness_maximum_ns;
                     lateness_mean_ns = flow.lateness_sum_ns / static_cast<std::int64_t>(flow.lateness_count);
                 }
                 flow.lateness_minimum_ns = std::numeric_limits<std::int64_t>::max();
+                flow.lateness_maximum_ns = std::numeric_limits<std::int64_t>::min();
                 flow.lateness_sum_ns = 0;
                 flow.lateness_count = 0;
             }
@@ -904,11 +950,13 @@ namespace uxplay
             // does not keep it awake.
             window->set_stream_active(video_session);
             log::info("{} video {}x{}: {} units received, {} decoded in total ({}), {} decode failures, decoded "
-                      "min {:.1f} mean {:.1f} ms after its timestamp | presented {} (+{}), dropped late +{} overflow "
-                      "+{} | lateness p50 {:.1f} p95 {:.1f} ms, queue peak {}, wake overshoot {:.1f} ms | mode {}",
+                      "min {:.1f} mean {:.1f} max {:.1f} ms after its timestamp | presented {} (+{}), dropped late "
+                      "+{} overflow +{} | lateness p50 {:.1f} p95 {:.1f} ms, queue peak {}, wake overshoot {:.1f} ms "
+                      "| mode {}",
                       media_source_name(source), interval.stream_width, interval.stream_height, video_received,
                       video_decoded, video_hardware ? "hardware" : "software", video_failures,
                       static_cast<double>(lateness_minimum_ns) / 1e6, static_cast<double>(lateness_mean_ns) / 1e6,
+                      static_cast<double>(lateness_maximum_ns) / 1e6,
                       stats.presented, stats.presented - presented_before, stats.dropped_late - late_before,
                       stats.dropped_overflow - overflow_before, static_cast<double>(interval.lateness_p50_ns) / 1e6,
                       static_cast<double>(interval.lateness_p95_ns) / 1e6, interval.peak_queue_depth,
@@ -922,6 +970,9 @@ namespace uxplay
             std::uint64_t failures = 0;
             std::uint64_t decoded_frames = 0;
             float peak = 0.0F;
+            std::int64_t audio_lateness_minimum_ns = 0;
+            std::int64_t audio_lateness_maximum_ns = 0;
+            std::int64_t audio_lateness_mean_ns = 0;
             {
                 audio_pipeline &flow = audio_pipelines[source_index(source)];
                 std::scoped_lock pipeline_lock{flow.mutex};
@@ -930,16 +981,29 @@ namespace uxplay
                 decoded_frames = std::exchange(flow.decoded_frames, 0);
                 peak = std::exchange(flow.peak, 0.0F);
                 failures = flow.failures;
+                if (flow.lateness_count > 0)
+                {
+                    audio_lateness_minimum_ns = flow.lateness_minimum_ns;
+                    audio_lateness_maximum_ns = flow.lateness_maximum_ns;
+                    audio_lateness_mean_ns = flow.lateness_sum_ns / static_cast<std::int64_t>(flow.lateness_count);
+                }
+                flow.lateness_minimum_ns = std::numeric_limits<std::int64_t>::max();
+                flow.lateness_maximum_ns = std::numeric_limits<std::int64_t>::min();
+                flow.lateness_sum_ns = 0;
+                flow.lateness_count = 0;
             }
             audio_flow const played = audio->take_flow(source);
             // audio: where a silent session loses its sound (no packets, decoder
             // output empty or all zero, nothing played, or volume 0)
             log::info("{}: presented {} dropped {} | sync delay {:.1f} ms | audio {} packets ({} empty, {} failed "
-                      "total), decoded {} frames peak {}, played {} frames, volume x{:.2f}{} | audio device "
-                      "latency {:.1f} ms",
+                      "total), arrived min {:.1f} mean {:.1f} max {:.1f} ms after their timestamps, decoded {} frames "
+                      "peak {}, played {} frames, volume x{:.2f}{} | audio device latency {:.1f} ms",
                       media_source_name(source), stats.presented, stats.dropped,
                       static_cast<double>(timelines[source_index(source)].delay()) / 1e6, packets, empty_outputs,
-                      failures, decoded_frames, level_text(peak), played.played_frames, played.gain,
+                      failures, static_cast<double>(audio_lateness_minimum_ns) / 1e6,
+                      static_cast<double>(audio_lateness_mean_ns) / 1e6,
+                      static_cast<double>(audio_lateness_maximum_ns) / 1e6, decoded_frames, level_text(peak),
+                      played.played_frames, played.gain,
                       played.muted ? " (muted here)" : "",
                       static_cast<double>(audio->device_latency_ns()) / 1e6);
         }
@@ -1338,6 +1402,13 @@ namespace uxplay
         audio_pipeline &pipeline = impl->audio_pipelines[source_index(source)];
         std::scoped_lock lock{pipeline.mutex};
         ++pipeline.packets;
+        {
+            std::int64_t const lateness_ns = arrival_time_ns - media_time_ns;
+            pipeline.lateness_minimum_ns = std::min(pipeline.lateness_minimum_ns, lateness_ns);
+            pipeline.lateness_maximum_ns = std::max(pipeline.lateness_maximum_ns, lateness_ns);
+            pipeline.lateness_sum_ns += lateness_ns;
+            ++pipeline.lateness_count;
+        }
         if (!pipeline.decoder)
         {
             return;

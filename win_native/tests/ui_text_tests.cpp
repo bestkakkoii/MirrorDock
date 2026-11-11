@@ -37,7 +37,8 @@ int main()
     check(ui_language_for(L"zh-Hans-HK") == ui_language::simplified_chinese, "the script subtag wins over the region");
     check(ui_language_for(L"zh") == ui_language::simplified_chinese, "plain zh is Simplified Chinese");
     check(ui_language_for(L"en-US") == ui_language::english, "en-US is English");
-    check(ui_language_for(L"ja-JP") == ui_language::english, "any other language falls back to English");
+    check(ui_language_for(L"ja-JP") == ui_language::japanese, "ja-JP is Japanese");
+    check(ui_language_for(L"pt-BR") == ui_language::english, "any other language falls back to English");
     check(ui_language_for(L"zhx-TW") == ui_language::english, "only the exact zh language subtag counts");
     check(ui_language_for(L"") == ui_language::english, "an empty name is English");
 

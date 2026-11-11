@@ -5,7 +5,7 @@ usage: python -I package_zip.py <build_dir> <source_dir> <msys2_clang64_dir> <de
 
 Contents: stripped mirror_dock.exe (statically linked: it needs only Windows
 system DLLs, so no DLL is bundled; the collector reports any that appear),
-the Traditional Chinese user guide, licence texts of every statically linked
+the user guide in ten languages, licence texts of every statically linked
 library and the complete corresponding source (LGPL relinking: rebuild from
 it with win_native/build_scripts).
 """
@@ -20,6 +20,8 @@ import zipfile
 PRODUCT_FOLDER = "MirrorDock"
 EXECUTABLE = "mirror_dock.exe"
 SOURCE_FOLDER = "mirror_dock"
+# one user guide per interface language (win_native/package/user_guide)
+GUIDE_LANGUAGES = ["de", "en", "es", "fr", "ja", "ko", "th", "vi", "zh_cn", "zh_tw"]
 
 # local tool state (.claude, .vs, .vscode) is not part of the corresponding source
 SOURCE_EXCLUDES = {".git", ".claude", ".vs", ".vscode", "build", "dist", "__pycache__"}
@@ -52,7 +54,16 @@ def main():
     collector = os.path.join(os.path.dirname(os.path.abspath(__file__)), "collect_dlls.py")
     run([sys.executable, "-I", collector, objdump, exe, os.path.join(clang64, "bin"), app])
 
-    shutil.copy2(os.path.join(source_dir, "win_native", "package", "user_guide_zh_tw.txt"), app)
+    # the user guide in every language of the interface
+    guides = os.path.join(source_dir, "win_native", "package", "user_guide")
+    guide_files = sorted(name for name in os.listdir(guides) if name.startswith("user_guide_") and name.endswith(".txt"))
+    if len(guide_files) != len(GUIDE_LANGUAGES) or any(
+            f"user_guide_{code}.txt" not in guide_files for code in GUIDE_LANGUAGES):
+        shutil.rmtree(staging)
+        sys.exit(f"user guides found: {guide_files}; expected one per language: {GUIDE_LANGUAGES}")
+    os.makedirs(os.path.join(app, "user_guide"))
+    for name in guide_files:
+        shutil.copy2(os.path.join(guides, name), os.path.join(app, "user_guide", name))
     shutil.copy2(os.path.join(source_dir, "win_native", "package", "run_with_console_log.cmd"), app)
     shutil.copy2(os.path.join(source_dir, "win_native", "package", "install_apple_usb_support.cmd"), app)
     licenses = {

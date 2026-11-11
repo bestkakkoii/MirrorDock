@@ -1,0 +1,369 @@
+﻿MirrorDock – Benutzerhandbuch
+=============================
+
+MirrorDock zeigt das Bild eines iPhone oder iPad auf einem Windows-PC an und
+gibt dessen Ton wieder – über Wi-Fi oder über das USB-Kabel. Das Programm
+besteht aus einer einzigen Datei, mirror_dock.exe; sonst muss nichts
+installiert werden.
+(Bis Version 1.6 hieß es „UxPlay for Windows“. Wenn Sie von einer älteren
+Version umsteigen, lesen Sie bitte den letzten Abschnitt.)
+
+Voraussetzungen: Windows 10 oder 11 (x64). Das Programm stellt sich auf den
+PC ein, auf dem es läuft: Es nutzt die Grafikkarte, an der der Monitor hängt
+(integriert oder dediziert; Intel, AMD oder NVIDIA; kann die Karte das Video
+nicht dekodieren, übernimmt die Software-Dekodierung), liest Auflösung und
+Bildwiederholfrequenz des Monitors aus (und bemerkt, wenn ein Monitor
+angeschlossen oder entfernt wird) und arbeitet mit der geringsten
+Verzögerung, die das Audiogerät erlaubt. Auf einem anderen PC muss nichts
+neu eingerichtet werden.
+
+
+1. Starten und Beenden
+----------------------
+- Doppelklicken Sie auf mirror_dock.exe. Es öffnet sich kein
+  Konsolenfenster; im Infobereich (neben der Uhr) erscheint ein Symbol, und
+  beim ersten Start wird die Benachrichtigung „Bereit“ angezeigt. Solange
+  kein Smartphone verbunden ist, gibt es kein Fenster: Alle Funktionen
+  finden Sie im Menü dieses Symbols (Links- oder Rechtsklick).
+- Nach etwa einer halben Sekunde erscheint der PC auf dem iPhone unter
+  „Bildschirmsynchronisierung“.
+- Erscheint ein „Windows-Sicherheitshinweis“, wählen Sie „Zulassen“ (ein
+  Heimnetzwerk ist ein „privates Netzwerk“). Haben Sie den Hinweis
+  abgebrochen, findet das iPhone den PC nicht: Öffnen Sie dann
+  „Windows-Sicherheit > Firewall & Netzwerkschutz > Zugriff von App durch
+  Firewall zulassen“ und setzen Sie das Häkchen bei mirror_dock.exe.
+- Pro Name läuft nur eine Instanz: Starten Sie das Programm ein zweites
+  Mal, zeigt die laufende Instanz lediglich die Benachrichtigung „Wird
+  bereits ausgeführt“ an.
+- Wenn Sie das Videofenster schließen, endet nur diese eine Spiegelung; das
+  Programm wartet im Hintergrund auf die nächste.
+- Beenden: Menü des Symbols im Infobereich > „Beenden“ (das iPhone wird
+  benachrichtigt, und der PC verschwindet aus seiner Liste).
+- Zusammen mit Windows starten: Menü > „Mit Windows starten“ (erneut
+  wählen, um es wieder auszuschalten; die Einstellung gilt nur für Ihr
+  Benutzerkonto und erfordert keine Administratorrechte).
+- Kann das Programm nicht starten (ein Port ist belegt, eine Option ist
+  falsch geschrieben), nennt ein Dialogfeld den Grund und den Speicherort
+  der Protokolldatei.
+
+
+2. Spiegelung über Wi-Fi
+------------------------
+Verbinden Sie iPhone und PC mit demselben Wi-Fi-Netzwerk. Öffnen Sie dann
+auf dem iPhone Kontrollzentrum > Bildschirmsynchronisierung und wählen Sie
+„MirrorDock@Computername“. Das Videofenster erscheint und kommt in den
+Vordergrund. Wird das Smartphone gesperrt, hält iOS das Bild an, während der
+Ton weiterläuft; nach dem Entsperren geht es weiter (das ist normal).
+Dieser Weg benötigt keinen Treiber und verbraucht keine mobilen Daten.
+
+
+3. Spiegelung über das USB-Kabel
+--------------------------------
+AirPlay läuft dabei über die Netzwerkverbindung, die das iPhone über sein
+USB-Kabel bereitstellt. Solange diese Verbindung besteht, bevorzugt
+MirrorDock sie; wird das Kabel abgezogen, kehrt das Programm zu Wi-Fi
+zurück. Während es läuft, reagiert es innerhalb von etwa 2 Sekunden auf das
+Anschließen und Abziehen (eine laufende Sitzung wird nicht unterbrochen:
+Der Wechsel erfolgt, sobald sie endet).
+
+  1. Installieren Sie den USB-Treiber von Apple (einmalig): Führen Sie die
+     beiliegende Datei install_apple_usb_support.cmd aus (sie installiert
+     Apple Mobile Device Support mit winget) oder installieren Sie
+     „Apple-Geräte“ aus dem Microsoft Store.
+  2. Auf dem iPhone: Einstellungen > Persönlicher Hotspot > „Zugriff für
+     andere erlauben“ aktivieren, dann das USB-Kabel anschließen. Windows
+     erhält einen Netzwerkadapter namens „Apple Mobile Device Ethernet“
+     (172.20.10.x). Ist das iPhone angeschlossen, der Hotspot aber
+     ausgeschaltet, erinnert Sie nach etwa 8 Sekunden eine Benachrichtigung
+     daran (einmal pro Programmlauf).
+  3. Auf dem iPhone: Kontrollzentrum > Bildschirmsynchronisierung >
+     MirrorDock.
+     Die Steuerleiste und das Symbol im Infobereich zeigen „USB“ oder
+     „Wi-Fi“ an, je nachdem, was tatsächlich genutzt wird.
+  Die zweite Zeile des Menüs zeigt den Zustand der USB-Verbindung: nicht
+  angeschlossen / persönlichen Hotspot aktivieren / bereit /
+  Netzwerkadapter deaktiviert / nur Laden.
+
+Zwischen USB und Wi-Fi wechseln (das Kabel kann zum Laden angeschlossen
+bleiben):
+  Wählen Sie in der Steuerleiste oder im Menü eine der beiden
+  Möglichkeiten:
+    - „USB bevorzugen“: USB wird genutzt, solange das iPhone angeschlossen
+      und der persönliche Hotspot aktiviert ist (Standard).
+    - „Nur Wi-Fi“: Die Spiegelung läuft immer über Wi-Fi; das Kabel lädt
+      nur.
+  Die Auswahl wird gespeichert. Ein Wechsel während einer Sitzung beendet
+  diese Sitzung: Wählen Sie den PC auf dem iPhone unter
+  „Bildschirmsynchronisierung“ erneut aus.
+
+  „Nur Wi-Fi“ hält USB wirklich außen vor: Das Programm antwortet auf der
+  USB-Verbindung nicht, und eine Verbindung, die trotzdem darüber ankommt,
+  wird abgewiesen. Zum Umschalten müssen Sie also weder das Gerät noch
+  seinen Netzwerkadapter deaktivieren (bitte tun Sie das nicht: Es legt die
+  USB-Spiegelung lahm und unterbricht bei manchen Kabeln das Laden). Wurde
+  „Apple Mobile Device Ethernet“ früher einmal deaktiviert, weist das
+  Programm darauf hin, sobald Sie „USB bevorzugen“ wählen: Klicken Sie auf
+  die Benachrichtigung (oder auf „USB-Netzwerkadapter aktivieren…“) und
+  bestätigen Sie die Administratorabfrage mit „Ja“.
+
+Zu den mobilen Daten:
+- Die Spiegelung selbst ist eine lokale Übertragung vom Smartphone zum PC
+  über das Kabel. Sie läuft nicht über den Mobilfunkanbieter und verbraucht
+  keine mobilen Daten.
+- Solange der persönliche Hotspot aktiviert ist, kann Windows allerdings
+  den eigenen Internetverkehr des PCs über die mobilen Daten des iPhone
+  leiten (typischerweise, wenn das heimische Wi-Fi kein IPv6 bietet, das
+  iPhone aber das IPv6 des Mobilfunkanbieters).
+- Bemerkt das Programm dies, zeigt es eine Benachrichtigung an: Klicken Sie
+  darauf (oder auf „Mobile Daten sparen…“) und bestätigen Sie die
+  Administratorabfrage mit „Ja“. Das ist nur einmal nötig. Danach überträgt
+  das Kabel nur noch die Spiegelung, und der PC bleibt in seinem eigenen
+  Netzwerk; selbst wenn das Wi-Fi ausfällt, weicht der PC nicht auf die
+  mobilen Daten des Smartphones aus.
+- Lassen Sie „Mobile Daten“ auf dem iPhone eingeschaltet: Schalten Sie sie
+  aus, verschwindet auch der persönliche Hotspot samt der lokalen
+  Verbindung über das Kabel, und die USB-Spiegelung endet.
+- Soll der PC später doch wieder über das Kabel das Internet des
+  Smartphones nutzen, machen Sie die Einstellung in einer
+  Administrator-Eingabeaufforderung rückgängig (<n> ist die
+  Schnittstellennummer des Apple-Adapters;
+  „netsh interface ipv4 show interfaces“ zeigt sie an):
+    netsh interface ipv4 set interface <n> ignoredefaultroutes=disabled
+    netsh interface ipv6 set interface <n> routerdiscovery=enabled ignoredefaultroutes=disabled
+
+Hinweis: Seit iOS 16 hat Apple die ältere kabelgebundene Bildschirmaufnahme
+per „QuickTime“ abgeschaltet (jene, die ohne Hotspot auskam); dieses
+Programm verwendet sie daher nicht. Der oben beschriebene Weg ist die
+kabelgebundene Spiegelung, die mit aktuellem iOS funktioniert.
+
+
+4. Fenster, Steuerleiste und Vollbild
+-------------------------------------
+- Fenstergröße: Steht das Smartphone hochkant, nimmt das Fenster etwa 90 %
+  der Bildschirmhöhe ein; quer gedreht ist es etwa halb so breit wie der
+  Bildschirm und füllt ihn bei Weitem nicht aus. Ziehen Sie am Fensterrand,
+  um die Größe zu ändern; das Bild behält sein Seitenverhältnis. Größe und
+  Position, die Sie wählen, werden gespeichert – getrennt für hochkant und
+  quer.
+- Bewegen Sie die Maus über das Bild, erscheint unten eine Steuerleiste;
+  nach 3 Sekunden ohne Bewegung blendet sie sich wieder aus (nicht, solange
+  der Mauszeiger auf ihr steht).
+- Links in der Steuerleiste: USB oder Wi-Fi und die Bildauflösung.
+  Rechts: „USB bevorzugen | Nur Wi-Fi“, Stummschalten (nur dieses Programm;
+  die Lautstärke des iPhone bleibt unverändert), Mehr (das vollständige
+  Menü) und Vollbild. Bei Bedarf erscheinen gelbe Schaltflächen: „Mobile
+  Daten sparen“, „USB-Adapter aktivieren“.
+- Ein Rechtsklick an beliebiger Stelle im Bild öffnet ebenfalls das
+  vollständige Menü.
+- Vollbild: Doppelklicken Sie auf das Bild oder drücken Sie F, F11 oder
+  Alt+Enter; mit Esc verlassen Sie es. Im Vollbild werden Mauszeiger und
+  Steuerleiste nach 3 Sekunden ohne Bewegung gemeinsam ausgeblendet.
+- Schwarze Balken abschneiden: Ist das Display des Smartphones breiter als
+  der Film (etwa ein 16:9-Film, der auf einem iPhone im Vollbild läuft),
+  überträgt das Smartphone seinen gesamten Bildschirm samt der schwarzen
+  Flächen. Diese lassen sich abschneiden, sodass das Fenster an allen vier
+  Seiten am Bild anliegt:
+    Automatisch: Drücken Sie C oder wählen Sie im Menü „Schwarze Balken
+                 automatisch abschneiden“. Schwarze Balken rund um das Bild
+                 werden abgeschnitten, und das Fenster schrumpft passend
+                 dazu. Der Zuschnitt bleibt erhalten, wenn auf einen Film der
+                 nächste folgt; erscheint in einem Balken etwas anderes und
+                 bleibt dort (etwa beim Verlassen der Vollbildwiedergabe),
+                 wird innerhalb von etwa einer Sekunde wieder das ganze Bild
+                 gezeigt. Damit eine dunkle Szene nicht für Balken gehalten
+                 wird, werden nur Balken abgeschnitten, die auf beiden Seiten
+                 gleich sind, etwa 1,5 Sekunden bestehen und ein bewegtes
+                 Bild umgeben. Die Auswahl wird gespeichert.
+    Von Hand:    Drücken Sie X oder wählen Sie im Menü „Bildausschnitt
+                 auswählen…“. Der Mauszeiger wird zum Kreuz: Ziehen Sie
+                 einen Rahmen um den Teil, den Sie behalten möchten, und
+                 lassen Sie los. Esc oder die rechte Maustaste bricht ab.
+                 Ein von Hand gezogener Rahmen gilt nur für das aktuelle
+                 Bild; er verfällt, wenn das Smartphone gedreht wird oder
+                 sich neu verbindet.
+    Rückgängig:  Wählen Sie im Menü „Kein Zuschnitt“ (oder drücken Sie im
+                 automatischen Modus erneut C).
+- Immer im Vordergrund: Drücken Sie T oder wählen Sie im Menü „Immer im
+  Vordergrund“. Stummschalten: Drücken Sie M.
+- Während der Spiegelung wechselt der PC nicht von selbst in den
+  Standbymodus und schaltet den Bildschirm nicht ab.
+- Die Oberfläche richtet sich nach der Windows-Anzeigesprache: Englisch,
+  traditionelles Chinesisch, vereinfachtes Chinesisch, Japanisch,
+  Koreanisch, Spanisch, Deutsch, Französisch, Vietnamesisch und Thai; bei
+  jeder anderen Sprache erscheint sie auf Englisch. Um eine Sprache fest
+  vorzugeben, verwenden Sie die Option -ui (Abschnitt 7).
+
+
+5. Qualitäts- und Leistungsmodi
+-------------------------------
+Wählen Sie im Menü einen von drei Modi; die Auswahl wird gespeichert:
+  - „Qualität“: fordert vom Smartphone die volle Auflösung an, puffert
+    etwas mehr und überspringt kein Einzelbild. Gut für Filme, Folien und
+    Text. Die Verzögerung ist etwas höher als bei „Ausgewogen“.
+  - „Ausgewogen (adaptiv)“: der Standard. Hält die Verzögerung so gering,
+    wie es ohne Ruckeln geht – abhängig von Monitor, Grafikkarte und
+    Netzwerk; kann die Karte das Video nicht per Hardware dekodieren,
+    fordert der Modus einen schlankeren Stream an.
+  - „Leistung“: fordert einen schlankeren Stream an (höchstens 1920x1080),
+    puffert so wenig wie möglich und ersetzt zu spät eintreffende
+    Einzelbilder durch das neueste. Geringste Verzögerung, geringster
+    Speicherbedarf und geringste Grafiklast: für Spiele oder für einen
+    älteren PC.
+Verzögerung und Flüssigkeit der Wiedergabe ändern sich sofort. Die
+Stream-Auflösung legt das Smartphone beim Verbinden fest; eine geänderte
+Auflösung (und die tiefere Pufferung von „Qualität“) wirkt sich daher erst
+mit der nächsten Verbindung vollständig aus (das Programm weist darauf
+hin).
+
+
+6. Protokolldatei und Absturzbericht
+------------------------------------
+- %LOCALAPPDATA%\MirrorDock\mirror_dock.log („Protokolldatei öffnen“ im
+  Menü). Jede Zeile trägt die Uhrzeit; das Protokoll des vorherigen Laufs
+  bleibt als mirror_dock.previous.log erhalten; eine Datei wird höchstens
+  8 MB groß.
+- Alle 10 Sekunden wird eine Zeile mit Bild- und Tonstatistik geschrieben.
+  Fehlt der Ton oder läuft das Bild nicht flüssig, zeigt sie, wo das
+  Problem liegt.
+- Endet das Programm unerwartet, bleiben im selben Ordner
+  mirror_dock_crash.txt (die Absturzstelle) und mirror_dock_crash.dmp
+  zurück; bitte fügen Sie beide bei, wenn Sie ein Problem melden.
+- Wird mirror_dock.exe aus einer Eingabeaufforderung gestartet, wird das
+  Protokoll dort ausgegeben.
+
+
+7. Erweiterte Optionen
+----------------------
+Erstellen Sie eine Verknüpfung mit mirror_dock.exe und hängen Sie die
+Optionen hinter dem „Ziel“ an, oder schreiben Sie eine Option pro Zeile
+(ohne das Minuszeichen) in %USERPROFILE%\.uxplayrc, zum Beispiel:
+    n Wohnzimmer-PC
+    fs
+
+Gängige Optionen:
+  -n Name        der Name, der auf dem iPhone angezeigt wird
+  -nh            @Computername nicht an den Namen anhängen
+  -fs            im Vollbild starten
+  -mode m        quality, balanced (Standard) oder performance; ohne diese
+                 Option gilt die letzte Auswahl im Menü
+  -crop auto     schwarze Balken automatisch abschneiden (off = kein
+                 Zuschnitt); ohne diese Option gilt die letzte Auswahl im
+                 Menü
+  -gpu auto      die GPU für Dekodierung und Anzeige: auto (Standard: die
+                 GPU, an der der Monitor hängt), integrated, discrete,
+                 software
+  -h264          nur H.264 verwenden (standardmäßig darf das iPhone H.265
+                 nutzen, wenn die Grafikkarte es per Hardware dekodiert)
+  -s BxH         diese Stream-Auflösung anfordern (die Modi lassen sie dann
+                 unverändert)
+  -ui en         Sprache der Oberfläche: auto (Standard), en, zh-TW, zh-CN,
+                 ja, ko, es, de, fr, vi, th
+  -vsync 20      den Ton 20 Millisekunden später als das Bild wiedergeben
+                 (auch negativ möglich; zur Feinabstimmung der
+                 Lippensynchronität)
+  -vsync no      die Synchronisation über Zeitstempel abschalten
+                 (Wiedergabe sofort beim Eintreffen)
+  -pin           zum Verbinden muss eine PIN eingegeben werden (sie wird in
+                 einer Benachrichtigung angezeigt)
+  -nc            das letzte Bild und das Fenster behalten, wenn das iPhone
+                 die Spiegelung beendet
+  -ca Datei      das Albumcover in einer Datei speichern, während Musik
+                 läuft
+  -d             ausführliches Protokoll zur Fehlersuche
+Die meisten anderen UxPlay-Optionen funktionieren weiterhin
+(mirror_dock.exe -h in einer Eingabeaufforderung listet sie auf).
+Funktionen, die GStreamer oder eine andere Plattform voraussetzen, gehören
+nicht zu diesem Programm (HLS-Videoübertragung, MP4-Aufzeichnung, Albumcover
+auf dem Bildschirm, RTP-Weiterleitung, Kippen oder Drehen des Bildes,
+Bluetooth-LE-Beacon). Enthält eine alte Einstellungsdatei solche Optionen,
+vermerkt das Protokoll, dass sie ignoriert wurden, und das Programm startet
+normal.
+
+
+8. Richtwerte
+-------------
+Gemessen auf einem Notebook von 2016 (Core i7-6700HQ, die integrierte Intel
+HD Graphics 530 steuert den Monitor an, Windows 11). Die Werte dienen nur
+der Orientierung und fallen von PC zu PC unterschiedlich aus:
+- Etwa 0,5 Sekunden nach dem Start bereit für eine Verbindung (der erste
+  Start einer frisch heruntergeladenen Kopie dauert länger, solange das
+  Antivirenprogramm sie prüft); beendet sich in etwa 0,05 Sekunden.
+- Spiegelung mit H.265-Hardwaredekodierung: Die Verzögerung zwischen Ton
+  und Bild pendelt sich bei etwa 18 Millisekunden ein – synchron.
+- Der Ton nutzt WASAPI im Modus mit geringer Latenz, das Bild eine
+  DXGI-Swapchain im Flip-Modell; beide teilen sich eine Zeitachse.
+
+
+9. Empfehlungen
+---------------
+- Duplizieren zwei Monitore den Desktop mit unterschiedlichen
+  Bildwiederholfrequenzen (etwa 60 Hz und 50 Hz), richtet sich Windows nur
+  nach einem von ihnen, und Bewegungen wirken auf dem anderen leicht
+  ungleichmäßig. Wenn Sie nur auf einen Monitor schauen, stellen Sie unter
+  „Einstellungen > System > Bildschirm“ ein, dass der Desktop nur auf
+  diesem Monitor angezeigt wird.
+- Ein Notebook arbeitet am besten im Netzbetrieb.
+
+
+10. Problembehandlung
+---------------------
+- Das iPhone zeigt den PC nicht an: Beide Geräte müssen sich im selben
+  Wi-Fi-Netzwerk befinden, und die Firewall muss das Programm zulassen
+  (Abschnitt 1); schalten Sie Wi-Fi am iPhone aus und wieder ein.
+- Das Kabel ist angeschlossen, aber USB wird nicht genutzt: Sehen Sie sich
+  den USB-Zustand in der zweiten Zeile des Menüs an. „Persönlichen Hotspot
+  aktivieren“: Aktivieren Sie ihn auf dem iPhone. „Netzwerkadapter
+  deaktiviert“: Wählen Sie „USB-Netzwerkadapter aktivieren…“. Vergewissern
+  Sie sich, dass „USB bevorzugen“ gewählt ist. Während einer Sitzung wartet
+  der Wechsel zu USB, bis sie endet: Stoppen Sie die
+  Bildschirmsynchronisierung auf dem iPhone und wählen Sie den PC erneut
+  aus.
+- Nach der Wahl von „Nur Wi-Fi“ kann sich das iPhone nicht verbinden:
+  Möglicherweise merkt sich das Smartphone noch den Weg über USB. Stoppen
+  Sie die Bildschirmsynchronisierung auf dem iPhone, warten Sie einige
+  Sekunden und wählen Sie den PC erneut aus; hilft das nicht, schalten Sie
+  Wi-Fi am iPhone aus und wieder ein.
+- Kein Ton: Prüfen Sie, ob die Lautsprecher-Schaltfläche in der
+  Steuerleiste auf stumm steht, und sehen Sie sich dann die „audio“-Werte
+  in der 10-Sekunden-Zeile des Protokolls an (Pakete, ein Spitzenwert und
+  wiedergegebene Frames bedeuten, dass die Lautstärke oder der Mixer des
+  PCs selbst heruntergeregelt ist).
+- Ersetzen Sie den Treiber des iPhone nicht durch libusb (Zadig und
+  ähnliche Werkzeuge): Das entfernt den Apple-Treiber, und die
+  USB-Spiegelung funktioniert nicht mehr.
+- Lippenbewegung und Stimme passen nicht zusammen: Justieren Sie mit -vsync
+  und einer Zahl in Millisekunden nach (positiv = Ton später).
+- Das Bild ruckelt: Probieren Sie zuerst den Modus „Leistung“; bei
+  duplizierten Monitoren siehe Abschnitt 9.
+- Das Bild wird schwarz, und das Programm startet von selbst neu: Der
+  Grafiktreiber wurde zurückgesetzt oder aktualisiert. Das Programm startet
+  einmal neu; wählen Sie den PC auf dem iPhone erneut aus. Passiert das
+  innerhalb kurzer Zeit mehrfach, hält das Programm an und zeigt den Grund
+  an: Überprüfen Sie den Grafiktreiber.
+
+
+11. Umstieg von UxPlay for Windows (1.6 oder älter)
+---------------------------------------------------
+- Das Programm heißt jetzt MirrorDock, und seine ausführbare Datei ist
+  mirror_dock.exe. Beenden Sie die alte uxplay.exe, bevor Sie die neue
+  starten; die alte ausführbare Datei kann gelöscht werden.
+- Auf dem iPhone ändert sich der Name unter „Bildschirmsynchronisierung“
+  von „UxPlay@Computername“ zu „MirrorDock@Computername“. Um den alten
+  Namen beizubehalten, fügen Sie -n UxPlay hinzu.
+- Ihre Einstellungen (USB bevorzugen / Nur Wi-Fi, Modus, Fenstergröße usw.)
+  werden beim ersten Start übernommen; war „Mit Windows starten“
+  eingeschaltet, wird es auf die neue ausführbare Datei umgestellt.
+- Der Protokollordner ist jetzt %LOCALAPPDATA%\MirrorDock (der alte Ordner
+  wird umbenannt und weiterverwendet, sofern ihn kein Programm benutzt; die
+  alten Protokolldateien bleiben darin erhalten).
+- Die Einstellungsdatei %USERPROFILE%\.uxplayrc und die Dateien mit den
+  Kopplungsschlüsseln behalten ihre Namen und funktionieren weiterhin.
+
+
+Lizenz: Das Programm als Ganzes steht unter GPL-3.0; sein
+AirPlay-Protokollkern stammt aus dem Open-Source-Projekt UxPlay, und die
+Windows-Medien-Engine (win_native) steht unter MIT. Enthalten sind FFmpeg
+(LGPL-2.1+-Komponenten), OpenSSL (Apache-2.0), libplist (LGPL-2.1+), LLVM
+libc++ (Apache-2.0 WITH LLVM-exception) und winpthreads (MIT). Der
+Quellcode und die vollständigen Lizenztexte liegen in den Ordnern „source“
+und „licenses“.

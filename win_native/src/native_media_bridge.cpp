@@ -66,15 +66,13 @@ namespace
     std::atomic<bool> ui_language_applied{false};
 
     // native_media_settings::ui_language: 0 follows the Windows display
-    // language; 1/2/3 force Traditional Chinese / Simplified Chinese / English
+    // language; 1..10 force one (the order of uxplay::ui_language, plus one)
     void apply_ui_language(int requested)
     {
         ui_language_applied.store(true);
-        if (requested >= 1 && requested <= 3)
+        if (requested >= 1 && requested <= static_cast<int>(uxplay::ui_language::count))
         {
-            uxplay::ui_language const forced = requested == 1   ? uxplay::ui_language::traditional_chinese
-                                               : requested == 2 ? uxplay::ui_language::simplified_chinese
-                                                                : uxplay::ui_language::english;
+            auto const forced = static_cast<uxplay::ui_language>(requested - 1);
             uxplay::set_ui_language(forced);
             uxplay::log::info("interface language: {} (set with -ui)", uxplay::ui_language_name(forced));
             return;

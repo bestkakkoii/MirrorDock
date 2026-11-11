@@ -181,8 +181,9 @@ filaire qui fonctionne avec les versions actuelles d’iOS.
   de lui-même.
 - L’interface suit la langue d’affichage de Windows : anglais, chinois
   traditionnel, chinois simplifié, japonais, coréen, espagnol, allemand,
-  français, vietnamien et thaï ; dans toute autre langue, l’interface est en
-  anglais. Pour en imposer une, utilisez l’option -ui (section 8).
+  français, vietnamien, thaï et russe ; dans toute autre langue,
+  l’interface est en anglais. Pour en imposer une, utilisez l’option -ui
+  (section 8).
 
 
 5. Contrôler l’iPhone à la souris et au clavier
@@ -304,7 +305,7 @@ Options courantes :
   -s LxH         demander cette résolution de flux (les modes n’y touchent
                  alors plus)
   -ui en         langue de l’interface : auto (par défaut), en, zh-TW,
-                 zh-CN, ja, ko, es, de, fr, vi, th
+                 zh-CN, ja, ko, es, de, fr, vi, th, ru
   -vsync 20      diffuser le son 20 millisecondes après l’image (valeur
                  négative possible ; pour affiner la synchronisation
                  labiale)

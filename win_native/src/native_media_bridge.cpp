@@ -69,7 +69,7 @@ namespace
     std::atomic<bool> ui_language_applied{false};
 
     // native_media_settings::ui_language: 0 follows the Windows display
-    // language; 1..10 force one (the order of uxplay::ui_language, plus one)
+    // language; 1..11 force one (the order of uxplay::ui_language, plus one)
     void apply_ui_language(int requested)
     {
         ui_language_applied.store(true);

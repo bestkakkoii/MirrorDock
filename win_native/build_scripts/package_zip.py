@@ -5,7 +5,7 @@ usage: python -I package_zip.py <build_dir> <source_dir> <msys2_clang64_dir> <de
 
 Contents: stripped mirror_dock.exe (statically linked: it needs only Windows
 system DLLs, so no DLL is bundled; the collector reports any that appear),
-the user guide in ten languages, licence texts of every statically linked
+the user guide in eleven languages, licence texts of every statically linked
 library and the complete corresponding source (LGPL relinking: rebuild from
 it with win_native/build_scripts).
 """
@@ -21,7 +21,7 @@ PRODUCT_FOLDER = "MirrorDock"
 EXECUTABLE = "mirror_dock.exe"
 SOURCE_FOLDER = "mirror_dock"
 # one user guide per interface language (win_native/package/user_guide)
-GUIDE_LANGUAGES = ["de", "en", "es", "fr", "ja", "ko", "th", "vi", "zh_cn", "zh_tw"]
+GUIDE_LANGUAGES = ["de", "en", "es", "fr", "ja", "ko", "ru", "th", "vi", "zh_cn", "zh_tw"]
 
 # local tool state (.claude, .vs, .vscode) is not part of the corresponding source
 SOURCE_EXCLUDES = {".git", ".claude", ".vs", ".vscode", "build", "dist", "__pycache__"}

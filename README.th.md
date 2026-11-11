@@ -13,7 +13,7 @@
 [![Licence](https://img.shields.io/badge/licence-GPL--3.0-blue)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/bestkakkoii/MirrorDock?style=social)](https://github.com/bestkakkoii/MirrorDock/stargazers)
 
-[English](README.md) · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Tiếng Việt](README.vi.md) · **ไทย**
+[English](README.md) · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Tiếng Việt](README.vi.md) · **ไทย** · [Русский](README.ru.md)
 
 </div>
 
@@ -35,7 +35,7 @@ MirrorDock คือตัวรับ AirPlay สำหรับ Windows เพ
 | ✂️ **ครอบตัดขอบดำ** | ตัดขอบดำรอบภาพยนตร์ออกให้อัตโนมัติ หรือให้คุณใช้เมาส์ลากกรอบเลือกส่วนใดของภาพก็ได้ |
 | 🖱️ **ควบคุม iPhone** | คลิก ลาก เลื่อน และพิมพ์บนภาพ แล้วโทรศัพท์ก็จะทำตาม เป็นความสามารถที่มีมาในตัว ไม่ต้องใช้โปรแกรมเสริม ไม่ต้องเจลเบรก (ต้องใช้ iOS 27 สาย USB และโหมดนักพัฒนา) |
 | 🪟 **หน้าต่างที่ใช้งานได้ดีจริง** | เปิดขึ้นมาในขนาดที่พอเหมาะ คงสัดส่วนภาพไว้ขณะปรับขนาด จำขนาดและตำแหน่งได้ เต็มหน้าจอได้ด้วยปุ่มเดียว และอยู่บนสุดเสมอได้ |
-| 🌐 **สิบภาษา** | ภาษาของโปรแกรมเป็นไปตามภาษาที่แสดงของ Windows |
+| 🌐 **สิบเอ็ดภาษา** | ภาษาของโปรแกรมเป็นไปตามภาษาที่แสดงของ Windows |
 | 🧳 **ไฟล์เดียว** | ไฟล์โปรแกรมเพียงไฟล์เดียว ขนาดประมาณ 12 MB ที่ต้องอาศัยแค่ตัว Windows เท่านั้น |
 
 ## 🚀 เริ่มต้นใช้งานอย่างรวดเร็ว
@@ -132,9 +132,9 @@ MirrorDock คือตัวรับ AirPlay สำหรับ Windows เพ
 
 ## 🌐 ภาษา
 
-ภาษาของโปรแกรมเป็นไปตามภาษาที่แสดงของ Windows ได้แก่ English, 繁體中文, 简体中文, 日本語, 한국어, Español, Deutsch, Français, Tiếng Việt และ ไทย ภาษาอื่นนอกจากนี้จะแสดงเป็นภาษาอังกฤษ หากต้องการกำหนดภาษาเอง ให้ใช้ `-ui en|zh-TW|zh-CN|ja|ko|es|de|fr|vi|th`
+ภาษาของโปรแกรมเป็นไปตามภาษาที่แสดงของ Windows ได้แก่ English, 繁體中文, 简体中文, 日本語, 한국어, Español, Deutsch, Français, Tiếng Việt, ไทย และ Русский ภาษาอื่นนอกจากนี้จะแสดงเป็นภาษาอังกฤษ หากต้องการกำหนดภาษาเอง ให้ใช้ `-ui en|zh-TW|zh-CN|ja|ko|es|de|fr|vi|th|ru`
 
-คู่มือการใช้งานทั้งสิบภาษาอยู่ในไฟล์ zip (โฟลเดอร์ `user_guide`)
+คู่มือการใช้งานทั้งสิบเอ็ดภาษาอยู่ในไฟล์ zip (โฟลเดอร์ `user_guide`)
 
 ## 🧩 หลักการทำงาน
 

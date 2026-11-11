@@ -10,7 +10,7 @@ architecture, invariants, build inputs and verification state.
 single Windows-native program for the iPhone → Windows AirPlay use case. The tree
 builds **only** this program (MSYS2 CLANG64; the top-level CMakeLists stops
 on other hosts). The program has its own name and version (`win_native/include/
-uxplay_version.h`, currently MirrorDock 1.9.1: the one place they are written
+uxplay_version.h`, currently MirrorDock 1.10.0: the one place they are written
 — log, "About", the version resource and the settings/log locations read it;
 only `uxplay.manifest`, `package_zip.py` and the CMake `OUTPUT_NAME` repeat
 them); `UXPLAY_CORE_VERSION` there is the upstream UxPlay release the
@@ -212,7 +212,7 @@ Engine modules (`win_native/src`, C++26 named modules, `import std;`):
 | `uxplay_audio_decoder`, `uxplay_audio_output` | AAC-ELD/ALAC/AAC-LC/LPCM -> float32 at device rate; WASAPI IAudioClient3 low-latency period, per-sample scheduling with ≤0.3 % cubic-resampling drift correction, mute, soft limiter; the stream runs only while a source has audio queued (stopped after 3 s of silence, endpoint released 2 s later when no source is in use), endpoint failures are retried with back-off |
 | `uxplay_media_engine` | the AirPlay pipeline and the shared presentation timeline |
 | `uxplay_media_types` | media source identity (AirPlay), `performance_mode` |
-| `uxplay_ui_text` | interface text table in ten languages (completeness and `{}` placeholder counts checked at compile time), Windows display-language detection, DirectWrite locale |
+| `uxplay_ui_text` | interface text table in eleven languages (completeness and `{}` placeholder counts checked at compile time), Windows display-language detection, DirectWrite locale |
 | `uxplay_usb_link` | iPhone USB network link (AirPlay over the Personal Hotspot cable): attach/link detection, tray status and hints, link classification for the window label, cellular-data guard |
 | `native_media_bridge.cpp` | C API (`win_native/include/native_media.h`) used by `uxplay.cpp` |
 
@@ -397,24 +397,26 @@ Engine modules (`win_native/src`, C++26 named modules, `import std;`):
 * **Interface language:** chosen once in `native_media_start`, before the
   engine thread creates the window, tray menu and control bar:
   `native_media_settings::ui_language` (`-ui`) or else the first entry of
-  `GetUserPreferredUILanguages`. Ten languages (`ui_language`, in this
+  `GetUserPreferredUILanguages`. Eleven languages (`ui_language`, in this
   order, which is also the order of the texts in every table row and, plus
   one, the numbering of the C API): Traditional Chinese (zh-TW/HK/MO and
   `zh-Hant`), Simplified Chinese (other `zh`), English, Japanese, Korean,
-  Spanish, German, French, Vietnamese, Thai — chosen by the primary language
+  Spanish, German, French, Vietnamese, Thai, Russian — chosen by the primary
+  language
   subtag; anything else → English (a detection failure is logged and falls
   back to English). All user-visible strings come from `ui_string(ui_text)`;
   two `static_assert`s make a missing text, or a text whose number of `{}`
   placeholders differs from the English one, a compile error. The control
   bar measures label widths, and its DirectWrite locale (zh-TW, zh-CN, en-US,
-  ja-JP, ko-KR, es-ES, de-DE, fr-FR, vi-VN, th-TH) selects matching fonts;
+  ja-JP, ko-KR, es-ES, de-DE, fr-FR, vi-VN, th-TH, ru-RU) selects matching
+  fonts;
   scripts the UI font lacks (Thai, for example) come from DirectWrite's font
   fallback. Log messages and `-h` stay English.
 * **Translated documents:** `README.md` (English) is the master of
-  `README.<lang>.md` (zh-TW, zh-CN, ja, ko, es, de, fr, vi, th), and
-  `win_native/package/user_guide/user_guide_en.txt` the master of the nine
+  `README.<lang>.md` (zh-TW, zh-CN, ja, ko, es, de, fr, vi, th, ru), and
+  `win_native/package/user_guide/user_guide_en.txt` the master of the ten
   other guides there; `package_zip.py` refuses to build a package without all
-  ten guides. A translation is the same document in another language: same
+  eleven guides. A translation is the same document in another language: same
   sections, tables, lists, code blocks, links and emoji (checked with a
   structure comparison when they were written), menu items quoted exactly as
   in the interface texts of that language. Change the master first, then
@@ -698,16 +700,35 @@ upstream socket code keeps Windows `SOCKET` handles in `int`). The only
 remaining build warnings come from the toolchain's own `std.cppm` /
 `std.compat.cppm` (`-Wreserved-module-identifier`).
 
-Pinned inputs (observed 2026-11-02):
+Pinned inputs (observed 2026-11-12, each the newest of its source on that day):
 
 | input | source | branch | commit / version |
 |---|---|---|---|
-| FFmpeg | github.com/FFmpeg/FFmpeg | master | a88838af482100fa22dd22c94be592c35642de46 (libavcodec 63) |
-| OpenSSL | github.com/openssl/openssl | master | aad00a888ccb47ec49afeb7545f2dddf9397fbb5 (4.2.0-dev) |
-| libplist | github.com/libimobiledevice/libplist | master | fe3dc34dc3484006e12b403f7ceb06f0ad40b6f4 (2.8.0) |
-| clang / libc++ / lld | MSYS2 CLANG64 | — | 23.1.4 |
+| FFmpeg | github.com/FFmpeg/FFmpeg | master | 7b00cbd7edf64c439209fb473dd21943c49a7178 (libavcodec 63.28.100) |
+| OpenSSL | github.com/openssl/openssl | master | df281a12096f3ac80272444b128135d065ac3e4d (4.2.0-dev) |
+| libplist | github.com/libimobiledevice/libplist | master | 3cfe22475244cc1e924b6fd189234c130d6c5914 (2.8.1) |
+| protocol core (`lib/`, `uxplay.cpp`) | github.com/FDH2/UxPlay | master | branched off at 234b407e2e7a8a9a33adf293f0e56fd539658b1e (2026-11-01); the changes up to 05b0275cb1b726592700e47a6e0307544b3d3a52 (2026-11-06) that touch files of this tree are carried over |
+| llhttp (`lib/llhttp/`, as published) | github.com/nodejs/llhttp | tag `release/v9.4.3` | 0e815792b167a9bd8ace259b95b7da953776c288 (9.4.3) |
+| clang / libc++ / libunwind / lld / compiler-rt | MSYS2 CLANG64 | — | 23.1.5 |
+| mingw-w64 crt / headers / winpthreads | MSYS2 CLANG64 | — | 14.0.0.r598.ge3d18511f |
 | CMake / Ninja | MSYS2 CLANG64 | — | 4.4.5 / 1.13.2 |
 | fxc | Windows SDK | — | 10.0.28000.0 |
+
+Not built in, but what the program installs or relies on at run time: the
+Developer Disk Image and Apple's root certificate (table further down), and
+Apple's USB driver package, which `install_apple_usb_support.cmd` installs
+through winget (`Apple.AppleMobileDeviceSupport`: always the version winget
+offers; 19.4.0.10 with driver 538.0.0.0 on 2026-11-12).
+
+Upstream's five commits after the branch point: `5812f84` (the HTTP
+server's run mutex is created and destroyed; the data socket's session
+pointer is cleared), `b1be2bd` (a short first packet in `mirror_buffer`),
+`7aaad62` (H.265 unit type) are carried over as upstream wrote them;
+`d4b7373` (a callback of the Raspberry Pi profile options) and `05b0275` (a
+GStreamer renderer) concern code this tree does not have. The run mutex
+matters here too: `httpd.c` locked and unlocked it everywhere but never
+created it, and winpthreads refuses to lock a mutex that was not
+initialized, so the lock protected nothing until now.
 
 Fetched at run time, not part of the build or the package (observed
 2026-11-12; constants in `phone_control/src/uxplay_developer_image.cpp`):
@@ -778,7 +799,7 @@ pinned values in it (image hashes, Apple's root certificate) are public.
 
 `-gpu auto|integrated|discrete|software` (aliases `intel`, `nvidia`, `warp`),
 `-mode quality|balanced|performance` (default: the mode saved by the menu,
-else balanced), `-crop auto|off`, `-ui auto|en|zh-TW|zh-CN|ja|ko|es|de|fr|vi|th`
+else balanced), `-crop auto|off`, `-ui auto|en|zh-TW|zh-CN|ja|ko|es|de|fr|vi|th|ru`
 (interface language),
 `-h264` / `-h265` (by default H.265 is offered only with HEVC hardware
 decode). Display geometry/refresh are advertised from the monitor (per mode)
@@ -1013,3 +1034,30 @@ its exit, and the run's own handle then wrote at its old position. The exit
 of 1.9 at 03:27 left its log whole. Nothing in the exit path opens the log
 again; a second start that takes over truncates only after waiting for the
 file. Worth watching when a log is needed after an exit.
+
+## State of 1.10 (2026-11-12)
+
+1.10 adds Russian as the eleventh language (interface texts, README, user
+guide; `-ui ru`) and brings every input to the newest version of its source:
+the three dependency libraries, llhttp, the protocol core's upstream changes
+and the toolchain whose runtime is linked in (see "Pinned inputs").
+
+**Observed:** a build from scratch with clang 23.1.5 and the new libraries,
+warnings as errors. The engine test with the 2872x1320 H.265 stream: 480 of
+480 pictures decoded in hardware and presented at 60.0 fps, sync delay 17.8
+ms. The console probe built with the same toolchain and libraries against
+the phone on the cable: lockdown session (TLS), tunnel, service directory
+(85 services), the input surfaces and the orientation. The program itself
+started under a test name and asked to exit ended orderly (exit code 0 after
+0.05 s): the HTTP server starts and stops with its mutex in place. The eleven
+READMEs match the master's structure (0 differences each); the eleven user
+guides have twelve sections.
+
+**Not observed:** MirrorDock 1.10 itself with a phone - a mirroring session,
+and with it the HTTP server's restart after an error now that its mutex
+really locks (the paths were written for a working mutex and read again for
+this release: none takes it twice, and the thread is joined either without
+the lock or when it no longer needs it). The Russian texts on screen; they
+and the Russian documents were written by a language model with Apple's and
+Microsoft's Russian pages as the source for the terms, not by a native
+speaker. Everything listed as not observed for 1.9 and 1.9.1 still applies.

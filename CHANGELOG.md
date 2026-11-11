@@ -4,6 +4,13 @@ All releases of MirrorDock. Up to 1.6 the program was published as *UxPlay for W
 
 Mirroring over Wi-Fi and over USB was verified with an iPhone 16 Pro Max (iOS 26) up to version 1.5. From 1.6 on, every entry ends with how far that release was tested.
 
+## 1.10 — 2026-11-12
+
+- 🌐 **Russian** is the eleventh language of the interface, the README and the user guide (`-ui ru`).
+- ⬆️ **Everything the program is built from is current** as of 2026-11-12: FFmpeg, OpenSSL and libplist at the heads of their main branches, llhttp 9.4.3, and the compiler toolchain whose runtime is linked in (clang, libc++ and libunwind 23.1.5, mingw-w64 r598). The Developer Disk Image (27B52), Apple's driver package (Apple Mobile Device Support 19.4.0.10) and the Windows SDK shader compiler were the newest already.
+- 🔁 **The protocol core follows upstream UxPlay again** (up to its commit `05b0275` of 2026-11-06). Of the five changes made there since this tree branched off, the four that touch code of this tree are in: the AirPlay server's run state is guarded by a mutex that is now actually created (it was locked and unlocked but never initialized), a session pointer is cleared after its session is destroyed, a correction to how a short first packet of a mirror stream is decrypted (third-party senders), and a corrected H.265 unit-type read.
+- *Tested:* built from scratch with the new toolchain and libraries, warnings as errors; the engine test decoded and showed all 480 pictures of the H.265 test stream at 60 fps; the console probe (same code, same libraries) reached the phone's services over the cable. *Not yet seen:* 1.10 itself in a mirroring session, and the Russian texts on screen (they were written by a language model, with Apple's and Microsoft's Russian terms looked up).
+
 ## 1.9.1 — 2026-11-12
 
 - 🔧 **Fixed: control stopped answering after a while without input.** The phone checks a silent connection with keep-alive probes, and the program's own TCP did not answer them, so after two to three quiet minutes the phone reset the connection. The next click then went nowhere while MirrorDock connected again (under a second). The probes are answered now; a control session that sat idle for 200 seconds stayed up.

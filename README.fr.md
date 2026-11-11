@@ -13,7 +13,7 @@
 [![Licence](https://img.shields.io/badge/licence-GPL--3.0-blue)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/bestkakkoii/MirrorDock?style=social)](https://github.com/bestkakkoii/MirrorDock/stargazers)
 
-[English](README.md) · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Deutsch](README.de.md) · **Français** · [Tiếng Việt](README.vi.md) · [ไทย](README.th.md)
+[English](README.md) · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Deutsch](README.de.md) · **Français** · [Tiếng Việt](README.vi.md) · [ไทย](README.th.md) · [Русский](README.ru.md)
 
 </div>
 
@@ -35,7 +35,7 @@ Il repose sur le cœur du protocole AirPlay d’[UxPlay](https://github.com/FDH2
 | ✂️ **Rognage des bandes noires** | Supprime automatiquement les bandes noires autour d’un film, ou vous laisse cadrer à la souris n’importe quelle partie de l’image. |
 | 🖱️ **Contrôle de l’iPhone** | Cliquez, faites glisser, faites défiler et tapez au clavier sur l’image : le téléphone fait de même. Tout est intégré : ni programme auxiliaire ni jailbreak (iOS 27, câble USB, mode Développeur). |
 | 🪟 **Une vraie fenêtre** | S’ouvre à une taille raisonnable, conserve les proportions quand vous la redimensionnez, mémorise sa taille et sa position, passe en plein écran d’une seule touche et peut rester toujours au premier plan. |
-| 🌐 **Dix langues** | L’interface suit la langue d’affichage de Windows. |
+| 🌐 **Onze langues** | L’interface suit la langue d’affichage de Windows. |
 | 🧳 **Un seul fichier** | Un exécutable unique d’environ 12 Mo, qui n’a besoin que de Windows. |
 
 ## 🚀 Démarrage rapide
@@ -132,9 +132,9 @@ Ajoutez les options à un raccourci vers `mirror_dock.exe`, ou écrivez-les à r
 
 ## 🌐 Langues
 
-L’interface suit la langue d’affichage de Windows : English, 繁體中文, 简体中文, 日本語, 한국어, Español, Deutsch, Français, Tiếng Việt et ไทย. Dans toute autre langue, l’interface s’affiche en anglais. Pour en imposer une, utilisez `-ui en|zh-TW|zh-CN|ja|ko|es|de|fr|vi|th`.
+L’interface suit la langue d’affichage de Windows : English, 繁體中文, 简体中文, 日本語, 한국어, Español, Deutsch, Français, Tiếng Việt, ไทย et Русский. Dans toute autre langue, l’interface s’affiche en anglais. Pour en imposer une, utilisez `-ui en|zh-TW|zh-CN|ja|ko|es|de|fr|vi|th|ru`.
 
-Les guides d’utilisation dans les dix langues se trouvent dans le zip (dossier `user_guide`).
+Les guides d’utilisation dans les onze langues se trouvent dans le zip (dossier `user_guide`).
 
 ## 🧩 Fonctionnement
 

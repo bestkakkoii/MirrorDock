@@ -13,7 +13,7 @@
 [![Licence](https://img.shields.io/badge/licence-GPL--3.0-blue)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/bestkakkoii/MirrorDock?style=social)](https://github.com/bestkakkoii/MirrorDock/stargazers)
 
-[English](README.md) · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · **Español** · [Deutsch](README.de.md) · [Français](README.fr.md) · [Tiếng Việt](README.vi.md) · [ไทย](README.th.md)
+[English](README.md) · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · **Español** · [Deutsch](README.de.md) · [Français](README.fr.md) · [Tiếng Việt](README.vi.md) · [ไทย](README.th.md) · [Русский](README.ru.md)
 
 </div>
 
@@ -35,7 +35,7 @@ Se basa en el núcleo del protocolo AirPlay de [UxPlay](https://github.com/FDH2/
 | ✂️ **Recorte de barras negras** | Recorta automáticamente las barras negras que rodean una película, o le permite encuadrar con el mouse cualquier parte de la imagen. |
 | 🖱️ **Control del iPhone** | Haga clic, arrastre, desplácese y escriba sobre la imagen, y el teléfono hace lo mismo. Viene integrado: sin programas auxiliares y sin jailbreak (iOS 27, cable USB, modo de desarrollador). |
 | 🪟 **Una ventana como debe ser** | Se abre con un tamaño razonable, mantiene la relación de aspecto al redimensionarla, recuerda el tamaño y la posición, pasa a pantalla completa con una tecla y puede quedar siempre visible. |
-| 🌐 **Diez idiomas** | La interfaz sigue el idioma para mostrar de Windows. |
+| 🌐 **Once idiomas** | La interfaz sigue el idioma para mostrar de Windows. |
 | 🧳 **Un solo archivo** | Un único ejecutable de unos 12 MB que solo necesita el propio Windows. |
 
 ## 🚀 Inicio rápido
@@ -132,9 +132,9 @@ Agregue las opciones a un acceso directo de `mirror_dock.exe`, o escríbalas una
 
 ## 🌐 Idiomas
 
-La interfaz sigue el idioma para mostrar de Windows: English, 繁體中文, 简体中文, 日本語, 한국어, Español, Deutsch, Français, Tiếng Việt y ไทย. Con cualquier otro idioma se muestra en inglés. Para forzar uno, use `-ui en|zh-TW|zh-CN|ja|ko|es|de|fr|vi|th`.
+La interfaz sigue el idioma para mostrar de Windows: English, 繁體中文, 简体中文, 日本語, 한국어, Español, Deutsch, Français, Tiếng Việt, ไทย y Русский. Con cualquier otro idioma se muestra en inglés. Para forzar uno, use `-ui en|zh-TW|zh-CN|ja|ko|es|de|fr|vi|th|ru`.
 
-Las guías de usuario en los diez idiomas están en el zip (carpeta `user_guide`).
+Las guías de usuario en los once idiomas están en el zip (carpeta `user_guide`).
 
 ## 🧩 Cómo funciona
 

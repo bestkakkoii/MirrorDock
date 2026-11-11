@@ -190,9 +190,9 @@ kabelgebundene Spiegelung, die mit aktuellem iOS funktioniert.
   Standbymodus und schaltet den Bildschirm nicht ab.
 - Die Oberfläche richtet sich nach der Windows-Anzeigesprache: Englisch,
   traditionelles Chinesisch, vereinfachtes Chinesisch, Japanisch,
-  Koreanisch, Spanisch, Deutsch, Französisch, Vietnamesisch und Thai; bei
-  jeder anderen Sprache erscheint sie auf Englisch. Um eine Sprache fest
-  vorzugeben, verwenden Sie die Option -ui (Abschnitt 8).
+  Koreanisch, Spanisch, Deutsch, Französisch, Vietnamesisch, Thai und
+  Russisch; bei jeder anderen Sprache erscheint sie auf Englisch. Um eine
+  Sprache fest vorzugeben, verwenden Sie die Option -ui (Abschnitt 8).
 
 
 5. Das iPhone mit Maus und Tastatur steuern
@@ -311,7 +311,7 @@ Gängige Optionen:
   -s BxH         diese Stream-Auflösung anfordern (die Modi lassen sie dann
                  unverändert)
   -ui en         Sprache der Oberfläche: auto (Standard), en, zh-TW, zh-CN,
-                 ja, ko, es, de, fr, vi, th
+                 ja, ko, es, de, fr, vi, th, ru
   -vsync 20      den Ton 20 Millisekunden später als das Bild wiedergeben
                  (auch negativ möglich; zur Feinabstimmung der
                  Lippensynchronität)

@@ -26,6 +26,7 @@ export namespace uxplay
         french,
         vietnamese,
         thai,
+        russian,
         count
     };
 
@@ -152,6 +153,6 @@ export namespace uxplay
     [[nodiscard]] std::wstring_view ui_locale_name();
 
     // short name for the log: "zh-Hant", "zh-Hans", "en", "ja", "ko", "es",
-    // "de", "fr", "vi" or "th"
+    // "de", "fr", "vi", "th" or "ru"
     [[nodiscard]] std::string_view ui_language_name(ui_language language);
 }

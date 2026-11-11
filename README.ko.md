@@ -13,7 +13,7 @@
 [![Licence](https://img.shields.io/badge/licence-GPL--3.0-blue)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/bestkakkoii/MirrorDock?style=social)](https://github.com/bestkakkoii/MirrorDock/stargazers)
 
-[English](README.md) · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · **한국어** · [Español](README.es.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Tiếng Việt](README.vi.md) · [ไทย](README.th.md)
+[English](README.md) · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · **한국어** · [Español](README.es.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Tiếng Việt](README.vi.md) · [ไทย](README.th.md) · [Русский](README.ru.md)
 
 </div>
 
@@ -35,7 +35,7 @@ MirrorDock은 Windows용 AirPlay 수신기입니다. iPhone의 *화면 미러링
 | ✂️ **검은 여백 자르기** | 영화 주위의 검은 여백을 자동으로 잘라내거나, 마우스로 원하는 부분만 골라서 볼 수 있습니다. |
 | 🖱️ **iPhone 제어** | 영상 위에서 클릭하고, 드래그하고, 스크롤하고, 입력하면 iPhone이 그대로 따라 합니다. 프로그램에 내장된 기능이라 보조 프로그램도 탈옥도 필요 없습니다(iOS 27, USB 케이블, 개발자 모드 필요). |
 | 🪟 **제대로 된 창** | 알맞은 크기로 열리고, 크기를 바꿔도 화면 비율이 유지되며, 크기와 위치를 기억합니다. 키 하나로 전체 화면이 되고, 항상 위에 표시할 수도 있습니다. |
-| 🌐 **10개 언어** | 인터페이스는 Windows 표시 언어를 따릅니다. |
+| 🌐 **11개 언어** | 인터페이스는 Windows 표시 언어를 따릅니다. |
 | 🧳 **파일 하나** | 약 12 MB짜리 실행 파일 하나면 되고, Windows 말고는 아무것도 필요 없습니다. |
 
 ## 🚀 빠른 시작
@@ -132,9 +132,9 @@ iPhone을 제어하는 동안에는 문자 키가 iPhone에 입력됩니다. **F
 
 ## 🌐 언어
 
-인터페이스는 Windows 표시 언어를 따릅니다. 지원하는 언어는 English, 繁體中文, 简体中文, 日本語, 한국어, Español, Deutsch, Français, Tiếng Việt, ไทย입니다. 그 밖의 언어에서는 영어로 표시됩니다. 특정 언어로 고정하려면 `-ui en|zh-TW|zh-CN|ja|ko|es|de|fr|vi|th`를 사용하세요.
+인터페이스는 Windows 표시 언어를 따릅니다. 지원하는 언어는 English, 繁體中文, 简体中文, 日本語, 한국어, Español, Deutsch, Français, Tiếng Việt, ไทย, Русский입니다. 그 밖의 언어에서는 영어로 표시됩니다. 특정 언어로 고정하려면 `-ui en|zh-TW|zh-CN|ja|ko|es|de|fr|vi|th|ru`를 사용하세요.
 
-zip에는 열 가지 언어의 사용 설명서가 모두 들어 있습니다(`user_guide` 폴더).
+zip에는 열한 가지 언어의 사용 설명서가 모두 들어 있습니다(`user_guide` 폴더).
 
 ## 🧩 작동 방식
 

@@ -13,7 +13,7 @@
 [![Licence](https://img.shields.io/badge/licence-GPL--3.0-blue)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/bestkakkoii/MirrorDock?style=social)](https://github.com/bestkakkoii/MirrorDock/stargazers)
 
-[English](README.md) · [繁體中文](README.zh-TW.md) · **简体中文** · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Tiếng Việt](README.vi.md) · [ไทย](README.th.md)
+[English](README.md) · [繁體中文](README.zh-TW.md) · **简体中文** · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Tiếng Việt](README.vi.md) · [ไทย](README.th.md) · [Русский](README.ru.md)
 
 </div>
 
@@ -35,7 +35,7 @@ MirrorDock 是一款运行在 Windows 上的 AirPlay 接收端。在 iPhone 的 
 | ✂️ **裁剪黑边** | 自动裁掉影片四周的黑边，也可以用鼠标框选画面中的任意区域。 |
 | 🖱️ **操作 iPhone** | 在画面上点击、拖动、滚动、打字，手机就照着做。功能内置：不用另装辅助程序，也不用越狱（需要 iOS 27、USB 数据线和开发者模式）。 |
 | 🪟 **像样的窗口** | 以合适的大小打开，调整大小时保持画面比例，记住大小和位置，一键全屏，还能窗口置顶。 |
-| 🌐 **十种语言** | 界面语言跟随 Windows 的显示语言。 |
+| 🌐 **十一种语言** | 界面语言跟随 Windows 的显示语言。 |
 | 🧳 **单文件** | 只有一个约 12 MB 的可执行文件，除了 Windows 本身什么都不依赖。 |
 
 ## 🚀 快速上手
@@ -132,9 +132,9 @@ MirrorDock 是一款运行在 Windows 上的 AirPlay 接收端。在 iPhone 的 
 
 ## 🌐 语言
 
-界面语言跟随 Windows 的显示语言：English、繁體中文、简体中文、日本語、한국어、Español、Deutsch、Français、Tiếng Việt 和 ไทย。其他语言一律显示英文。也可以用 `-ui en|zh-TW|zh-CN|ja|ko|es|de|fr|vi|th` 强制指定。
+界面语言跟随 Windows 的显示语言：English、繁體中文、简体中文、日本語、한국어、Español、Deutsch、Français、Tiếng Việt、ไทย 和 Русский。其他语言一律显示英文。也可以用 `-ui en|zh-TW|zh-CN|ja|ko|es|de|fr|vi|th|ru` 强制指定。
 
-压缩包里附有全部十种语言的使用说明（`user_guide` 文件夹）。
+压缩包里附有全部十一种语言的使用说明（`user_guide` 文件夹）。
 
 ## 🧩 工作原理
 

@@ -13,7 +13,7 @@
 [![Licence](https://img.shields.io/badge/licence-GPL--3.0-blue)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/bestkakkoii/MirrorDock?style=social)](https://github.com/bestkakkoii/MirrorDock/stargazers)
 
-**English** · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Tiếng Việt](README.vi.md) · [ไทย](README.th.md)
+**English** · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Tiếng Việt](README.vi.md) · [ไทย](README.th.md) · [Русский](README.ru.md)
 
 </div>
 
@@ -35,7 +35,7 @@ It is built on the AirPlay protocol core of [UxPlay](https://github.com/FDH2/UxP
 | ✂️ **Crop black bars** | Cuts the black bars around a film off automatically, or lets you frame any part of the picture with the mouse. |
 | 🖱️ **Control the iPhone** | Click, drag, scroll and type on the picture, and the phone does it. Built in: no helper program, no jailbreak (iOS 27, USB cable, Developer Mode). |
 | 🪟 **A proper window** | Opens at a sensible size, keeps the aspect ratio while you resize, remembers size and position, full screen with one key, always on top. |
-| 🌐 **Ten languages** | The interface follows your Windows display language. |
+| 🌐 **Eleven languages** | The interface follows your Windows display language. |
 | 🧳 **One file** | A single executable of about 12 MB that needs only Windows itself. |
 
 ## 🚀 Quick start
@@ -132,9 +132,9 @@ Add options to a shortcut of `mirror_dock.exe`, or write them one per line (with
 
 ## 🌐 Languages
 
-The interface follows the Windows display language: English, 繁體中文, 简体中文, 日本語, 한국어, Español, Deutsch, Français, Tiếng Việt and ไทย. Any other language gets English. Force one with `-ui en|zh-TW|zh-CN|ja|ko|es|de|fr|vi|th`.
+The interface follows the Windows display language: English, 繁體中文, 简体中文, 日本語, 한국어, Español, Deutsch, Français, Tiếng Việt, ไทย and Русский. Any other language gets English. Force one with `-ui en|zh-TW|zh-CN|ja|ko|es|de|fr|vi|th|ru`.
 
-User guides in all ten languages are in the zip (folder `user_guide`).
+User guides in all eleven languages are in the zip (folder `user_guide`).
 
 ## 🧩 How it works
 

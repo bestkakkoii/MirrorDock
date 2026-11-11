@@ -157,7 +157,7 @@ static std::atomic<bool> restart_after_exit{false};
 static bool force_h264_only = false;    /* "-h264": do not offer H.265 to the client */
 static int gpu_preference = 0;          /* "-gpu auto|intel|nvidia" */
 static int ui_language_choice = 0;      /* "-ui": 0 auto, 1 zh-TW, 2 zh-CN, 3 en, 4 ja, 5 ko, 6 es, 7 de, 8 fr,
-                                           9 vi, 10 th (native_media_settings) */
+                                           9 vi, 10 th, 11 ru (native_media_settings) */
 static int mode_choice = -1;            /* "-mode": native_media_mode, -1 = the choice saved by the menu */
 static int crop_choice = -1;            /* "-crop": 0 off, 1 auto, -1 = the choice saved by the menu */
 static bool user_set_display = false;   /* "-s": the stream size is the user's, not the mode's */
@@ -1028,7 +1028,7 @@ static void print_info (char *name) {
     printf("          where a part can be framed by hand too (key X)\n");
     printf("-ui l     Interface language: auto (the Windows display language, the\n");
     printf("          default), en, zh-TW (Traditional Chinese), zh-CN (Simplified\n");
-    printf("          Chinese), ja, ko, es, de, fr, vi, th\n");
+    printf("          Chinese), ja, ko, es, de, fr, vi, th, ru\n");
     printf("-pin[xxxx]Use a 4-digit pin code to control client access (default: no)\n");
     printf("          default pin is random: optionally use fixed pin xxxx\n");
     printf("-reg [fn] Keep a register in ~/.uxplay.register to verify returning\n");
@@ -1731,7 +1731,7 @@ static void parse_arguments (int argc, char *argv[]) {
                            [](unsigned char c) { return (char) std::tolower(c); });
             /* the numbering of native_media_settings::ui_language */
             static const char *const language_codes[] = {"auto", "zh-tw", "zh-cn", "en", "ja", "ko",
-                                                         "es",   "de",    "fr",    "vi", "th"};
+                                                         "es",   "de",    "fr",    "vi", "th", "ru"};
             int chosen = -1;
             for (int code = 0; code < (int) (sizeof(language_codes) / sizeof(language_codes[0])); code++) {
                 if (choice == language_codes[code]) {
@@ -1746,7 +1746,7 @@ static void parse_arguments (int argc, char *argv[]) {
             if (chosen >= 0) {
                 ui_language_choice = chosen;
             } else {
-                startup_message("invalid \"-ui %s\": choices are auto, en, zh-TW, zh-CN, ja, ko, es, de, fr, vi, th\n",
+                startup_message("invalid \"-ui %s\": choices are auto, en, zh-TW, zh-CN, ja, ko, es, de, fr, vi, th, ru\n",
                                 argv[i]);
                 startup_exit(1);
             }

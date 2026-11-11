@@ -13,7 +13,7 @@
 [![Licence](https://img.shields.io/badge/licence-GPL--3.0-blue)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/bestkakkoii/MirrorDock?style=social)](https://github.com/bestkakkoii/MirrorDock/stargazers)
 
-[English](README.md) · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md) · **日本語** · [한국어](README.ko.md) · [Español](README.es.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Tiếng Việt](README.vi.md) · [ไทย](README.th.md)
+[English](README.md) · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md) · **日本語** · [한국어](README.ko.md) · [Español](README.es.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Tiếng Việt](README.vi.md) · [ไทย](README.th.md) · [Русский](README.ru.md)
 
 </div>
 
@@ -35,7 +35,7 @@ MirrorDock は Windows 用の AirPlay レシーバーです。iPhone の*画面�
 | ✂️ **黒帯をトリミング** | 映画のまわりの黒帯を自動で切り落とします。マウスで囲んだ好きな部分だけを表示することもできます。 |
 | 🖱️ **iPhone を操作** | 映像の上でクリック、ドラッグ、スクロール、キーボード入力をすると、iPhone がそのとおりに動きます。機能は MirrorDock に内蔵されていて、補助プログラムも脱獄も要りません（iOS 27、USB ケーブル、デベロッパモードが必要です）。 |
 | 🪟 **使い勝手のよいウィンドウ** | ほどよい大きさで開き、サイズを変えても縦横比を保ち、大きさと位置を覚えます。キーひとつで全画面表示になり、常に手前に表示することもできます。 |
-| 🌐 **10 言語に対応** | 画面の表示は、Windows の表示言語に合わせて切り替わります。 |
+| 🌐 **11 言語に対応** | 画面の表示は、Windows の表示言語に合わせて切り替わります。 |
 | 🧳 **ファイルはひとつ** | 約 12 MB の実行ファイルが 1 つあるだけで、Windows のほかには何も要りません。 |
 
 ## 🚀 クイックスタート
@@ -132,9 +132,9 @@ iPhone の操作中は、文字キーを押すと iPhone に入力されます�
 
 ## 🌐 言語
 
-画面の表示は Windows の表示言語に合わせて切り替わります。対応しているのは English、繁體中文、简体中文、日本語、한국어、Español、Deutsch、Français、Tiếng Việt、ไทย です。それ以外の言語では英語で表示されます。特定の言語に固定するには `-ui en|zh-TW|zh-CN|ja|ko|es|de|fr|vi|th` を使います。
+画面の表示は Windows の表示言語に合わせて切り替わります。対応しているのは English、繁體中文、简体中文、日本語、한국어、Español、Deutsch、Français、Tiếng Việt、ไทย、Русский です。それ以外の言語では英語で表示されます。特定の言語に固定するには `-ui en|zh-TW|zh-CN|ja|ko|es|de|fr|vi|th|ru` を使います。
 
-zip には、10 言語すべてのユーザーガイドが入っています（`user_guide` フォルダー）。
+zip には、11 言語すべてのユーザーガイドが入っています（`user_guide` フォルダー）。
 
 ## 🧩 仕組み
 

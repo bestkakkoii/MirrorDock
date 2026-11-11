@@ -167,8 +167,9 @@ mô tả ở trên là cách phản chiếu qua dây hoạt động được v�
   màn hình.
 - Giao diện đi theo ngôn ngữ hiển thị của Windows: tiếng Anh, tiếng Trung
   phồn thể, tiếng Trung giản thể, tiếng Nhật, tiếng Hàn, tiếng Tây Ban Nha,
-  tiếng Đức, tiếng Pháp, tiếng Việt và tiếng Thái; mọi ngôn ngữ khác sẽ
-  dùng tiếng Anh. Để cố định một ngôn ngữ, hãy dùng tùy chọn -ui (mục 8).
+  tiếng Đức, tiếng Pháp, tiếng Việt, tiếng Thái và tiếng Nga; mọi ngôn ngữ
+  khác sẽ dùng tiếng Anh. Để cố định một ngôn ngữ, hãy dùng tùy chọn -ui
+  (mục 8).
 
 
 5. Điều khiển iPhone bằng chuột và bàn phím
@@ -279,7 +280,7 @@ Các tùy chọn thường dùng:
   -s RxC         yêu cầu độ phân giải luồng này (khi đó các chế độ không
                  thay đổi nó)
   -ui en         ngôn ngữ giao diện: auto (mặc định), en, zh-TW, zh-CN, ja,
-                 ko, es, de, fr, vi, th
+                 ko, es, de, fr, vi, th, ru
   -vsync 20      phát âm thanh chậm hơn hình ảnh 20 mili giây (có thể là số
                  âm; dùng để tinh chỉnh độ khớp khẩu hình)
   -vsync no      tắt đồng bộ theo dấu thời gian (đến đâu phát đó)

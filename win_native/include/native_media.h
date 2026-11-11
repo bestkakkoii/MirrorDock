@@ -62,7 +62,7 @@ typedef struct native_media_settings {
     int ui_language;                   /* interface text: 0 = Windows display language (default),
                                           1 = Traditional Chinese, 2 = Simplified Chinese, 3 = English,
                                           4 = Japanese, 5 = Korean, 6 = Spanish, 7 = German, 8 = French,
-                                          9 = Vietnamese, 10 = Thai */
+                                          9 = Vietnamese, 10 = Thai, 11 = Russian */
     int performance_mode;              /* native_media_mode, or -1 for the choice saved by the user
                                           (balanced when none is saved) */
     int crop_mode;                     /* 0 = show the whole picture, 1 = cut black bars off

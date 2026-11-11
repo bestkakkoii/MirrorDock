@@ -13,7 +13,7 @@
 [![Licence](https://img.shields.io/badge/licence-GPL--3.0-blue)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/bestkakkoii/MirrorDock?style=social)](https://github.com/bestkakkoii/MirrorDock/stargazers)
 
-[English](README.md) · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md) · **Deutsch** · [Français](README.fr.md) · [Tiếng Việt](README.vi.md) · [ไทย](README.th.md)
+[English](README.md) · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md) · **Deutsch** · [Français](README.fr.md) · [Tiếng Việt](README.vi.md) · [ไทย](README.th.md) · [Русский](README.ru.md)
 
 </div>
 
@@ -35,7 +35,7 @@ Es baut auf dem AirPlay-Protokollkern von [UxPlay](https://github.com/FDH2/UxPla
 | ✂️ **Schwarze Balken abschneiden** | Schneidet die schwarzen Balken rund um einen Film automatisch ab – oder Sie rahmen mit der Maus einen beliebigen Teil des Bildes ein. |
 | 🖱️ **iPhone steuern** | Klicken, ziehen, scrollen und schreiben Sie im Bild, und das Smartphone führt es aus. Fest eingebaut: kein Hilfsprogramm, kein Jailbreak (setzt iOS 27, das USB-Kabel und den Entwicklermodus voraus). |
 | 🪟 **Ein richtiges Fenster** | Öffnet sich in sinnvoller Größe, behält beim Ändern der Größe das Seitenverhältnis bei, merkt sich Größe und Position, Vollbild per Tastendruck, immer im Vordergrund. |
-| 🌐 **Zehn Sprachen** | Die Oberfläche richtet sich nach Ihrer Windows-Anzeigesprache. |
+| 🌐 **Elf Sprachen** | Die Oberfläche richtet sich nach Ihrer Windows-Anzeigesprache. |
 | 🧳 **Eine einzige Datei** | Eine einzelne ausführbare Datei von rund 12 MB, die nichts außer Windows selbst benötigt. |
 
 ## 🚀 Schnellstart
@@ -132,9 +132,9 @@ Hängen Sie die Optionen an eine Verknüpfung mit `mirror_dock.exe` an oder schr
 
 ## 🌐 Sprachen
 
-Die Oberfläche richtet sich nach der Windows-Anzeigesprache: English, 繁體中文, 简体中文, 日本語, 한국어, Español, Deutsch, Français, Tiếng Việt und ไทย. Bei jeder anderen Sprache erscheint sie auf Englisch. Eine bestimmte Sprache erzwingen Sie mit `-ui en|zh-TW|zh-CN|ja|ko|es|de|fr|vi|th`.
+Die Oberfläche richtet sich nach der Windows-Anzeigesprache: English, 繁體中文, 简体中文, 日本語, 한국어, Español, Deutsch, Français, Tiếng Việt, ไทย und Русский. Bei jeder anderen Sprache erscheint sie auf Englisch. Eine bestimmte Sprache erzwingen Sie mit `-ui en|zh-TW|zh-CN|ja|ko|es|de|fr|vi|th|ru`.
 
-Benutzerhandbücher in allen zehn Sprachen liegen dem ZIP-Archiv bei (Ordner `user_guide`).
+Benutzerhandbücher in allen elf Sprachen liegen dem ZIP-Archiv bei (Ordner `user_guide`).
 
 ## 🧩 So funktioniert es
 

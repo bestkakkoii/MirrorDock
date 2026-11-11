@@ -220,6 +220,7 @@ httpd_init(logger_t *logger, httpd_callbacks_t *callbacks, int nohold)
     httpd->server_fd4 = -1;
     httpd->server_fd6 = -1;
     httpd->wakeup_fd = -1;
+    MUTEX_CREATE(httpd->run_mutex);
 
     return httpd;
 }
@@ -229,6 +230,7 @@ httpd_destroy(httpd_t *httpd)
 {
     if (httpd) {
         httpd_stop(httpd);
+        MUTEX_DESTROY(httpd->run_mutex);
         free(httpd->connections);
         free(httpd);
     }

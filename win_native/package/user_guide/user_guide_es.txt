@@ -180,8 +180,8 @@ con las versiones actuales de iOS.
   pantalla por sí solo.
 - La interfaz sigue el idioma para mostrar de Windows: inglés, chino
   tradicional, chino simplificado, japonés, coreano, español, alemán,
-  francés, vietnamita y tailandés; con cualquier otro idioma se muestra en
-  inglés. Para fijar uno, use la opción -ui (sección 8).
+  francés, vietnamita, tailandés y ruso; con cualquier otro idioma se
+  muestra en inglés. Para fijar uno, use la opción -ui (sección 8).
 
 
 5. Controlar el iPhone con mouse y teclado
@@ -300,7 +300,7 @@ Opciones habituales:
   -s AnchoxAlto  pedir esta resolución de transmisión (los modos ya no la
                  modifican)
   -ui en         idioma de la interfaz: auto (predeterminado), en, zh-TW,
-                 zh-CN, ja, ko, es, de, fr, vi, th
+                 zh-CN, ja, ko, es, de, fr, vi, th, ru
   -vsync 20      reproducir el sonido 20 milisegundos después que la imagen
                  (puede ser negativo; sirve para afinar la sincronización
                  labial)

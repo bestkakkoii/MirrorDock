@@ -13,7 +13,7 @@
 [![Licence](https://img.shields.io/badge/licence-GPL--3.0-blue)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/bestkakkoii/MirrorDock?style=social)](https://github.com/bestkakkoii/MirrorDock/stargazers)
 
-[English](README.md) · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · **Tiếng Việt** · [ไทย](README.th.md)
+[English](README.md) · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · **Tiếng Việt** · [ไทย](README.th.md) · [Русский](README.ru.md)
 
 </div>
 
@@ -35,7 +35,7 @@ Chương trình được xây dựng trên lõi giao thức AirPlay của [UxPla
 | ✂️ **Cắt viền đen** | Tự động cắt bỏ viền đen quanh bộ phim, hoặc để bạn dùng chuột khoanh bất kỳ phần nào của hình ảnh. |
 | 🖱️ **Điều khiển iPhone** | Bấm, kéo, cuộn và gõ phím ngay trên hình ảnh, điện thoại sẽ làm theo. Tích hợp sẵn: không cần chương trình hỗ trợ, không cần jailbreak (cần iOS 27, cáp USB và Chế độ nhà phát triển). |
 | 🪟 **Một cửa sổ đúng nghĩa** | Mở ra với kích thước hợp lý, giữ nguyên tỉ lệ khung hình khi bạn đổi kích thước, ghi nhớ kích thước và vị trí, vào toàn màn hình bằng một phím, luôn ở trên cùng. |
-| 🌐 **Mười ngôn ngữ** | Giao diện đi theo ngôn ngữ hiển thị Windows của bạn. |
+| 🌐 **Mười một ngôn ngữ** | Giao diện đi theo ngôn ngữ hiển thị Windows của bạn. |
 | 🧳 **Một tệp duy nhất** | Chỉ một tệp thực thi khoảng 12 MB, không cần gì ngoài chính Windows. |
 
 ## 🚀 Bắt đầu nhanh
@@ -132,9 +132,9 @@ Thêm tùy chọn vào một lối tắt của `mirror_dock.exe`, hoặc ghi m�
 
 ## 🌐 Ngôn ngữ
 
-Giao diện đi theo ngôn ngữ hiển thị của Windows: English, 繁體中文, 简体中文, 日本語, 한국어, Español, Deutsch, Français, Tiếng Việt và ไทย. Mọi ngôn ngữ khác sẽ dùng tiếng Anh. Để chỉ định một ngôn ngữ, hãy dùng `-ui en|zh-TW|zh-CN|ja|ko|es|de|fr|vi|th`.
+Giao diện đi theo ngôn ngữ hiển thị của Windows: English, 繁體中文, 简体中文, 日本語, 한국어, Español, Deutsch, Français, Tiếng Việt, ไทย và Русский. Mọi ngôn ngữ khác sẽ dùng tiếng Anh. Để chỉ định một ngôn ngữ, hãy dùng `-ui en|zh-TW|zh-CN|ja|ko|es|de|fr|vi|th|ru`.
 
-Hướng dẫn sử dụng bằng cả mười ngôn ngữ có sẵn trong tệp zip (thư mục `user_guide`).
+Hướng dẫn sử dụng bằng cả mười một ngôn ngữ có sẵn trong tệp zip (thư mục `user_guide`).
 
 ## 🧩 Cách hoạt động
 

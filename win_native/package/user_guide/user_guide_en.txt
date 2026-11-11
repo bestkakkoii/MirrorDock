@@ -162,8 +162,8 @@ the way described above is the wired mirroring that works with current iOS.
   itself.
 - The interface follows the Windows display language: English, Traditional
   Chinese, Simplified Chinese, Japanese, Korean, Spanish, German, French,
-  Vietnamese and Thai; any other language gets English. To fix one, use the
-  -ui option (section 8).
+  Vietnamese, Thai and Russian; any other language gets English. To fix
+  one, use the -ui option (section 8).
 
 
 5. Controlling the iPhone with mouse and keyboard
@@ -271,7 +271,7 @@ Common options:
                  the graphics card decodes it in hardware)
   -s WxH         ask for this stream resolution (modes then leave it alone)
   -ui en         interface language: auto (the default), en, zh-TW, zh-CN,
-                 ja, ko, es, de, fr, vi, th
+                 ja, ko, es, de, fr, vi, th, ru
   -vsync 20      play the sound 20 milliseconds later than the picture (may
                  be negative; for fine-tuning lip sync)
   -vsync no      switch off timestamp synchronization (play on arrival)

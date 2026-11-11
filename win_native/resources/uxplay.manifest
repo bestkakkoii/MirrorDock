@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0" xmlns:asmv3="urn:schemas-microsoft-com:asm.v3">
-  <assemblyIdentity type="win32" name="MirrorDock" version="1.8.0.0" processorArchitecture="amd64"/>
+  <assemblyIdentity type="win32" name="MirrorDock" version="1.9.0.0" processorArchitecture="amd64"/>
   <description>MirrorDock screen mirroring receiver</description>
   <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
     <application>

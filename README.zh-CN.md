@@ -4,7 +4,7 @@
 
 # MirrorDock
 
-**把 iPhone 或 iPad 的屏幕镜像到 Windows 电脑——走 Wi-Fi 或 USB 数据线都可以。**
+**把 iPhone 或 iPad 的屏幕镜像到 Windows 电脑——走 Wi-Fi 或 USB 数据线都可以——还能用鼠标和键盘操作 iPhone。**
 
 [![Release](https://img.shields.io/github/v/release/bestkakkoii/MirrorDock?label=release&color=126BDB)](https://github.com/bestkakkoii/MirrorDock/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/bestkakkoii/MirrorDock/total?color=33B8FF)](https://github.com/bestkakkoii/MirrorDock/releases)
@@ -33,9 +33,10 @@ MirrorDock 是一款运行在 Windows 上的 AirPlay 接收端。在 iPhone 的 
 | 🔊 **音画同步** | 低延迟的 WASAPI 输出与画面共用同一条时间轴，口型和声音对得上。 |
 | 🎛️ **三种模式** | *画质优先*、*均衡*（默认）和 *性能优先*：要最清晰的画面还是最低的延迟，由你决定。 |
 | ✂️ **裁剪黑边** | 自动裁掉影片四周的黑边，也可以用鼠标框选画面中的任意区域。 |
+| 🖱️ **操作 iPhone** | 在画面上点击、拖动、滚动、打字，手机就照着做。功能内置：不用另装辅助程序，也不用越狱（需要 iOS 27、USB 数据线和开发者模式）。 |
 | 🪟 **像样的窗口** | 以合适的大小打开，调整大小时保持画面比例，记住大小和位置，一键全屏，还能窗口置顶。 |
 | 🌐 **十种语言** | 界面语言跟随 Windows 的显示语言。 |
-| 🧳 **单文件** | 只有一个约 10 MB 的可执行文件，除了 Windows 本身什么都不依赖。 |
+| 🧳 **单文件** | 只有一个约 12 MB 的可执行文件，除了 Windows 本身什么都不依赖。 |
 
 ## 🚀 快速上手
 
@@ -74,6 +75,30 @@ MirrorDock 是一款运行在 Windows 上的 AirPlay 接收端。在 iPhone 的 
 - **自动**（按 **C** 键）：裁掉黑边，窗口紧贴画面。一部影片接着另一部播放时，裁剪保持不变；如果黑边里出现了别的内容并且停留在那里（例如播放器的控制按钮），完整画面会在大约一秒内恢复。
 - **手动**（按 **X** 键）：拖出一个框，圈住想看的部分。按 **Esc** 取消。
 
+## 🖱️ 操作 iPhone
+
+按 **F8**（或在菜单里选择 **用鼠标和键盘操作 iPhone**），画面就成了手机的屏幕：你在上面做什么，iPhone 就做什么。
+
+| 在电脑上 | 在 iPhone 上 |
+|---|---|
+| 鼠标左键：单击、按住、拖动 | 一根手指：轻点、长按、轻扫 |
+| 鼠标滚轮（按住 **Shift**：横向滚动） | 滚动指针下方的内容 |
+| 鼠标中键 | 回到主屏幕 |
+| 键盘 | 在手机上打字，就像给手机接了一把键盘；**Ctrl** 相当于 ⌘，**Ctrl+空格** 切换手机的输入语言 |
+| **Page Down** / **Page Up**、**Alt** + 方向键 | 快速滑动到下一页或上一页、下一个或上一个视频 |
+| 鼠标右键 | 照旧是 MirrorDock 的菜单 |
+
+需要满足的条件：
+
+1. **iOS 27 或更高版本**，插着 **USB 数据线**，并且 iPhone 已经信任这台电脑。只有操作走数据线；画面仍然可以走 Wi-Fi。
+2. 在 iPhone 上打开 **开发者模式**：*设置 → 隐私与安全性 → 开发者模式*。这个开关平时是隐藏的，要有开发工具提出请求才会出现；你第一次按 F8 时，MirrorDock 就会提出请求。
+3. 第一次使用，以及每次 iOS 更新后的第一次，需要互联网连接：MirrorDock 会给手机装上 Apple 的 *开发者磁盘映像*，大约需要一分钟。
+
+> [!NOTE]
+> AirPlay 无法传递输入，所以操作走的是另一条路：iOS 的开发者服务，也就是 Xcode 用来操作真机的那一套。为了装上这些服务，MirrorDock 会从 [DeveloperDiskImage](https://github.com/doronz88/DeveloperDiskImage) 仓库下载 Apple 的映像，并请 Apple 的签名服务（`gs.apple.com`）针对你的手机为映像签名；这个过程会把手机的芯片编号告诉 Apple，和 Xcode 的做法完全一样。装好之后，操作不会再连接任何地方。
+
+操作开启期间，**F8**、**F11**、**Alt+Enter** 和 **Alt+F4** 仍然归窗口所有；控制栏不会出现，因为它会挡住手机屏幕的底部。
+
 ## ⌨️ 键盘和鼠标
 
 | 操作 | 按键 |
@@ -83,8 +108,11 @@ MirrorDock 是一款运行在 Windows 上的 AirPlay 接收端。在 iPhone 的 
 | 框选要显示的区域 | **X** |
 | 窗口置顶 | **T** |
 | 静音（仅电脑端） | **M** |
+| 开启 / 关闭 iPhone 操作 | **F8** |
 | 控制栏 | 把鼠标移到画面上 |
 | 菜单 | 在画面任意位置单击右键 |
+
+操作 iPhone 期间，字母键会输入到手机上；按 **F8** 就把它们还给窗口。
 
 ## ⚙️ 选项
 
@@ -123,6 +151,8 @@ flowchart LR
 
 画面和声音在同一条时间轴上调度，延迟会随网络状况和电脑的解码速度自动调整：在不卡顿的前提下尽可能短。
 
+操作则是另一条独立的通路。MirrorDock 通过 USB 数据线打开手机的开发者隧道（自带一套精简的 IPv6 和 TCP 实现，所以不需要网卡，也不需要管理员权限），再把触控和键盘报告发送到手机的输入服务。
+
 ## 📊 实测数据
 
 一台 2016 年的笔记本电脑（Intel Core i7-6700HQ，Intel HD Graphics 530），2872×1320、60 fps 的 H.265 测试流，*均衡* 模式，1.6 版：
@@ -150,6 +180,12 @@ Wi-Fi 镜像和 USB 镜像已用 iPhone 16 Pro Max（iOS 26）验证，覆盖到
 **口型和声音对不上。**
 用 `-vsync` 加一个毫秒数来微调（正值让声音延后）。
 
+**按了 F8，却提示无法操作 iPhone。**
+提示信息会说明原因：没插数据线或还没有信任这台电脑、开发者模式没有打开、iPhone 的 iOS 版本低于 27，或者开发者磁盘映像没能装上（这一步需要联网）。打开开发者模式后，iPhone 会重新启动，并再次请你确认。
+
+**开发者模式一直开着安全吗？**
+这是 Apple 自己为开发 App 的人准备的开关。它允许受信任的电脑安装和调试 App，并访问开发者服务；它不会让手机越狱，想关的时候回到同一个地方关掉就行。
+
 **日志在哪里？**
 `%LOCALAPPDATA%\MirrorDock\mirror_dock.log`，或者在菜单里选择 **打开日志**。
 
@@ -167,12 +203,13 @@ MSYSTEM=CLANG64 bash -lc 'bash win_native/build_scripts/build_uxplay_native.sh <
 
 ## 📜 许可证
 
-MirrorDock 以 **GNU General Public License v3**（[LICENSE](LICENSE)）发布，因为它构建在 UxPlay 的 GPL-3.0 代码之上。[`win_native/`](win_native) 中的 Windows 媒体引擎是原创作品，采用 **MIT 许可证**（[win_native/LICENSE](win_native/LICENSE)）。发布的压缩包里包含所有捆绑库的许可证文本，以及完整的对应源代码。
+MirrorDock 以 **GNU General Public License v3**（[LICENSE](LICENSE)）发布，因为它构建在 UxPlay 的 GPL-3.0 代码之上。[`win_native/`](win_native) 中的 Windows 媒体引擎是原创作品，采用 **MIT 许可证**（[win_native/LICENSE](win_native/LICENSE)）；[`phone_control/`](phone_control) 中的操作功能同样是原创作品，采用 **GPL-3.0-or-later**。发布的压缩包里包含所有捆绑库的许可证文本，以及完整的对应源代码。
 
 ## 🙏 致谢
 
 - [UxPlay](https://github.com/FDH2/UxPlay)，作者 F. Duncanh 及各位贡献者——MirrorDock 所基于的 AirPlay 服务器。
 - [RPiPlay](https://github.com/FD-/RPiPlay)（作者 Florian Draschbacher）和 [shairplay](https://github.com/juhovh/shairplay)（作者 Juho Vähä-Herttua）——这套协议核心的来源。
+- [pymobiledevice3](https://github.com/doronz88/pymobiledevice3)，作者 doronz88 及各位贡献者——操作功能所依据的 iOS 开发者服务知识，就来自这个项目。
 - playfair、llhttp、csrp、FFmpeg、OpenSSL 和 libplist。
 
 AirPlay、iPhone 和 iPad 是 Apple Inc. 的商标。MirrorDock 是独立的开源项目，与 Apple 没有任何关联。

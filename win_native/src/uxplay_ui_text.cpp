@@ -49,6 +49,11 @@ namespace uxplay
             // texts per row, in the order of ui_language:
             // zh-Hant, zh-Hans, en, ja, ko, es, de, fr, vi, th
             // zh-Hant, zh-Hans, en, ja, ko, es, de, fr, vi, th
+            // zh-Hant, zh-Hans, en, ja, ko, es, de, fr, vi, th
+            // zh-Hant, zh-Hans, en, ja, ko, es, de, fr, vi, th
+            // zh-Hant, zh-Hans, en, ja, ko, es, de, fr, vi, th
+            // zh-Hant, zh-Hans, en, ja, ko, es, de, fr, vi, th
+            // zh-Hant, zh-Hans, en, ja, ko, es, de, fr, vi, th
             // window and tray status
             {ui_text::waiting_for_connection,
              {L"等待連線",
@@ -812,6 +817,185 @@ namespace uxplay
               L"{} · rogné",
               L"{} · đã cắt",
               L"{} · ครอบตัดแล้ว"}},
+            // remote control of the phone
+            {ui_text::control_phone,
+             {L"用滑鼠和鍵盤操作 iPhone",
+              L"用鼠标和键盘操作 iPhone",
+              L"Control the iPhone with mouse and keyboard",
+              L"マウスとキーボードで iPhone を操作",
+              L"마우스와 키보드로 iPhone 제어",
+              L"Controlar el iPhone con mouse y teclado",
+              L"iPhone mit Maus und Tastatur steuern",
+              L"Contrôler l’iPhone à la souris et au clavier",
+              L"Điều khiển iPhone bằng chuột và bàn phím",
+              L"ควบคุม iPhone ด้วยเมาส์และคีย์บอร์ด"}},
+            {ui_text::control_connecting,
+             {L"正在連接 iPhone…",
+              L"正在连接 iPhone…",
+              L"connecting to the iPhone…",
+              L"iPhone に接続中…",
+              L"iPhone에 연결 중…",
+              L"conectando con el iPhone…",
+              L"wird mit dem iPhone verbunden…",
+              L"connexion à l’iPhone…",
+              L"đang kết nối với iPhone…",
+              L"กำลังเชื่อมต่อกับ iPhone…"}},
+            {ui_text::control_ready_title,
+             {L"現在可以操作 iPhone 了",
+              L"现在可以操作 iPhone 了",
+              L"You can control the iPhone now",
+              L"iPhone を操作できるようになりました",
+              L"이제 iPhone을 제어할 수 있습니다",
+              L"Ya puede controlar el iPhone",
+              L"Sie können das iPhone jetzt steuern",
+              L"Vous pouvez maintenant contrôler l’iPhone",
+              L"Bây giờ bạn có thể điều khiển iPhone",
+              L"ควบคุม iPhone ได้แล้ว"}},
+            {ui_text::control_ready_text,
+             {L"直接在畫面上點擊、拖曳和打字。按右鍵開啟選單，按 F8 關閉操作。",
+              L"直接在画面上点击、拖动和打字。右键打开菜单，按 F8 关闭操作。",
+              L"Click, drag and type on the picture. Right-click opens the menu, F8 switches control off.",
+              L"映像の上でクリック、ドラッグ、キーボード入力ができます。右クリックでメニューが開き、F8 で操作をオフにできます。",
+              L"영상 위에서 클릭하고, 드래그하고, 키보드로 입력하세요. 오른쪽 클릭하면 메뉴가 열리고, F8을 누르면 제어가 꺼집니다.",
+              L"Haga clic, arrastre y escriba sobre la imagen. El botón derecho abre el menú y F8 desactiva el c"
+              L"ontrol.",
+              L"Klicken, ziehen und schreiben Sie direkt im Bild. Ein Rechtsklick öffnet das Menü, F8 schaltet d"
+              L"ie Steuerung aus.",
+              L"Cliquez, faites glisser et tapez au clavier, directement sur l’image. Le clic droit ouvre le men"
+              L"u, F8 désactive le contrôle.",
+              L"Hãy bấm, kéo và gõ phím ngay trên hình ảnh. Bấm chuột phải để mở menu, nhấn F8 để tắt điều khiển"
+              L".",
+              L"คลิก ลาก และพิมพ์บนภาพได้เลย คลิกขวาเพื่อเปิดเมนู กด F8 เพื่อปิดการควบคุม"}},
+            {ui_text::control_preparing_title,
+             {L"正在準備 iPhone",
+              L"正在准备 iPhone",
+              L"Preparing the iPhone",
+              L"iPhone を準備しています",
+              L"iPhone을 준비하고 있습니다",
+              L"Preparando el iPhone",
+              L"iPhone wird vorbereitet",
+              L"Préparation de l’iPhone",
+              L"Đang chuẩn bị iPhone",
+              L"กำลังเตรียม iPhone"}},
+            {ui_text::control_preparing_text,
+             {L"第一次操作（以及 iOS 更新後的第一次）需要為 iPhone 安裝 Apple 的開發者元件，大約一分鐘，需要網際網路連線。",
+              L"首次操作（以及 iOS 更新后的第一次）需要为 iPhone 安装 Apple 的开发者组件，大约一分钟，需要互联网连接。",
+              L"The first use (and the first after an iOS update) installs Apple's developer components on the i"
+              L"Phone. This takes about a minute and needs an internet connection.",
+              L"初めて使うとき（および iOS をアップデートしたあとの初回）は、Apple の開発者向けコンポーネントを iPhone にインストールします。約 1 分かかり、インターネット接続が必要です。",
+              L"처음 사용할 때(그리고 iOS 업데이트 후 처음 사용할 때)는 iPhone에 Apple의 개발자용 구성 요소를 설치합니다. 1분 정도 걸리며 인터넷 연결이 필요합니다.",
+              L"La primera vez (y la primera tras una actualización de iOS) se instalan en el iPhone los compone"
+              L"ntes para desarrolladores de Apple. Tarda cerca de un minuto y requiere conexión a Internet.",
+              L"Bei der ersten Nutzung (und der ersten nach einem iOS-Update) werden Apples Entwicklerkomponente"
+              L"n auf dem iPhone installiert. Das dauert etwa eine Minute und erfordert eine Internetverbindung.",
+              L"La première utilisation (et la première après une mise à jour d’iOS) installe sur l’iPhone les c"
+              L"omposants pour développeurs d’Apple. Il faut environ une minute et une connexion Internet.",
+              L"Ở lần dùng đầu tiên (và lần đầu tiên sau khi cập nhật iOS), các thành phần dành cho nhà phát tri"
+              L"ển của Apple sẽ được cài lên iPhone. Việc này mất khoảng một phút và cần có kết nối Internet.",
+              L"ในการใช้งานครั้งแรก (และครั้งแรกหลังอัปเดต iOS) โปรแกรมจะติดตั้งส่วนประกอบสำหรับนักพัฒนาของ Appl"
+              L"e ลงใน iPhone ซึ่งใช้เวลาประมาณหนึ่งนาทีและต้องเชื่อมต่ออินเทอร์เน็ต"}},
+            {ui_text::control_failed_title,
+             {L"無法操作 iPhone",
+              L"无法操作 iPhone",
+              L"The iPhone cannot be controlled",
+              L"iPhone を操作できません",
+              L"iPhone을 제어할 수 없습니다",
+              L"No se puede controlar el iPhone",
+              L"Das iPhone lässt sich nicht steuern",
+              L"Impossible de contrôler l’iPhone",
+              L"Không điều khiển được iPhone",
+              L"ควบคุม iPhone ไม่ได้"}},
+            {ui_text::control_needs_cable,
+             {L"請用 USB 線連接 iPhone，解鎖後點一下「信任」。",
+              L"请用 USB 数据线连接 iPhone，解锁后轻点“信任”。",
+              L"Connect the iPhone with the USB cable, unlock it and tap \"Trust\".",
+              L"iPhone を USB ケーブルで接続し、ロックを解除して「信頼」をタップしてください。",
+              L"iPhone을 USB 케이블로 연결하고 잠금을 해제한 다음 ‘신뢰’를 탭하세요.",
+              L"Conecte el iPhone con el cable USB, desbloquéelo y toque «Confiar».",
+              L"Schließen Sie das iPhone mit dem USB-Kabel an, entsperren Sie es und tippen Sie auf „Vertrauen“.",
+              L"Branchez l’iPhone avec le câble USB, déverrouillez-le et touchez « Se fier ».",
+              L"Hãy kết nối iPhone bằng cáp USB, mở khóa rồi chạm vào “Tin cậy”.",
+              L"เชื่อมต่อ iPhone ด้วยสาย USB ปลดล็อกเครื่อง แล้วแตะ “เชื่อถือ”"}},
+            {ui_text::control_needs_developer_mode,
+             {L"請在 iPhone 開啟開發者模式：設定 > 隱私權與安全性 > 開發者模式。",
+              L"请在 iPhone 上打开开发者模式：设置 > 隐私与安全性 > 开发者模式。",
+              L"Turn on Developer Mode on the iPhone: Settings > Privacy & Security > Developer Mode.",
+              L"iPhone でデベロッパモードをオンにしてください（設定 > プライバシーとセキュリティ > デベロッパモード）。",
+              L"iPhone의 설정 > 개인정보 보호 및 보안 > 개발자 모드에서 개발자 모드를 켜세요.",
+              L"Active el modo de desarrollador en el iPhone: Ajustes (o Configuración) > Privacidad y seguridad"
+              L" > Modo de desarrollador.",
+              L"Aktivieren Sie auf dem iPhone den Entwicklermodus: Einstellungen > Datenschutz & Sicherheit > En"
+              L"twicklermodus.",
+              L"Activez le mode Développeur sur l’iPhone : Réglages > Confidentialité et sécurité > Mode Dévelop"
+              L"peur.",
+              L"Hãy bật Chế độ nhà phát triển trên iPhone: Cài đặt > Quyền riêng tư & Bảo mật > Chế độ nhà phát "
+              L"triển.",
+              L"เปิดโหมดนักพัฒนาบน iPhone: การตั้งค่า > ความเป็นส่วนตัวและความปลอดภัย > โหมดนักพัฒนา"}},
+            {ui_text::control_image_failed,
+             {L"無法把開發者磁碟映像檔載入 iPhone。請確認這台電腦可以上網，然後再試一次。",
+              L"无法把开发者磁盘映像加载到 iPhone。请确认这台电脑可以上网，然后重试。",
+              L"The Developer Disk Image could not be loaded onto the iPhone. Check that this PC is online, then"
+              L" try again.",
+              L"開発者向けディスクイメージを iPhone にインストールできませんでした。この PC がインターネットに接続されているか確認して、もう一度お試しください。",
+              L"개발자 디스크 이미지를 iPhone에 설치하지 못했습니다. 이 PC가 인터넷에 연결되어 있는지 확인한 다음 다시 시도하세요.",
+              L"No se pudo cargar en el iPhone la imagen de disco de desarrollador. Compruebe que este equipo te"
+              L"nga conexión a Internet y vuelva a intentarlo.",
+              L"Das Developer Disk Image konnte nicht auf das iPhone geladen werden. Prüfen Sie, ob dieser PC on"
+              L"line ist, und versuchen Sie es dann erneut.",
+              L"Impossible de charger l’image disque développeur sur l’iPhone. Vérifiez que ce PC est connecté à"
+              L" Internet, puis réessayez.",
+              L"Không nạp được Developer Disk Image vào iPhone. Hãy kiểm tra kết nối Internet của máy tính này r"
+              L"ồi thử lại.",
+              L"โหลด Developer Disk Image (ดิสก์อิมเมจสำหรับนักพัฒนา) ลงใน iPhone ไม่สำเร็จ โปรดตรวจสอบว่าคอมพิว"
+              L"เตอร์เครื่องนี้เชื่อมต่ออินเทอร์เน็ตอยู่ แล้วลองอีกครั้ง"}},
+            {ui_text::control_camera_in_use,
+             {L"iPhone 的相機或麥克風正在使用中。請關閉使用它的 App，然後再試一次。",
+              L"iPhone 的相机或麦克风正在使用中。请关闭使用它的 App，然后重试。",
+              L"The iPhone's camera or microphone is in use. Close the app that uses it, then try again.",
+              L"iPhone のカメラまたはマイクが使用中です。使用しているアプリを閉じてから、もう一度お試しください。",
+              L"iPhone의 카메라 또는 마이크가 사용 중입니다. 사용 중인 앱을 닫은 다음 다시 시도하세요.",
+              L"La cámara o el micrófono del iPhone están en uso. Cierre la app que los usa y vuelva a intentarl"
+              L"o.",
+              L"Die Kamera oder das Mikrofon des iPhone wird gerade verwendet. Schließen Sie die App, die darauf"
+              L" zugreift, und versuchen Sie es dann erneut.",
+              L"L’appareil photo ou le micro de l’iPhone est en cours d’utilisation. Fermez l’app qui s’en sert,"
+              L" puis réessayez.",
+              L"Camera hoặc micrô của iPhone đang được sử dụng. Hãy đóng ứng dụng đang dùng camera hoặc micrô rồ"
+              L"i thử lại.",
+              L"กล้องหรือไมโครโฟนของ iPhone กำลังถูกใช้งานอยู่ โปรดปิดแอปที่ใช้กล้องหรือไมโครโฟน แล้วลองอีกครั้ง"}},
+            {ui_text::control_needs_ios,
+             {L"操作 iPhone 需要 iOS 27 或以上版本。",
+              L"操作 iPhone 需要 iOS 27 或更高版本。",
+              L"Controlling the iPhone needs iOS 27 or later.",
+              L"iPhone の操作には iOS 27 以降が必要です。",
+              L"iPhone을 제어하려면 iOS 27 이상이 필요합니다.",
+              L"Para controlar el iPhone se necesita iOS 27 o posterior.",
+              L"Für die Steuerung des iPhone ist iOS 27 oder neuer erforderlich.",
+              L"Le contrôle de l’iPhone nécessite iOS 27 ou version ultérieure.",
+              L"Để điều khiển iPhone, cần có iOS 27 trở lên.",
+              L"การควบคุม iPhone ต้องใช้ iOS 27 ขึ้นไป"}},
+            {ui_text::control_failed_text,
+             {L"詳細資訊請見記錄檔。",
+              L"详细信息请见日志。",
+              L"Details are in the log file.",
+              L"詳細はログファイルを確認してください。",
+              L"자세한 내용은 로그 파일을 확인하세요.",
+              L"Los detalles están en el archivo de registro.",
+              L"Details stehen in der Protokolldatei.",
+              L"Les détails figurent dans le fichier journal.",
+              L"Xem chi tiết trong tệp nhật ký.",
+              L"ดูรายละเอียดได้ในไฟล์บันทึก"}},
+            {ui_text::controlled,
+             {L"{} · 可操作",
+              L"{} · 可操作",
+              L"{} · control",
+              L"{} · 操作中",
+              L"{} · 제어 중",
+              L"{} · control activo",
+              L"{} · Steuerung",
+              L"{} · contrôle actif",
+              L"{} · đang điều khiển",
+              L"{} · ควบคุมได้"}},
         }};
 
         consteval bool text_table_is_complete()

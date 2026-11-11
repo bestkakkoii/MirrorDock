@@ -8,6 +8,7 @@ module;
 #include <dwmapi.h>
 #include <shellapi.h>
 #include <windowsx.h>
+#include <imm.h>
 
 #include "uxplay_version.h"
 
@@ -20,6 +21,7 @@ import uxplay_media_types;
 import uxplay_settings;
 import uxplay_ui_text;
 import uxplay_video_overlay;
+import uxplay_remote_control;
 
 namespace uxplay
 {
@@ -41,6 +43,7 @@ namespace uxplay
         constexpr UINT cursor_hide_delay_ms = 3000;
         constexpr UINT message_keep_awake = WM_APP + 12;
         constexpr UINT message_detach = WM_APP + 13;
+        constexpr UINT message_remote_control = WM_APP + 14;
         // answer to the second-launch message of an instance with our name
         constexpr LRESULT second_launch_answer = 1;
 
@@ -92,6 +95,7 @@ namespace uxplay
             menu_crop_off,
             menu_crop_automatic,
             menu_crop_select,
+            menu_remote_control,
             menu_autostart,
             menu_open_log,
             menu_about,
@@ -186,6 +190,9 @@ namespace uxplay
         std::atomic<bool> stream_active{false};
         std::atomic<performance_mode> mode{performance_mode::balanced};
         std::atomic<crop_mode> crop{crop_mode::off};
+        // remote control: chosen in the menu / input goes to the phone
+        std::atomic<bool> control_wanted{false};
+        std::atomic<bool> control_ready{false};
         std::wstring stream_transport; // guarded by text_mutex
         std::wstring stream_detail;    // guarded by text_mutex
         std::unique_ptr<video_overlay> overlay; // UI thread only
@@ -219,6 +226,17 @@ namespace uxplay
         bool detached = false; // UI thread only: the owner wants no callback any more
         // the right button just cancelled a frame: its release opens no menu
         bool right_click_consumed = false;
+        // UI thread only: remote control
+        bool pointer_pressed = false;           // the left button is a finger on the phone
+        std::pair<double, double> pointer_position{}; // where it was last, as fractions of the picture
+        std::vector<std::uint8_t> held_keys;    // HID usages down on the phone
+        bool input_method_detached = false;     // the IME of this PC is kept out while keys go to the phone
+
+        [[nodiscard]] bool controlling() const;
+        [[nodiscard]] std::optional<std::pair<double, double>> picture_fraction(POINT client, bool clamp) const;
+        void apply_remote_control();
+        void release_remote_input();
+        [[nodiscard]] bool control_key(bool pressed, WPARAM key, LPARAM details);
 
         [[nodiscard]] RECT picture_rectangle() const;
         void begin_framing();
@@ -366,6 +384,175 @@ namespace uxplay
         return picture;
     }
 
+    // Input on the picture goes to the phone.
+    bool video_window::state::controlling() const
+    {
+        return control_ready.load() && !framing && is_visible.load();
+    }
+
+    // A client position as fractions of the picture.  Outside the picture (the
+    // bars of a window with another shape) it is nothing, or the nearest
+    // position on it when `clamp` is set (a drag that left the picture).
+    std::optional<std::pair<double, double>> video_window::state::picture_fraction(POINT client, bool clamp) const
+    {
+        RECT const picture = picture_rectangle();
+        LONG const width = picture.right - picture.left;
+        LONG const height = picture.bottom - picture.top;
+        if (width <= 0 || height <= 0)
+        {
+            return std::nullopt;
+        }
+        if (!clamp && (client.x < picture.left || client.x >= picture.right || client.y < picture.top ||
+                       client.y >= picture.bottom))
+        {
+            return std::nullopt;
+        }
+        // the middle of the pixel under the pointer
+        return std::pair{std::clamp((client.x - picture.left + 0.5) / width, 0.0, 1.0),
+                         std::clamp((client.y - picture.top + 0.5) / height, 0.0, 1.0)};
+    }
+
+    // Nothing stays pressed on the phone: the finger lifts, the keys are released.
+    void video_window::state::release_remote_input()
+    {
+        if (std::exchange(pointer_pressed, false))
+        {
+            if (GetCapture() == window)
+            {
+                ReleaseCapture();
+            }
+            if (!detached && callbacks.on_pointer)
+            {
+                callbacks.on_pointer(pointer_action::release, pointer_position.first, pointer_position.second);
+            }
+        }
+        if (!held_keys.empty())
+        {
+            held_keys.clear();
+            if (!detached && callbacks.on_keys)
+            {
+                callbacks.on_keys(held_keys);
+            }
+        }
+    }
+
+    // Remote control became ready or ended (UI thread).
+    void video_window::state::apply_remote_control()
+    {
+        bool const ready = control_ready.load();
+        if (!ready)
+        {
+            release_remote_input();
+        }
+        else if (overlay)
+        {
+            overlay->hide(); // it would cover the bottom of the phone's screen
+        }
+        // Keys go to the phone as keys: the input method of this PC must not
+        // compose text from them as well (the phone has its own).
+        if (ready != input_method_detached)
+        {
+            ImmAssociateContextEx(window, nullptr, ready ? 0 : IACE_DEFAULT);
+            input_method_detached = ready;
+        }
+    }
+
+    // A key while the phone is controlled.  True: it went to the phone (or is
+    // one a phone has no use for) and the window does nothing with it.
+    bool video_window::state::control_key(bool pressed, WPARAM key, LPARAM details)
+    {
+        bool const alt_down = (details & (1 << 29)) != 0;
+        if (key == VK_F8 || key == VK_F11 || (key == VK_ESCAPE && is_fullscreen.load()) ||
+            (alt_down && (key == VK_RETURN || key == VK_F4 || key == VK_SPACE)))
+        {
+            return false; // the window's own keys
+        }
+        // Page Up / Page Down and Alt + arrow flick the screen instead of
+        // being sent as keys (few apps on a phone act on those keys)
+        std::optional<swipe_action> flick;
+        if (key == VK_NEXT || (alt_down && key == VK_DOWN))
+        {
+            flick = swipe_action::next_below;
+        }
+        else if (key == VK_PRIOR || (alt_down && key == VK_UP))
+        {
+            flick = swipe_action::previous_above;
+        }
+        else if (alt_down && key == VK_RIGHT)
+        {
+            flick = swipe_action::next_right;
+        }
+        else if (alt_down && key == VK_LEFT)
+        {
+            flick = swipe_action::previous_left;
+        }
+        if (flick)
+        {
+            bool const repeated = (details & (1 << 30)) != 0;
+            if (pressed && !repeated && !detached && callbacks.on_swipe)
+            {
+                POINT pointer{};
+                GetCursorPos(&pointer);
+                ScreenToClient(window, &pointer);
+                std::pair<double, double> const around =
+                    picture_fraction(pointer, false).value_or(std::pair{0.5, 0.5});
+                callbacks.on_swipe(*flick, around.first, around.second);
+            }
+            return true;
+        }
+        auto const scan_code = static_cast<unsigned>((details >> 16) & 0xFF);
+        bool const extended = (details & (1 << 24)) != 0;
+        std::optional<std::uint8_t> usage = keyboard_usage(scan_code, extended);
+        if (!usage)
+        {
+            return true;
+        }
+        // Ctrl acts as Command: Ctrl+C, Ctrl+V and the like do on the phone
+        // what they do on this PC
+        if (*usage == 0xE0)
+        {
+            usage = std::uint8_t{0xE3};
+        }
+        else if (*usage == 0xE4)
+        {
+            usage = std::uint8_t{0xE7};
+        }
+        auto const held = std::ranges::find(held_keys, *usage);
+        if (pressed)
+        {
+            if (held != held_keys.end())
+            {
+                return true; // the keyboard's auto-repeat: the phone repeats by itself
+            }
+            held_keys.push_back(*usage);
+        }
+        else
+        {
+            if (held == held_keys.end())
+            {
+                return true;
+            }
+            held_keys.erase(held);
+        }
+        if (!detached && callbacks.on_keys)
+        {
+            // Control + Space is the phone's "next input source": while Space
+            // is down, Ctrl is sent as Control and not as Command
+            if (std::ranges::contains(held_keys, std::uint8_t{0x2C}))
+            {
+                std::vector<std::uint8_t> sent = held_keys;
+                std::ranges::replace(sent, std::uint8_t{0xE3}, std::uint8_t{0xE0});
+                std::ranges::replace(sent, std::uint8_t{0xE7}, std::uint8_t{0xE4});
+                callbacks.on_keys(sent);
+            }
+            else
+            {
+                callbacks.on_keys(held_keys);
+            }
+        }
+        return true;
+    }
+
     // Arms the hand-drawn crop: the next drag on the picture frames the part
     // to show.  The window title carries the hint while it is armed.
     void video_window::state::begin_framing()
@@ -374,6 +561,7 @@ namespace uxplay
         {
             return;
         }
+        release_remote_input(); // the mouse frames from here on
         framing = true;
         framing_drag = false;
         bring_to_front(window);
@@ -882,6 +1070,8 @@ namespace uxplay
                                                                 : menu_crop_off,
                            MF_BYCOMMAND);
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+        item(menu_remote_control, ui_text::control_phone, L"F8", control_wanted.load());
+        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         item(menu_fullscreen, is_fullscreen.load() ? ui_text::exit_full_screen : ui_text::full_screen, L"F11", false,
              shown);
         item(menu_always_on_top, ui_text::always_on_top, L"T", always_on_top.load());
@@ -939,6 +1129,9 @@ namespace uxplay
             break;
         case menu_crop_select:
             tray(tray_command::crop_select);
+            break;
+        case menu_remote_control:
+            tray(tray_command::toggle_remote_control);
             break;
         case menu_autostart:
             tray(tray_command::toggle_autostart);
@@ -1137,6 +1330,7 @@ namespace uxplay
         }
         case message_hide:
             end_framing();
+            release_remote_input();
             if (overlay)
             {
                 overlay->hide();
@@ -1158,8 +1352,16 @@ namespace uxplay
             // further up this very stack (a callback inside a modal loop, such
             // as the About box, still receives sent messages).
             end_framing();
+            release_remote_input();
             detached = true;
             return 0;
+        case message_remote_control:
+            apply_remote_control();
+            return 0;
+        case WM_KILLFOCUS:
+            // another window gets the keys: none stays down on the phone
+            release_remote_input();
+            break;
         case message_title:
         {
             std::wstring title;
@@ -1313,13 +1515,13 @@ namespace uxplay
             return 0;
         }
         case WM_LBUTTONDBLCLK:
-            if (!framing)
+            if (!framing && !controlling())
             {
                 set_fullscreen(!is_fullscreen.load());
                 return 0;
             }
-            // while framing the second press of a double-click starts a frame
-            // like any other press
+            // while framing, and while the phone is controlled, the second
+            // press of a double-click is a press like any other
             [[fallthrough]];
         case WM_LBUTTONDOWN:
             if (framing)
@@ -1332,11 +1534,68 @@ namespace uxplay
                 SetCapture(window);
                 return 0;
             }
+            if (controlling())
+            {
+                // a finger goes down where the pointer is (nothing on the bars)
+                if (auto const position = picture_fraction(POINT{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)}, false);
+                    position)
+                {
+                    pointer_pressed = true;
+                    pointer_position = *position;
+                    SetCapture(window);
+                    if (!detached && callbacks.on_pointer)
+                    {
+                        callbacks.on_pointer(pointer_action::press, position->first, position->second);
+                    }
+                }
+                return 0;
+            }
             break;
         case WM_LBUTTONUP:
             if (framing && framing_drag)
             {
                 finish_framing();
+                return 0;
+            }
+            if (pointer_pressed)
+            {
+                if (auto const position = picture_fraction(POINT{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)}, true);
+                    position)
+                {
+                    pointer_position = *position;
+                }
+                release_remote_input();
+                return 0;
+            }
+            break;
+        case WM_MOUSEWHEEL:
+        case WM_MOUSEHWHEEL:
+            if (controlling())
+            {
+                // (the position of this message is in screen coordinates)
+                POINT pointer{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)};
+                ScreenToClient(window, &pointer);
+                if (auto const position = picture_fraction(pointer, false);
+                    position && !pointer_pressed && !detached && callbacks.on_wheel)
+                {
+                    double const notches = static_cast<double>(GET_WHEEL_DELTA_WPARAM(wparam)) / WHEEL_DELTA;
+                    // a tilting wheel, or Shift with the wheel, scrolls sideways
+                    bool const sideways =
+                        message == WM_MOUSEHWHEEL || (GET_KEYSTATE_WPARAM(wparam) & MK_SHIFT) != 0;
+                    callbacks.on_wheel(position->first, position->second,
+                                       sideways ? (message == WM_MOUSEHWHEEL ? notches : -notches) : 0.0,
+                                       sideways ? 0.0 : notches);
+                }
+                return 0;
+            }
+            break;
+        case WM_MBUTTONDOWN:
+            if (controlling())
+            {
+                if (!detached && callbacks.on_home_button)
+                {
+                    callbacks.on_home_button();
+                }
                 return 0;
             }
             break;
@@ -1371,6 +1630,25 @@ namespace uxplay
                 framing_drag = false;
                 hide_frame();
             }
+            if (pointer_pressed)
+            {
+                release_remote_input(); // the finger lifts where it was
+            }
+            break;
+        case WM_KEYUP:
+        case WM_SYSKEYUP:
+            if (controlling() && control_key(false, wparam, lparam))
+            {
+                return 0;
+            }
+            break;
+        case WM_CHAR:
+        case WM_SYSDEADCHAR:
+        case WM_DEADCHAR:
+            if (controlling())
+            {
+                return 0; // the text of keys that went to the phone
+            }
             break;
         case WM_KEYDOWN:
             if (framing)
@@ -1380,6 +1658,18 @@ namespace uxplay
                 {
                     end_framing();
                 }
+                return 0;
+            }
+            if (wparam == VK_F8)
+            {
+                if ((lparam & (1 << 30)) == 0) // not the auto-repeat of a held key
+                {
+                    tray(tray_command::toggle_remote_control);
+                }
+                return 0;
+            }
+            if (controlling() && control_key(true, wparam, lparam))
+            {
                 return 0;
             }
             if (wparam == 'C')
@@ -1419,11 +1709,15 @@ namespace uxplay
                 set_fullscreen(!is_fullscreen.load());
                 return 0;
             }
+            if (controlling() && control_key(true, wparam, lparam))
+            {
+                return 0; // Alt and Alt+key go to the phone (no window menu)
+            }
             break;
         case WM_SYSCHAR:
-            if (wparam == VK_RETURN)
+            if (wparam == VK_RETURN || (controlling() && wparam != VK_SPACE))
             {
-                return 0; // swallow the Alt+Enter beep
+                return 0; // swallow the beep of Alt+Enter and of Alt+key sent to the phone
             }
             break;
         case WM_MOUSEMOVE:
@@ -1440,6 +1734,20 @@ namespace uxplay
                 }
                 return 0;
             }
+            if (pointer_pressed)
+            {
+                // the finger follows the pointer (and stays on the screen's
+                // edge when the pointer leaves the picture)
+                if (auto const position = picture_fraction(POINT{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)}, true);
+                    position && *position != pointer_position)
+                {
+                    pointer_position = *position;
+                    if (!detached && callbacks.on_pointer)
+                    {
+                        callbacks.on_pointer(pointer_action::move, position->first, position->second);
+                    }
+                }
+            }
             // Windows also sends WM_MOUSEMOVE when the window moves under a
             // still pointer or the cursor changes: react to real movement only
             POINT pointer{};
@@ -1450,7 +1758,7 @@ namespace uxplay
             }
             last_pointer = pointer;
             show_cursor_again();
-            if (overlay)
+            if (overlay && !controlling())
             {
                 overlay->activity();
             }
@@ -1745,6 +2053,15 @@ namespace uxplay
     void video_window::set_crop_mode(crop_mode mode)
     {
         impl->crop.store(mode);
+    }
+
+    void video_window::set_remote_control(bool wanted, bool ready)
+    {
+        impl->control_wanted.store(wanted);
+        if (impl->control_ready.exchange(ready) != ready)
+        {
+            PostMessageW(impl->window, message_remote_control, 0, 0);
+        }
     }
 
     void video_window::set_autostart(bool enabled)

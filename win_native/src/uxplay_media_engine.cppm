@@ -32,6 +32,12 @@ export namespace uxplay
         bool tray_icon = false;
         performance_mode mode = performance_mode::balanced;
         crop_mode crop = crop_mode::off; // off or automatic
+        // Remote control of the phone (uxplay_remote_control): the user's
+        // standing choice, and the directory in which the Developer Disk
+        // Image is kept once it was fetched for a phone that lacked it
+        // (empty: it is fetched each time one does).
+        bool remote_control = false;
+        std::filesystem::path control_cache;
     };
 
     struct engine_callbacks
@@ -109,6 +115,10 @@ export namespace uxplay
         // hand, is entered from the window and lasts until the stream changes
         // or one of these two is chosen again.
         void set_crop_mode(crop_mode mode);
+        // Mouse and keyboard on the picture operate the phone: a control
+        // session with it runs while this is wanted and a stream is shown.
+        // Why it cannot is told to the user in a notification and to the log.
+        void set_remote_control(bool wanted);
         // a stream is on screen
         [[nodiscard]] bool showing_video() const;
 

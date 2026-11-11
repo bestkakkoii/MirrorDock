@@ -104,6 +104,21 @@ export namespace uxplay
         crop_select,
         crop_select_hint,
         cropped, // {}: size of the part shown
+        // remote control of the phone
+        control_phone,
+        control_connecting,
+        control_ready_title,
+        control_ready_text,
+        control_preparing_title,
+        control_preparing_text,
+        control_failed_title,
+        control_needs_cable,
+        control_needs_developer_mode,
+        control_image_failed,
+        control_camera_in_use,
+        control_needs_ios,
+        control_failed_text,
+        controlled, // {}: what the window shows (link and size)
         count
     };
 

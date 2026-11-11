@@ -4,7 +4,7 @@
 
 # MirrorDock
 
-**Phản chiếu iPhone hoặc iPad lên máy tính Windows — qua Wi-Fi hoặc cáp USB.**
+**Phản chiếu iPhone hoặc iPad lên máy tính Windows — qua Wi-Fi hoặc cáp USB — và điều khiển iPhone bằng chuột và bàn phím.**
 
 [![Release](https://img.shields.io/github/v/release/bestkakkoii/MirrorDock?label=release&color=126BDB)](https://github.com/bestkakkoii/MirrorDock/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/bestkakkoii/MirrorDock/total?color=33B8FF)](https://github.com/bestkakkoii/MirrorDock/releases)
@@ -33,9 +33,10 @@ Chương trình được xây dựng trên lõi giao thức AirPlay của [UxPla
 | 🔊 **Âm thanh khớp hình** | Đầu ra WASAPI độ trễ thấp chạy trên cùng một trục thời gian với hình ảnh, nên khẩu hình và lời nói khớp nhau. |
 | 🎛️ **Ba chế độ** | *Chất lượng*, *Cân bằng* (mặc định) và *Hiệu năng*: bạn chọn giữa hình ảnh sắc nét nhất và độ trễ thấp nhất. |
 | ✂️ **Cắt viền đen** | Tự động cắt bỏ viền đen quanh bộ phim, hoặc để bạn dùng chuột khoanh bất kỳ phần nào của hình ảnh. |
+| 🖱️ **Điều khiển iPhone** | Bấm, kéo, cuộn và gõ phím ngay trên hình ảnh, điện thoại sẽ làm theo. Tích hợp sẵn: không cần chương trình hỗ trợ, không cần jailbreak (cần iOS 27, cáp USB và Chế độ nhà phát triển). |
 | 🪟 **Một cửa sổ đúng nghĩa** | Mở ra với kích thước hợp lý, giữ nguyên tỉ lệ khung hình khi bạn đổi kích thước, ghi nhớ kích thước và vị trí, vào toàn màn hình bằng một phím, luôn ở trên cùng. |
 | 🌐 **Mười ngôn ngữ** | Giao diện đi theo ngôn ngữ hiển thị Windows của bạn. |
-| 🧳 **Một tệp duy nhất** | Chỉ một tệp thực thi khoảng 10 MB, không cần gì ngoài chính Windows. |
+| 🧳 **Một tệp duy nhất** | Chỉ một tệp thực thi khoảng 12 MB, không cần gì ngoài chính Windows. |
 
 ## 🚀 Bắt đầu nhanh
 
@@ -74,6 +75,30 @@ Một bộ phim 16:9 phát trên điện thoại có màn hình rộng hơn sẽ
 - **Tự động** (phím **C**): viền đen được cắt bỏ và cửa sổ ôm sát hình ảnh. Vùng cắt vẫn được giữ khi phim này nối tiếp phim khác; còn khi có nội dung khác xuất hiện trong viền và ở lại đó, chẳng hạn các nút điều khiển của trình phát, toàn bộ hình ảnh sẽ trở lại trong vòng khoảng một giây.
 - **Thủ công** (phím **X**): kéo một khung quanh phần bạn muốn xem. **Esc** để hủy.
 
+## 🖱️ Điều khiển iPhone
+
+Nhấn **F8** (hoặc chọn **Điều khiển iPhone bằng chuột và bàn phím** trong menu) là hình ảnh trở thành màn hình của điện thoại: bạn làm gì trên đó, iPhone làm đúng như vậy.
+
+| Trên máy tính | Trên iPhone |
+|---|---|
+| Nút chuột trái: bấm, giữ, kéo | Một ngón tay: chạm, nhấn giữ, vuốt |
+| Con lăn chuột (giữ **Shift**: cuộn ngang) | Cuộn nội dung nằm dưới con trỏ |
+| Nút chuột giữa | Về Màn hình chính |
+| Bàn phím | Gõ chữ trên điện thoại như thể có bàn phím cắm vào máy; **Ctrl** tương ứng với ⌘, **Ctrl+Phím cách** chuyển ngôn ngữ nhập của điện thoại |
+| **Page Down** / **Page Up**, **Alt** + phím mũi tên | Vuốt nhanh sang trang hoặc video tiếp theo hay trước đó |
+| Nút chuột phải | Vẫn là menu của MirrorDock như mọi khi |
+
+Điều kiện cần có:
+
+1. **iOS 27 trở lên** và **cáp USB**, đồng thời iPhone đã tin cậy máy tính này. Chỉ riêng việc điều khiển đi qua cáp; hình ảnh vẫn có thể tiếp tục truyền qua Wi-Fi.
+2. **Chế độ nhà phát triển** trên iPhone: *Cài đặt → Quyền riêng tư & Bảo mật → Chế độ nhà phát triển*. Công tắc này bị ẩn cho đến khi có một công cụ phát triển yêu cầu, và MirrorDock làm việc đó ở lần đầu tiên bạn nhấn F8.
+3. Kết nối Internet ở lần đầu tiên, và ở lần đầu tiên sau mỗi lần cập nhật iOS: MirrorDock cài lên điện thoại *Developer Disk Image* của Apple, tức ảnh đĩa chứa các dịch vụ dành cho nhà phát triển. Việc này mất khoảng một phút.
+
+> [!NOTE]
+> AirPlay không truyền được thao tác nhập, nên việc điều khiển đi theo một đường khác: qua các dịch vụ dành cho nhà phát triển của iOS, chính là những dịch vụ Xcode dùng để điều khiển thiết bị thật. Để cài các dịch vụ này, MirrorDock tải ảnh đĩa của Apple từ kho [DeveloperDiskImage](https://github.com/doronz88/DeveloperDiskImage) rồi yêu cầu dịch vụ ký của Apple (`gs.apple.com`) ký ảnh đĩa đó cho điện thoại của bạn; việc này cho Apple biết các mã số chip của điện thoại, hệt như Xcode vẫn làm. Sau đó, việc điều khiển không liên lạc với bất kỳ ai nữa.
+
+Trong lúc đang điều khiển iPhone, **F8**, **F11**, **Alt+Enter** và **Alt+F4** vẫn thuộc về cửa sổ, còn thanh điều khiển thì không hiện ra, vì nó sẽ che mất phần dưới cùng của màn hình điện thoại.
+
 ## ⌨️ Bàn phím và chuột
 
 | Thao tác | Phím |
@@ -83,8 +108,11 @@ Một bộ phim 16:9 phát trên điện thoại có màn hình rộng hơn sẽ
 | Khoanh vùng cần hiển thị | **X** |
 | Luôn ở trên cùng | **T** |
 | Tắt tiếng (chỉ phía máy tính) | **M** |
+| Bật / tắt điều khiển iPhone | **F8** |
 | Thanh điều khiển | Di chuột lên hình ảnh |
 | Menu | Bấm chuột phải vào bất kỳ đâu trên hình ảnh |
+
+Trong lúc đang điều khiển iPhone, các phím chữ cái được gõ vào điện thoại; **F8** trả chúng lại cho cửa sổ.
 
 ## ⚙️ Tùy chọn
 
@@ -123,6 +151,8 @@ flowchart LR
 
 Hình ảnh và âm thanh được lên lịch trên cùng một trục thời gian, với độ trễ tự điều chỉnh theo mạng và theo tốc độ giải mã của máy tính: ngắn nhất có thể mà không bị giật.
 
+Việc điều khiển là một đường truyền thứ hai, tách biệt. Qua cáp USB, MirrorDock mở đường hầm dành cho nhà phát triển của điện thoại (bằng phần triển khai IPv6 và TCP nhỏ gọn của riêng nó, nên không cần bộ điều hợp mạng, cũng không cần quyền quản trị viên) rồi gửi các báo cáo cảm ứng và bàn phím đến dịch vụ nhập liệu của điện thoại.
+
 ## 📊 Số liệu đo được
 
 Một laptop đời 2016 (Intel Core i7-6700HQ, Intel HD Graphics 530), luồng thử nghiệm H.265 2872×1320 60 fps, chế độ *Cân bằng*, phiên bản 1.6:
@@ -150,6 +180,12 @@ Hãy kiểm tra nút loa trên thanh điều khiển, sau đó kiểm tra bộ t
 **Khẩu hình và lời nói không khớp.**
 Tinh chỉnh bằng `-vsync` kèm theo số mili giây (giá trị dương làm âm thanh trễ hơn).
 
+**Nhấn F8 thì báo không điều khiển được iPhone.**
+Thông báo có nêu lý do: chưa cắm cáp hoặc iPhone chưa tin cậy máy tính này, Chế độ nhà phát triển đang tắt, iPhone chạy iOS cũ hơn 27, hoặc không cài được Developer Disk Image (bước này cần Internet). Sau khi bật Chế độ nhà phát triển, iPhone khởi động lại và hỏi xác nhận thêm một lần nữa.
+
+**Cứ để Chế độ nhà phát triển bật thì có an toàn không?**
+Đây là công tắc do chính Apple làm ra cho những người phát triển ứng dụng. Nó cho phép một máy tính đã được tin cậy cài đặt và gỡ lỗi ứng dụng, đồng thời truy cập các dịch vụ dành cho nhà phát triển; nó không jailbreak điện thoại, và bạn có thể tắt nó đi ở chính chỗ đó.
+
 **Nhật ký nằm ở đâu?**
 `%LOCALAPPDATA%\MirrorDock\mirror_dock.log`, hoặc chọn **Mở tệp nhật ký** trong menu.
 
@@ -167,12 +203,13 @@ MSYSTEM=CLANG64 bash -lc 'bash win_native/build_scripts/build_uxplay_native.sh <
 
 ## 📜 Giấy phép
 
-MirrorDock được phân phối theo **GNU General Public License v3** ([LICENSE](LICENSE)), vì nó được xây dựng trên mã GPL-3.0 của UxPlay. Bộ máy xử lý đa phương tiện cho Windows trong [`win_native/`](win_native) là tác phẩm gốc theo **giấy phép MIT** ([win_native/LICENSE](win_native/LICENSE)). Tệp zip phát hành chứa văn bản giấy phép của mọi thư viện đi kèm và toàn bộ mã nguồn tương ứng.
+MirrorDock được phân phối theo **GNU General Public License v3** ([LICENSE](LICENSE)), vì nó được xây dựng trên mã GPL-3.0 của UxPlay. Bộ máy xử lý đa phương tiện cho Windows trong [`win_native/`](win_native) là tác phẩm gốc theo **giấy phép MIT** ([win_native/LICENSE](win_native/LICENSE)); phần điều khiển từ xa trong [`phone_control/`](phone_control) là tác phẩm gốc theo **GPL-3.0-or-later**. Tệp zip phát hành chứa văn bản giấy phép của mọi thư viện đi kèm và toàn bộ mã nguồn tương ứng.
 
 ## 🙏 Lời cảm ơn
 
 - [UxPlay](https://github.com/FDH2/UxPlay) của F. Duncanh và các cộng tác viên — máy chủ AirPlay làm nền tảng cho MirrorDock.
 - [RPiPlay](https://github.com/FD-/RPiPlay) của Florian Draschbacher và [shairplay](https://github.com/juhovh/shairplay) của Juho Vähä-Herttua — nơi khởi nguồn của lõi giao thức ấy.
+- [pymobiledevice3](https://github.com/doronz88/pymobiledevice3) của doronz88 và các cộng tác viên — nguồn hiểu biết về các dịch vụ dành cho nhà phát triển của iOS mà phần điều khiển từ xa dựa vào.
 - playfair, llhttp, csrp, FFmpeg, OpenSSL và libplist.
 
 AirPlay, iPhone và iPad là nhãn hiệu của Apple Inc. MirrorDock là một dự án mã nguồn mở độc lập và không liên kết với Apple.

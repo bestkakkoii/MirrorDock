@@ -4,7 +4,7 @@
 
 # MirrorDock
 
-**Duplique la pantalla de su iPhone o iPad en un equipo con Windows, por Wi-Fi o por el cable USB.**
+**Duplique la pantalla de su iPhone o iPad en un equipo con Windows, por Wi-Fi o por el cable USB, y controle el iPhone con el mouse y el teclado.**
 
 [![Release](https://img.shields.io/github/v/release/bestkakkoii/MirrorDock?label=release&color=126BDB)](https://github.com/bestkakkoii/MirrorDock/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/bestkakkoii/MirrorDock/total?color=33B8FF)](https://github.com/bestkakkoii/MirrorDock/releases)
@@ -33,9 +33,10 @@ Se basa en el núcleo del protocolo AirPlay de [UxPlay](https://github.com/FDH2/
 | 🔊 **Sonido sincronizado** | Salida WASAPI de baja latencia en la misma línea de tiempo que la imagen, para que la voz coincida con los labios. |
 | 🎛️ **Tres modos** | *Calidad*, *Equilibrado* (predeterminado) y *Rendimiento*: usted elige entre la imagen más nítida y el menor retardo. |
 | ✂️ **Recorte de barras negras** | Recorta automáticamente las barras negras que rodean una película, o le permite encuadrar con el mouse cualquier parte de la imagen. |
+| 🖱️ **Control del iPhone** | Haga clic, arrastre, desplácese y escriba sobre la imagen, y el teléfono hace lo mismo. Viene integrado: sin programas auxiliares y sin jailbreak (iOS 27, cable USB, modo de desarrollador). |
 | 🪟 **Una ventana como debe ser** | Se abre con un tamaño razonable, mantiene la relación de aspecto al redimensionarla, recuerda el tamaño y la posición, pasa a pantalla completa con una tecla y puede quedar siempre visible. |
 | 🌐 **Diez idiomas** | La interfaz sigue el idioma para mostrar de Windows. |
-| 🧳 **Un solo archivo** | Un único ejecutable de unos 10 MB que solo necesita el propio Windows. |
+| 🧳 **Un solo archivo** | Un único ejecutable de unos 12 MB que solo necesita el propio Windows. |
 
 ## 🚀 Inicio rápido
 
@@ -74,6 +75,30 @@ Una película en 16:9 vista en un teléfono de pantalla más ancha se duplica co
 - **Automático** (tecla **C**): las barras se recortan y la ventana se ajusta a la imagen. El recorte se mantiene al pasar de una película a la siguiente; cuando en una barra aparece otra cosa y permanece, por ejemplo los controles del reproductor, la imagen completa vuelve en aproximadamente un segundo.
 - **A mano** (tecla **X**): arrastre un recuadro alrededor de la parte que quiere ver. **Esc** cancela.
 
+## 🖱️ Controlar el iPhone
+
+Presione **F8** (o elija **Controlar el iPhone con mouse y teclado** en el menú) y la imagen pasa a ser la pantalla del teléfono: lo que usted hace sobre ella, lo hace el iPhone.
+
+| En el equipo | En el iPhone |
+|---|---|
+| Botón izquierdo: hacer clic, mantener presionado, arrastrar | Un dedo: tocar, mantener presionado, deslizar |
+| Rueda del mouse (con **Shift**: en horizontal) | Desplaza lo que está bajo el puntero |
+| Botón central | Ir a la pantalla de inicio |
+| Teclado | Escribe en el teléfono como un teclado conectado a él; **Ctrl** equivale a ⌘ y **Ctrl+Espacio** cambia el idioma del teclado del teléfono |
+| **Page Down** / **Page Up**, **Alt** + teclas de flecha | Pasa a la página o al video siguiente o anterior con un deslizamiento rápido |
+| Botón derecho | El menú de MirrorDock, como siempre |
+
+Qué se necesita:
+
+1. **iOS 27 o posterior** y el **cable USB**, en un iPhone que confíe en este equipo. Por el cable solo pasa el control; la imagen puede seguir llegando por Wi-Fi.
+2. El **modo de desarrollador** activado en el iPhone: *Ajustes → Privacidad y seguridad → Modo de desarrollador*. Esa opción permanece oculta hasta que una herramienta de desarrollo la solicita, que es lo que hace MirrorDock la primera vez que usted presiona F8.
+3. Conexión a Internet la primera vez, y la primera vez después de cada actualización de iOS: MirrorDock instala en el teléfono la imagen de disco de desarrollador de Apple (*Developer Disk Image*). Tarda alrededor de un minuto.
+
+> [!NOTE]
+> AirPlay no puede transmitir la entrada del mouse ni del teclado, así que el control va por otro camino: los servicios para desarrolladores de iOS, los mismos que Xcode usa para manejar un dispositivo real. Para instalarlos, MirrorDock descarga la imagen de Apple desde el repositorio [DeveloperDiskImage](https://github.com/doronz88/DeveloperDiskImage) y pide al servicio de firma de Apple (`gs.apple.com`) que la firme para su teléfono, con lo que Apple recibe los números de identificación de su chip, exactamente igual que con Xcode. A partir de ahí, el control no se comunica con nadie.
+
+Mientras el control está activado, **F8**, **F11**, **Alt+Enter** y **Alt+F4** siguen reservadas a la ventana, y la barra de control no aparece, porque taparía la parte inferior de la pantalla del teléfono.
+
 ## ⌨️ Teclado y mouse
 
 | Acción | Teclas |
@@ -83,8 +108,11 @@ Una película en 16:9 vista en un teléfono de pantalla más ancha se duplica co
 | Encuadrar el área visible | **X** |
 | Siempre visible | **T** |
 | Silenciar (solo en el equipo) | **M** |
+| Activar o desactivar el control del iPhone | **F8** |
 | Barra de control | Mueva el mouse sobre la imagen |
 | Menú | Haga clic con el botón derecho en cualquier punto de la imagen |
+
+Mientras se controla el iPhone, las teclas de letras escriben en el teléfono; **F8** se las devuelve a la ventana.
 
 ## ⚙️ Opciones
 
@@ -123,6 +151,8 @@ flowchart LR
 
 La imagen y el sonido se programan sobre una misma línea de tiempo, con un retardo que se adapta a la red y a la velocidad con que el equipo decodifica: el más corto posible sin que la reproducción se entrecorte.
 
+El control va por un segundo camino, independiente. Por el cable USB, MirrorDock abre el túnel para desarrolladores del teléfono (con una pequeña implementación propia de IPv6 y TCP, de modo que no hacen falta ni un adaptador de red ni permisos de administrador) y envía informes táctiles y de teclado al servicio de entrada del teléfono.
+
 ## 📊 Mediciones
 
 Un equipo portátil de 2016 (Intel Core i7-6700HQ, Intel HD Graphics 530), una transmisión de prueba H.265 de 2872×1320 a 60 fps, modo *Equilibrado*, versión 1.6:
@@ -150,6 +180,12 @@ Revise el botón del altavoz en la barra de control y, después, el mezclador de
 **La voz no coincide con los labios.**
 Ajústelo con `-vsync` seguido de un número de milisegundos (los valores positivos retrasan el sonido).
 
+**F8 dice que no se puede controlar el iPhone.**
+El mensaje indica el motivo: el cable no está conectado o el iPhone no confía en este equipo, el modo de desarrollador está desactivado, el iPhone tiene un iOS anterior al 27, o no se pudo instalar la imagen de disco de desarrollador (ese paso necesita Internet). Después de activar el modo de desarrollador, el iPhone se reinicia y pide confirmación una vez más.
+
+**¿Es seguro dejar activado el modo de desarrollador?**
+Es una opción de la propia Apple, pensada para quienes crean apps. Permite que un equipo de confianza instale y depure apps y acceda a los servicios para desarrolladores; no le hace jailbreak al teléfono, y puede volver a desactivarla en el mismo lugar.
+
 **¿Dónde está el registro?**
 `%LOCALAPPDATA%\MirrorDock\mirror_dock.log`, o **Abrir archivo de registro** en el menú.
 
@@ -167,12 +203,13 @@ MSYSTEM=CLANG64 bash -lc 'bash win_native/build_scripts/build_uxplay_native.sh <
 
 ## 📜 Licencia
 
-MirrorDock se distribuye bajo la **GNU General Public License v3** ([LICENSE](LICENSE)), porque se basa en el código GPL-3.0 de UxPlay. El motor multimedia para Windows de [`win_native/`](win_native) es una obra original bajo la **licencia MIT** ([win_native/LICENSE](win_native/LICENSE)). El zip de cada versión contiene los textos de las licencias de todas las bibliotecas incluidas y el código fuente correspondiente completo.
+MirrorDock se distribuye bajo la **GNU General Public License v3** ([LICENSE](LICENSE)), porque se basa en el código GPL-3.0 de UxPlay. El motor multimedia para Windows de [`win_native/`](win_native) es una obra original bajo la **licencia MIT** ([win_native/LICENSE](win_native/LICENSE)); el control remoto de [`phone_control/`](phone_control) es una obra original bajo **GPL-3.0-or-later**. El zip de cada versión contiene los textos de las licencias de todas las bibliotecas incluidas y el código fuente correspondiente completo.
 
 ## 🙏 Agradecimientos
 
 - [UxPlay](https://github.com/FDH2/UxPlay), de F. Duncanh y colaboradores: el servidor AirPlay sobre el que se construye MirrorDock.
 - [RPiPlay](https://github.com/FD-/RPiPlay), de Florian Draschbacher, y [shairplay](https://github.com/juhovh/shairplay), de Juho Vähä-Herttua: de donde procede ese núcleo de protocolo.
+- [pymobiledevice3](https://github.com/doronz88/pymobiledevice3), de doronz88 y colaboradores: de donde procede el conocimiento sobre los servicios para desarrolladores de iOS en el que se basa el control remoto.
 - playfair, llhttp, csrp, FFmpeg, OpenSSL y libplist.
 
 AirPlay, iPhone y iPad son marcas comerciales de Apple Inc. MirrorDock es un proyecto independiente de código abierto y no está afiliado a Apple.

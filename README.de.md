@@ -4,7 +4,7 @@
 
 # MirrorDock
 
-**Spiegeln Sie Ihr iPhone oder iPad auf einen Windows-PC – über Wi-Fi oder das USB-Kabel.**
+**Spiegeln Sie Ihr iPhone oder iPad auf einen Windows-PC – über Wi-Fi oder das USB-Kabel – und bedienen Sie das iPhone mit Maus und Tastatur.**
 
 [![Release](https://img.shields.io/github/v/release/bestkakkoii/MirrorDock?label=release&color=126BDB)](https://github.com/bestkakkoii/MirrorDock/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/bestkakkoii/MirrorDock/total?color=33B8FF)](https://github.com/bestkakkoii/MirrorDock/releases)
@@ -33,9 +33,10 @@ Es baut auf dem AirPlay-Protokollkern von [UxPlay](https://github.com/FDH2/UxPla
 | 🔊 **Ton synchron zum Bild** | WASAPI-Ausgabe mit geringer Latenz auf derselben Zeitachse wie das Bild – Lippenbewegung und Stimme passen zusammen. |
 | 🎛️ **Drei Modi** | *Qualität*, *Ausgewogen* (Standard) und *Leistung*: Sie entscheiden zwischen dem schärfsten Bild und der geringsten Verzögerung. |
 | ✂️ **Schwarze Balken abschneiden** | Schneidet die schwarzen Balken rund um einen Film automatisch ab – oder Sie rahmen mit der Maus einen beliebigen Teil des Bildes ein. |
+| 🖱️ **iPhone steuern** | Klicken, ziehen, scrollen und schreiben Sie im Bild, und das Smartphone führt es aus. Fest eingebaut: kein Hilfsprogramm, kein Jailbreak (setzt iOS 27, das USB-Kabel und den Entwicklermodus voraus). |
 | 🪟 **Ein richtiges Fenster** | Öffnet sich in sinnvoller Größe, behält beim Ändern der Größe das Seitenverhältnis bei, merkt sich Größe und Position, Vollbild per Tastendruck, immer im Vordergrund. |
 | 🌐 **Zehn Sprachen** | Die Oberfläche richtet sich nach Ihrer Windows-Anzeigesprache. |
-| 🧳 **Eine einzige Datei** | Eine einzelne ausführbare Datei von rund 10 MB, die nichts außer Windows selbst benötigt. |
+| 🧳 **Eine einzige Datei** | Eine einzelne ausführbare Datei von rund 12 MB, die nichts außer Windows selbst benötigt. |
 
 ## 🚀 Schnellstart
 
@@ -74,6 +75,30 @@ Ein 16:9-Film auf einem Smartphone mit breiterem Display wird mit schwarzen Balk
 - **Automatisch** (Taste **C**): Die Balken werden abgeschnitten, und das Fenster schmiegt sich an das Bild. Der Zuschnitt bleibt erhalten, wenn auf einen Film der nächste folgt; erscheint in einem Balken etwas anderes und bleibt dort, etwa die Bedienelemente des Players, ist das ganze Bild innerhalb von etwa einer Sekunde wieder da.
 - **Von Hand** (Taste **X**): Ziehen Sie einen Rahmen um den Teil, den Sie sehen möchten. **Esc** bricht ab.
 
+## 🖱️ Das iPhone steuern
+
+Drücken Sie **F8** (oder wählen Sie im Menü **iPhone mit Maus und Tastatur steuern**), und das Bild wird zum Bildschirm des Smartphones: Alles, was Sie darauf tun, führt das iPhone aus.
+
+| Am PC | Auf dem iPhone |
+|---|---|
+| Linke Maustaste: klicken, halten, ziehen | Ein Finger: tippen, lange drücken, wischen |
+| Mausrad (mit **Shift**: seitwärts) | Scrollt den Inhalt unter dem Mauszeiger |
+| Mittlere Maustaste | Zum Home-Bildschirm |
+| Tastatur | Schreibt auf dem Smartphone, als wäre eine Tastatur daran angeschlossen; **Ctrl** entspricht ⌘, **Ctrl+Leertaste** wechselt die Eingabesprache des Smartphones |
+| **Page Down** / **Page Up**, **Alt** + Pfeiltasten | Schneller Wisch zur nächsten oder vorherigen Seite bzw. zum nächsten oder vorherigen Video |
+| Rechte Maustaste | Wie gewohnt das Menü von MirrorDock |
+
+Was Sie dafür brauchen:
+
+1. **iOS 27 oder neuer** und das **USB-Kabel**; außerdem muss das iPhone diesem PC vertrauen. Nur die Steuerung läuft über das Kabel; das Bild darf weiterhin über Wi-Fi kommen.
+2. Den **Entwicklermodus** auf dem iPhone: *Einstellungen → Datenschutz & Sicherheit → Entwicklermodus*. Der Schalter bleibt verborgen, bis ein Entwicklerwerkzeug ihn angefordert hat; MirrorDock tut das, wenn Sie zum ersten Mal F8 drücken.
+3. Eine Internetverbindung, und zwar beim ersten Mal sowie beim ersten Mal nach jedem iOS-Update: MirrorDock installiert dann Apples *Developer Disk Image*, ein Datenträgerabbild mit den Entwicklerdiensten, auf dem Smartphone. Das dauert etwa eine Minute.
+
+> [!NOTE]
+> AirPlay kann keine Eingaben übertragen, also nimmt die Steuerung einen anderen Weg: über die Entwicklerdienste von iOS – dieselben, mit denen Xcode ein echtes Gerät bedient. Um sie zu installieren, lädt MirrorDock das Image von Apple aus dem Repository [DeveloperDiskImage](https://github.com/doronz88/DeveloperDiskImage) herunter und lässt es von Apples Signierdienst (`gs.apple.com`) für Ihr Smartphone signieren. Dabei erfährt Apple die Chipnummern des Smartphones – genau wie bei Xcode. Danach nimmt die Steuerung zu niemandem mehr Kontakt auf.
+
+Solange die Steuerung eingeschaltet ist, gehören **F8**, **F11**, **Alt+Enter** und **Alt+F4** weiterhin dem Fenster, und die Steuerleiste bleibt ausgeblendet, weil sie den unteren Rand des Smartphone-Bildschirms verdecken würde.
+
 ## ⌨️ Tastatur und Maus
 
 | Aktion | Tasten |
@@ -83,8 +108,11 @@ Ein 16:9-Film auf einem Smartphone mit breiterem Display wird mit schwarzen Balk
 | Anzuzeigenden Bereich einrahmen | **X** |
 | Immer im Vordergrund | **T** |
 | Stummschalten (nur am PC) | **M** |
+| iPhone-Steuerung ein / aus | **F8** |
 | Steuerleiste | Maus über das Bild bewegen |
 | Menü | Rechtsklick an beliebiger Stelle im Bild |
+
+Solange das iPhone gesteuert wird, gehen die Buchstabentasten an das Smartphone; **F8** gibt sie dem Fenster zurück.
 
 ## ⚙️ Optionen
 
@@ -123,6 +151,8 @@ flowchart LR
 
 Bild und Ton werden auf einer gemeinsamen Zeitachse eingeplant. Die Verzögerung passt sich dabei dem Netzwerk und der Dekodiergeschwindigkeit des PCs an: so kurz wie möglich, ohne dass es ruckelt.
 
+Die Steuerung ist ein zweiter, getrennter Weg. Über das USB-Kabel öffnet MirrorDock den Entwicklertunnel des Smartphones (mit einer kleinen eigenen IPv6- und TCP-Implementierung, sodass weder ein Netzwerkadapter noch Administratorrechte nötig sind) und sendet Touch- und Tastaturberichte an dessen Eingabedienst.
+
 ## 📊 Messwerte
 
 Ein Notebook von 2016 (Intel Core i7-6700HQ, Intel HD Graphics 530), ein H.265-Teststream mit 2872×1320 und 60 fps, Modus *Ausgewogen*, Version 1.6:
@@ -150,6 +180,12 @@ Prüfen Sie zuerst die Lautsprecher-Schaltfläche in der Steuerleiste, dann den 
 **Lippenbewegung und Stimme passen nicht zusammen.**
 Justieren Sie mit `-vsync` und einer Zahl in Millisekunden nach (positive Werte verzögern den Ton).
 
+**F8 meldet, dass sich das iPhone nicht steuern lässt.**
+Die Meldung nennt den Grund: Das Kabel ist nicht angeschlossen oder das iPhone vertraut diesem PC nicht, der Entwicklermodus ist ausgeschaltet, auf dem iPhone läuft ein älteres iOS als 27, oder das Developer Disk Image ließ sich nicht installieren (dieser Schritt braucht das Internet). Nach dem Einschalten des Entwicklermodus startet das iPhone neu und bittet noch einmal um Bestätigung.
+
+**Ist es sicher, den Entwicklermodus eingeschaltet zu lassen?**
+Er ist Apples eigener Schalter für alle, die Apps entwickeln. Mit ihm darf ein Computer, dem das iPhone vertraut, Apps installieren und debuggen und auf die Entwicklerdienste zugreifen; ein Jailbreak ist das nicht, und an derselben Stelle lässt er sich wieder ausschalten.
+
 **Wo finde ich das Protokoll?**
 Unter `%LOCALAPPDATA%\MirrorDock\mirror_dock.log` oder über **Protokolldatei öffnen** im Menü.
 
@@ -167,12 +203,13 @@ MSYSTEM=CLANG64 bash -lc 'bash win_native/build_scripts/build_uxplay_native.sh <
 
 ## 📜 Lizenz
 
-MirrorDock wird unter der **GNU General Public License v3** ([LICENSE](LICENSE)) verbreitet, weil es auf dem GPL-3.0-Code von UxPlay aufbaut. Die Windows-Medien-Engine in [`win_native/`](win_native) ist ein eigenständiges Werk unter der **MIT-Lizenz** ([win_native/LICENSE](win_native/LICENSE)). Das ZIP-Archiv der Veröffentlichung enthält die Lizenztexte aller mitgelieferten Bibliotheken sowie den vollständigen zugehörigen Quellcode.
+MirrorDock wird unter der **GNU General Public License v3** ([LICENSE](LICENSE)) verbreitet, weil es auf dem GPL-3.0-Code von UxPlay aufbaut. Die Windows-Medien-Engine in [`win_native/`](win_native) ist ein eigenständiges Werk unter der **MIT-Lizenz** ([win_native/LICENSE](win_native/LICENSE)); die Fernsteuerung in [`phone_control/`](phone_control) ist ein eigenständiges Werk unter **GPL-3.0-or-later**. Das ZIP-Archiv der Veröffentlichung enthält die Lizenztexte aller mitgelieferten Bibliotheken sowie den vollständigen zugehörigen Quellcode.
 
 ## 🙏 Danksagungen
 
 - [UxPlay](https://github.com/FDH2/UxPlay) von F. Duncanh und Mitwirkenden – der AirPlay-Server, auf dem MirrorDock aufbaut.
 - [RPiPlay](https://github.com/FD-/RPiPlay) von Florian Draschbacher und [shairplay](https://github.com/juhovh/shairplay) von Juho Vähä-Herttua – aus diesen Projekten stammt der Protokollkern.
+- [pymobiledevice3](https://github.com/doronz88/pymobiledevice3) von doronz88 und Mitwirkenden – von dort stammt das Wissen über die Entwicklerdienste von iOS, auf dem die Fernsteuerung aufbaut.
 - playfair, llhttp, csrp, FFmpeg, OpenSSL und libplist.
 
 AirPlay, iPhone und iPad sind Marken von Apple Inc. MirrorDock ist ein unabhängiges Open-Source-Projekt und steht in keiner Verbindung zu Apple.

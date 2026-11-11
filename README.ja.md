@@ -4,7 +4,7 @@
 
 # MirrorDock
 
-**iPhone や iPad の画面を、Wi-Fi でも USB ケーブルでも Windows PC にミラーリング。**
+**iPhone や iPad の画面を、Wi-Fi でも USB ケーブルでも Windows PC にミラーリング。マウスとキーボードで iPhone を操作することもできます。**
 
 [![Release](https://img.shields.io/github/v/release/bestkakkoii/MirrorDock?label=release&color=126BDB)](https://github.com/bestkakkoii/MirrorDock/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/bestkakkoii/MirrorDock/total?color=33B8FF)](https://github.com/bestkakkoii/MirrorDock/releases)
@@ -33,9 +33,10 @@ MirrorDock は Windows 用の AirPlay レシーバーです。iPhone の*画面�
 | 🔊 **ずれない音声** | 低遅延の WASAPI 出力を映像と同じタイムラインで鳴らすので、口の動きと声がぴったり合います。 |
 | 🎛️ **3 つのモード** | *画質優先*、*バランス*（既定）、*パフォーマンス優先*の 3 つから、映像の鮮明さを取るか、遅延の少なさを取るかを選べます。 |
 | ✂️ **黒帯をトリミング** | 映画のまわりの黒帯を自動で切り落とします。マウスで囲んだ好きな部分だけを表示することもできます。 |
+| 🖱️ **iPhone を操作** | 映像の上でクリック、ドラッグ、スクロール、キーボード入力をすると、iPhone がそのとおりに動きます。機能は MirrorDock に内蔵されていて、補助プログラムも脱獄も要りません（iOS 27、USB ケーブル、デベロッパモードが必要です）。 |
 | 🪟 **使い勝手のよいウィンドウ** | ほどよい大きさで開き、サイズを変えても縦横比を保ち、大きさと位置を覚えます。キーひとつで全画面表示になり、常に手前に表示することもできます。 |
 | 🌐 **10 言語に対応** | 画面の表示は、Windows の表示言語に合わせて切り替わります。 |
-| 🧳 **ファイルはひとつ** | 約 10 MB の実行ファイルが 1 つあるだけで、Windows のほかには何も要りません。 |
+| 🧳 **ファイルはひとつ** | 約 12 MB の実行ファイルが 1 つあるだけで、Windows のほかには何も要りません。 |
 
 ## 🚀 クイックスタート
 
@@ -74,6 +75,30 @@ MirrorDock は Windows 用の AirPlay レシーバーです。iPhone の*画面�
 - **自動**（**C** キー）: 黒帯が切り落とされ、ウィンドウが映像にぴったり合います。次の映画に切り替わっても、トリミングはそのまま保たれます。プレーヤーのコントロールなど、別のものが黒帯の部分に現れて表示され続けた場合は、約 1 秒以内に映像全体の表示に戻ります。
 - **手動**（**X** キー）: 見たい部分をドラッグして枠で囲みます。**Esc** でキャンセルできます。
 
+## 🖱️ iPhone の操作
+
+**F8** を押す（またはメニューで**マウスとキーボードで iPhone を操作**を選ぶ）と、映像が iPhone の画面そのものになります。映像の上で行った操作が、そのまま iPhone で実行されます。
+
+| PC での操作 | iPhone での動作 |
+|---|---|
+| 左ボタン: クリック、長押し、ドラッグ | 1 本の指: タップ、長押し、スワイプ |
+| マウスホイール（**Shift** を押しながら回すと横方向） | ポインターの下にある内容をスクロール |
+| 中央ボタン | ホーム画面に戻る |
+| キーボード | iPhone につないだキーボードと同じように入力。**Ctrl** は ⌘ として働き、**Ctrl+Space** で iPhone の入力言語を切り替え |
+| **Page Down** / **Page Up**、**Alt** + 矢印キー | 次または前のページや動画にフリックで移動 |
+| 右ボタン | これまでどおり MirrorDock のメニュー |
+
+必要なもの:
+
+1. **iOS 27 以降**の iPhone を **USB ケーブル**でつなぎ、iPhone でこの PC を信頼しておく必要があります。ケーブルを通るのは操作だけで、映像は Wi-Fi のまま受け取っていても構いません。
+2. iPhone で**デベロッパモード**をオンにしておきます（*設定 → プライバシーとセキュリティ → デベロッパモード*）。このスイッチは、開発ツールから要求があるまで表示されません。MirrorDock は、初めて F8 を押したときにその要求を行います。
+3. 初回と、iOS をアップデートするたびにその最初の 1 回は、インターネット接続が必要です。MirrorDock が、Apple の開発者向けディスクイメージ（*Developer Disk Image*）を iPhone にインストールするためです。これには約 1 分かかります。
+
+> [!NOTE]
+> AirPlay では入力を送れないため、操作には別の経路を使います。iOS の開発者向けサービス、つまり Xcode が実機を操作するときに使っているものです。このサービスをインストールするために、MirrorDock は [DeveloperDiskImage](https://github.com/doronz88/DeveloperDiskImage) リポジトリから Apple のイメージをダウンロードし、Apple の署名サービス（`gs.apple.com`）に、お使いの iPhone 向けの署名を依頼します。このとき、Xcode とまったく同じように、iPhone のチップの識別番号が Apple に伝わります。それ以降、操作のために外部と通信することはありません。
+
+操作がオンのあいだも、**F8**、**F11**、**Alt+Enter**、**Alt+F4** はこれまでどおりウィンドウに対して働きます。コントロールバーは、iPhone の画面の下端を隠してしまうため、表示されません。
+
 ## ⌨️ キーボードとマウス
 
 | 操作 | キー |
@@ -83,8 +108,11 @@ MirrorDock は Windows 用の AirPlay レシーバーです。iPhone の*画面�
 | 表示する範囲を枠で囲む | **X** |
 | 常に手前に表示 | **T** |
 | ミュート（PC 側のみ） | **M** |
+| iPhone の操作のオン / オフ | **F8** |
 | コントロールバー | 映像の上でマウスを動かす |
 | メニュー | 映像の上の任意の場所を右クリック |
+
+iPhone の操作中は、文字キーを押すと iPhone に入力されます。**F8** を押すと、これらのキーは再びウィンドウで使えるようになります。
 
 ## ⚙️ オプション
 
@@ -123,6 +151,8 @@ flowchart LR
 
 映像と音声は、ひとつのタイムライン上でスケジュールされます。遅延はネットワークの状態と PC のデコード速度に合わせて変わり、カクつきが出ない範囲でできるだけ短く保たれます。
 
+操作には、これとは別のもうひとつの経路を使います。MirrorDock は USB ケーブル経由で iPhone の開発者向けトンネルを開き（IPv6 と TCP の小さな実装を独自に備えているため、ネットワークアダプターも管理者権限も要りません）、タッチとキーボードのレポートを iPhone の入力サービスに送ります。
+
 ## 📊 実測値
 
 2016 年製のノート PC 1 台（Intel Core i7-6700HQ、Intel HD Graphics 530）、2872×1320・60 fps の H.265 テストストリーム、*バランス* モード、バージョン 1.6:
@@ -150,6 +180,12 @@ iPhone と PC の両方が同じネットワークにつながっていて、Win
 **口の動きと声が合いません。**
 `-vsync` の後ろにミリ秒数を付けて微調整します（正の値にすると音声が遅れます）。
 
+**F8 を押すと「iPhone を操作できません」と表示されます。**
+原因はメッセージに表示されます。ケーブルがつながっていないかこの PC が信頼されていない、デベロッパモードがオフになっている、iPhone の iOS が 27 より古い、開発者向けディスクイメージをインストールできなかった（この手順にはインターネット接続が必要です）のいずれかです。デベロッパモードをオンにすると、iPhone が再起動し、もう一度確認を求められます。
+
+**デベロッパモードをオンのままにしておいても安全ですか。**
+デベロッパモードは、アプリを開発する人のために Apple 自身が用意しているスイッチです。オンにすると、信頼したコンピューターからアプリのインストールやデバッグ、開発者向けサービスの利用ができるようになります。iPhone を脱獄するものではなく、同じ場所でオフに戻せます。
+
 **ログはどこにありますか。**
 `%LOCALAPPDATA%\MirrorDock\mirror_dock.log` にあります。メニューの**ログファイルを開く**からも開けます。
 
@@ -167,12 +203,13 @@ MSYSTEM=CLANG64 bash -lc 'bash win_native/build_scripts/build_uxplay_native.sh <
 
 ## 📜 ライセンス
 
-MirrorDock は UxPlay の GPL-3.0 コードを土台にしているため、**GNU General Public License v3**（[LICENSE](LICENSE)）のもとで配布しています。[`win_native/`](win_native) にある Windows 用メディアエンジンは独自に開発したもので、**MIT ライセンス**（[win_native/LICENSE](win_native/LICENSE)）で提供します。リリースの zip には、同梱しているすべてのライブラリのライセンス文と、対応する完全なソースコードが入っています。
+MirrorDock は UxPlay の GPL-3.0 コードを土台にしているため、**GNU General Public License v3**（[LICENSE](LICENSE)）のもとで配布しています。[`win_native/`](win_native) にある Windows 用メディアエンジンは独自に開発したもので、**MIT ライセンス**（[win_native/LICENSE](win_native/LICENSE)）で提供します。[`phone_control/`](phone_control) にある iPhone の操作機能も独自に開発したもので、**GPL-3.0-or-later** で提供します。リリースの zip には、同梱しているすべてのライブラリのライセンス文と、対応する完全なソースコードが入っています。
 
 ## 🙏 謝辞
 
 - [UxPlay](https://github.com/FDH2/UxPlay)（F. Duncanh 氏とコントリビューターの皆さん）— MirrorDock の土台となっている AirPlay サーバーです。
 - [RPiPlay](https://github.com/FD-/RPiPlay)（Florian Draschbacher 氏）と [shairplay](https://github.com/juhovh/shairplay)（Juho Vähä-Herttua 氏）— そのプロトコルコアの源流です。
+- [pymobiledevice3](https://github.com/doronz88/pymobiledevice3)（doronz88 氏とコントリビューターの皆さん）— iPhone の操作機能は、ここで得られた iOS の開発者向けサービスに関する知見をもとに書かれています。
 - playfair、llhttp、csrp、FFmpeg、OpenSSL、libplist。
 
 AirPlay、iPhone、iPad は Apple Inc. の商標です。MirrorDock は独立したオープンソースプロジェクトであり、Apple とは関係ありません。

@@ -10,7 +10,7 @@ architecture, invariants, build inputs and verification state.
 single Windows-native program for the iPhone → Windows AirPlay use case. The tree
 builds **only** this program (MSYS2 CLANG64; the top-level CMakeLists stops
 on other hosts). The program has its own name and version (`win_native/include/
-uxplay_version.h`, currently MirrorDock 1.8.0: the one place they are written
+uxplay_version.h`, currently MirrorDock 1.9.0: the one place they are written
 — log, "About", the version resource and the settings/log locations read it;
 only `uxplay.manifest`, `package_zip.py` and the CMake `OUTPUT_NAME` repeat
 them); `UXPLAY_CORE_VERSION` there is the upstream UxPlay release the
@@ -68,11 +68,14 @@ Up to 1.6 the program was published as "UxPlay for Windows (native)"; since
 | `lib/` | AirPlay protocol core (RAOP/RTSP, pairing, FairPlay, NTP, RTP, mirror stream) | upstream: LGPL-2.1+ / GPL-3.0 (`crypto.c`, `playfair/`), MIT (`llhttp/`, `srp.c`) — see each file |
 | `lib/mdnsd/` | embedded mDNS responder (replaces Bonjour/Avahi), USB-link following | per file header |
 | `win_native/` | C++26 media engine, C API, build scripts, resources, tests | **MIT** (`win_native/LICENSE`, `SPDX-License-Identifier: MIT` in every file) |
+| `phone_control/` | C++26 remote control of the iPhone over its developer services (see "Remote control of the iPhone") | **GPL-3.0-or-later** (`SPDX-License-Identifier` in every file) |
 | `LICENSE` | GPL-3.0 text | — |
 
 The program as a whole is GPL-3.0 (it links GPL-3.0 code). `win_native/`
-alone may be reused under MIT. `package_zip.py` ships every applicable
-licence text in `licenses/`.
+alone may be reused under MIT. `phone_control/` is original code, but its
+wire formats follow what the GPL-3.0 project pymobiledevice3 found out about
+Apple's private protocols, so it is kept apart from the MIT part and under
+the GPL. `package_zip.py` ships every applicable licence text in `licenses/`.
 
 ## Adaptivity & portability
 
@@ -538,6 +541,126 @@ Hotspot on, Windows exposes an "Apple Mobile Device Ethernet" NIC
   verified on the device:** plugging in while UxPlay runs (membership move),
   the hotspot hint and the guard's UAC flow.
 
+## Remote control of the iPhone (`phone_control/`, since 1.9)
+
+AirPlay mirroring has no channel for input. (Its media remote, DACP, is
+offered by the phone while it mirrors - one line per session in the log says
+so - but it only knows play/pause/next/volume and is not used. A Bluetooth
+keyboard/mouse emulated by the PC needs the LE peripheral role, which the
+test PC's adapter lacks.) Control therefore uses the **developer services of
+iOS 27**, the ones Xcode's Device Hub uses to operate a real device. It needs
+iOS 27, the USB cable, a paired ("trusted") PC and Developer Mode; the
+picture keeps coming by AirPlay, over Wi-Fi or USB.
+
+**Modules** (each a `.cppm` interface and a `.cpp` unit; nothing in them
+depends on the engine):
+
+| module | what |
+|---|---|
+| `uxplay_byte_stream` | the stream interface every layer is written against; a read can be given a patience |
+| `uxplay_property_list` | property lists over libplist |
+| `uxplay_usbmux` | usbmuxd (Apple Mobile Device Service, 127.0.0.1:27015): device list, connect to a port of the phone, pairing record |
+| `uxplay_device_stream` | one connection to the phone, plain or TLS (OpenSSL, the pairing's certificate and key; the phone's side needs security level 0) |
+| `uxplay_lockdown` | lockdown: session with the pairing, values, starting services; property-list messages |
+| `uxplay_device_tunnel` | the lockdown service CoreDeviceProxy as a point-to-point IPv6 link, with this program's own IPv6 + TCP (no network adapter, no administrator rights); UDP towards a "discard port" is counted and dropped |
+| `uxplay_remote_xpc` | RemoteXPC: HTTP/2 framing with flow control, XPC objects, file transfers on their own streams |
+| `uxplay_core_device` | the service directory (RSD), the CoreDevice call envelope, the offer that starts a stream of the screen |
+| `uxplay_cryptex` | cryptexd: what is installed, the chip's identity, a nonce, installing a cryptex |
+| `uxplay_http_client` | one HTTP request through WinHTTP; optionally with one root certificate as the only trusted one |
+| `uxplay_developer_image` | the Developer Disk Image: fetch, verify, cache, Apple's signature, installation |
+| `uxplay_remote_control` | the session: a worker thread that connects, serves and ends; the only module the engine imports |
+
+**Session** (`remote_control::state::connect`, worker thread): usbmuxd lists
+the phone on the cable → lockdown session (TLS) → iOS version (below 27:
+`unsupported_ios`) → Developer Mode (`com.apple.security.mac.amfi` /
+`DeveloperModeStatus`; when off, the lockdown service `com.apple.amfi.lockdown`
+is asked to show the switch in Settings and the session ends with
+`developer_mode_off`) → tunnel → service directory → when the display and
+input services are missing: install the Developer Disk Image (state
+`preparing`) and read the directory again → `startmediastream` on
+`com.apple.coredevice.displayservice` → 0.5 s → connection to
+`com.apple.coredevice.hid.universalhidservice` → the phone's orientation →
+`ready`.
+
+* **The screen stream is a gate, not a picture.** iOS delivers HID reports to
+  apps only while a media stream of the display service runs. Its RTP goes to
+  a port of the tunnel that drops it (the picture the user sees is AirPlay's).
+  The gate belongs to the phone, not to the connection: `stopmediastream` with
+  `stopAll` (what a session sends at its end, so that nothing of a crashed
+  session lingers and keeps the phone's camera and microphone blocked) ends
+  the streams of **every** client. Two controllers on one phone therefore
+  disturb each other; a probe that ends with `stopAll` cuts a running
+  session's input without that session noticing.
+* **Input.** Touch: 58-byte reports to the surface with service identifier
+  257 (report 0x09; up to five contacts of `[state][x][y]`, 0..65535 on the
+  phone's own upright panel; every finger still down is in every report; a
+  48-bit nanosecond timestamp). Keyboard: a virtual keyboard is registered
+  with the first key report (`createService`, the way Universal Control lends
+  a Mac's keyboard), then 39-byte reports with one bit per HID usage.
+  Buttons: `IndigoButtonEvent` on `com.apple.coredevice.hid.indigo` (a
+  connection per press). Wheel scrolling and the flicks are a fifth finger of
+  the program's own whose position follows the clock, not the number of
+  reports. The engine speaks in 0..65535 across the picture as mirrored;
+  `to_panel` turns that by the interface orientation SpringBoard reports
+  (asked once a second and when the picture changes shape).
+* **Developer Disk Image.** On iOS 27 it is a "Cryptex1": Xcode installs it
+  through `com.apple.security.cryptexd.remote` with persistence "until the
+  next software update", and so does `ensure_developer_image`. The image
+  (17 MB) and its companions are not part of the program: they are fetched
+  from the DeveloperDiskImage repository at a pinned commit, checked against
+  pinned SHA-256 values and kept in
+  `%LOCALAPPDATA%\MirrorDock\developer_disk_image`. Apple's signing service
+  (`gs.apple.com/TSS/controller`) signs them for the phone: the request names
+  the chip model, the phone's unique chip number and a nonce the phone made.
+  That server's certificate comes from Apple's own authority, which Windows
+  does not trust; the request therefore goes out over HTTPS with **Apple Root
+  CA as the only accepted root** (embedded; checked in WinHTTP's
+  "sending request" callback, before anything is sent). The reference
+  implementation uses plain HTTP there.
+
+**Invariants**
+
+* Nothing that identifies the phone or the pairing is logged or shown: not
+  the serial number or unique chip number, not the nonce or the ticket, not
+  the pairing record's keys. Logged are the model, the iOS version and sizes.
+* The worker thread owns the whole session; the public members only queue
+  commands. What arrives before `ready` is dropped (it would be stale), a run
+  of moves of the same fingers keeps only the newest, and a queue that
+  overflows (the phone takes nothing) is dropped as a whole and followed by
+  "release everything", so that nothing stays pressed.
+* Every wait for the phone is bounded: lockdown and its services answer
+  within 10 s or the read fails, a write that is not taken for 20 s fails,
+  a connection inside the tunnel is made within 8 s, every call has its
+  patience. The destructor therefore returns: at once normally, after the
+  stage the phone hangs in otherwise.
+* The tunnel's TCP has no retransmission and no congestion control: the link
+  below it is TLS over the USB connection, which neither loses nor reorders.
+  This is the reason control is USB-only so far.
+* A failure of the touch path ends the session (`connection_lost`); the
+  engine starts a new one, three times in a row at most. A keyboard the
+  phone will not register, a button service that is missing or an
+  orientation the phone does not report are logged and do not end it.
+* Every connection inside one tunnel presents the same identity: sixteen
+  bytes from the pairing's HostID.
+
+**Engine and window.** `media_engine` keeps a control thread
+(`control_loop`): a session exists while the user wants control (F8, menu;
+remembered as `remote_control`) and a stream is shown. `control_status` turns
+the session's reports into the title ("connecting…", "control"), a
+notification the first time control is ready, one while the phone is being
+prepared, and one with the reason when control cannot be had. A new USB
+device triggers another attempt after `no_device` / `not_trusted`. The window
+forwards input only while control is ready (`controlling()`): left button,
+wheel, middle button, keys as HID usages (`keyboard_usage` maps scan codes),
+Page Up/Down and Alt+arrows as flicks; F8, F11, Alt+Enter, Alt+F4 and Esc in
+full screen stay with the window.
+
+**Not implemented:** control over Wi-Fi (the phone's RemotePairing tunnel:
+another handshake, and a real TCP), the media remote as a fallback without
+Developer Mode, phones with more than one screen (the touch surface would
+have to be chosen by display), restarting the screen stream when another
+client stopped it.
+
 ## Build (MSYS2 CLANG64)
 
 ```sh
@@ -554,7 +677,17 @@ MSYSTEM=CLANG64 bash -lc 'bash win_native/build_scripts/build_uxplay_native.sh <
 python -I win_native/build_scripts/package_zip.py <build_dir> <uxplay_src> <msys2>/clang64 <src_root> dist/mirror_dock_win64.zip
 ```
 
-Warnings are errors on all owned code: `win_native/` (`-Wall -Wextra
+CMake targets of the owned C++: `uxplay_base` (failure outcomes and the log:
+`uxplay_status`, `uxplay_log`) ← `phone_control` ← `uxplay_native` (the
+engine) ← `uxplay` (the executable) and the tests. `uxplay_base` exists so
+that `phone_control` does not depend on the engine that uses it. All of them
+compile with `CXX_EXTENSIONS OFF`: a consumer with another language mode
+makes CMake build a second flavour of every module interface and of the std
+module, and with more than one library in the chain the two flavours of
+`std` collide ("Disagreement of the location of the 'std' module").
+
+Warnings are errors on all owned code (`uxplay_strict_warnings` in the top
+`CMakeLists.txt`): `win_native/` and `phone_control/` (`-Wall -Wextra
 -Wpedantic -Wshadow -Wold-style-cast …`), `uxplay.cpp`, `lib/` and
 `lib/mdnsd/` (`-Wall -Wextra`; `-Wsign-compare` off in `lib/` because the
 upstream socket code keeps Windows `SOCKET` handles in `int`). The only
@@ -572,12 +705,25 @@ Pinned inputs (observed 2026-11-02):
 | CMake / Ninja | MSYS2 CLANG64 | — | 4.4.5 / 1.13.2 |
 | fxc | Windows SDK | — | 10.0.28000.0 |
 
+Fetched at run time, not part of the build or the package (observed
+2026-11-12; constants in `phone_control/src/uxplay_developer_image.cpp`):
+
+| input | source | pinned |
+|---|---|---|
+| Developer Disk Image (Cryptex1, build 27B52: `Image.dmg`, `.trustcache`, `.cryptex_info`, `.root_hash`, `BuildManifest.plist`) | github.com/doronz88/DeveloperDiskImage, branch `main`, directory `PersonalizedImages/Xcode_iOS_DDI_Cryptex` | commit a1020f81b6429f5ce40408cbe21c690512b613b5, and the SHA-256 of each file |
+| Apple Root CA (the only root accepted for `gs.apple.com`) | https://www.apple.com/appleca/AppleIncRootCertificate.cer | SHA-256 b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024, valid until 2035-02-09 |
+
+A newer iOS may need a newer image: then the commit and the hashes are
+updated together (the build identity "Developer Disk Image Cryptex" of the
+new `BuildManifest.plist` is what `load_developer_image` reads).
+
 FFmpeg options: `--disable-everything --disable-autodetect` plus decoders
 h264, hevc, aac, alac, pcm_s16le, pcm_f32le; parsers h264, hevc, aac;
 hwaccels h264/hevc d3d11va (+va2); swresample; w32threads.
 
 **Linking (single executable):** everything is linked statically
-(`-static`): the pinned FFmpeg/OpenSSL/libplist builds, libc++, libunwind and
+(`-static`): the pinned FFmpeg/OpenSSL (libcrypto, and libssl for the TLS
+towards the phone)/libplist builds, libc++, libunwind and
 winpthreads (MSYS2 CLANG64 runtime, recorded exception: toolchain runtime, not
 a main-branch build). `mirror_dock.exe` imports only Windows system DLLs, so the
 package bundles no DLL. The UCRT (`api-ms-win-crt-*` → `ucrtbase.dll`) stays
@@ -590,7 +736,8 @@ relinking is possible from the bundled source and build scripts.
 
 Owned source files are **UTF-8 with BOM and CRLF**: `uxplay.cpp`, `lib/*.c|h`,
 `lib/mdnsd/`, everything under `win_native/` (C++ modules, headers, tests,
-`uxplay.rc`, Python scripts) and the three `CMakeLists.txt`. `.gitattributes`
+`uxplay.rc`, Python scripts) and `phone_control/`, and the `CMakeLists.txt`
+files. `.gitattributes`
 and `.editorconfig` keep it that way; `python -I
 win_native/build_scripts/source_encoding.py check <files>` verifies it (valid
 UTF-8, BOM, CRLF only) and `convert` repairs it.
@@ -617,7 +764,11 @@ protection would not raise the effort of anyone who wants to read or alter
 the logic, would add start-up and runtime cost on the decode/present path and
 would make crash records (module+offset) useless. No VMProtect markers are
 used; the pairing keys the program generates stay in the user's profile
-(`.uxplay.pem`) and are never logged.
+(`.uxplay.pem`) and are never logged. The same holds for `phone_control/`:
+its protocols are documented in public GPL code, the only secrets it touches
+(the keys of the phone's pairing record, which Apple's driver service hands
+out) are used for the TLS session and never stored or logged, and the two
+pinned values in it (image hashes, Apple's root certificate) are public.
 
 ## Options specific to this build
 
@@ -751,3 +902,73 @@ models, not by native speakers. Whether iOS offers media remote control
 media remote control` appears once per session if it does. Everything listed
 as untested for 1.6 and 1.7 still applies, except what the session above
 showed working.
+
+## State of 1.9 (2026-11-12)
+
+1.9 adds remote control of the iPhone (`phone_control/`, see "Remote control
+of the iPhone"), its texts in the ten languages and its sections in the
+READMEs and user guides. The sender is the same iPhone 16 Pro Max
+(`iPhone17,2`), now with **iOS 27.2.1**, Developer Mode on.
+
+**How it came about.** Control was first tried with a helper process that
+used the Python library pymobiledevice3 (never published). With it the owner
+used the left button, the wheel, the middle button and typing on 2026-11-12.
+The owner then asked for a version without Python; `phone_control/` is that
+version, written against the same wire formats, and the helper is gone from
+the tree.
+
+**Observed with the phone on the cable** (a console probe built from the same
+`phone_control` sources; nothing identifying was printed):
+
+* Lockdown session after 45 ms, tunnel after 90 ms, service directory (85
+  services) after about 0.12 s.
+* The input service lists five surfaces: 257 touch screen, 512 keyboard, 1026
+  main screen buttons, 1280 and 1281 (gesture surfaces). SpringBoard reports
+  the orientation.
+* **The control session object** (`remote_control`, as the engine uses it):
+  ready after 1.0 s (of which 0.5 s is the settling pause after the stream
+  start); the keyboard registration is answered with the service identifier
+  that was asked for; a touch report and a keyboard report are taken (the
+  touch report, written to the log at debug level, is byte for byte what
+  pymobiledevice3 builds for the same contact, apart from the timestamp); the
+  screen stream delivers 300 to 500 datagrams a second, which the tunnel
+  drops; after twelve seconds the session is still ready; ending it (stream
+  stopped, everything closed) takes about 50 ms.
+* **Developer Disk Image:** removed with the reference tool, the phone's
+  directory shrinks to 64 services and the display, input and button services
+  are gone (this is how `connect` tells that the image is missing).
+  `ensure_developer_image` then installed it in 2.3 s with the image in the
+  cache (reading and checking it 0.8 s, Apple's signature 0.6 s, transfer and
+  installation 0.8 s); the directory, read again at once, lists 85 services.
+  A part missing from the cache is fetched through WinHTTP and checked (seen
+  with the trust cache file).
+* **Apple's signing service** answers the request with a ticket of 2977 bytes
+  over HTTPS with Apple Root CA as the only accepted root; the same check
+  refuses a server whose chain ends elsewhere (`CERT_E_UNTRUSTEDROOT`, nothing
+  sent).
+* The whole tree builds with warnings as errors; the translated READMEs match
+  the master's structure (0 differences each), the ten user guides have the
+  same twelve sections.
+
+**An incident worth knowing.** A probe run that ended with `stopAll` while
+the owner's MirrorDock (then still with the Python helper) was controlling
+the phone very probably cut that session's input, silently. Hence the note
+about the gate under "Remote control of the iPhone": never run a second
+controller, and no stream-stopping probe, while a session is in use.
+
+**Not observed:** a click or a key arriving in an app *through the native
+code* with MirrorDock itself (the session, the gate and the reports were
+seen being accepted; their effect on the screen was not looked at, and the
+report layouts are the ones the Python helper used). The flicks (Page
+Down / Page Up, Alt + arrows). A phone held sideways or upside down with the
+native code (sideways with the home indicator on the right worked with the
+helper; the other way round never ran). The failure paths: no cable, no
+trust, Developer Mode off and the request to show its switch, an iOS older
+than 27, camera or microphone in use, the cable pulled in mid-use and the
+automatic new session. The download of the 17 MB image through the program
+(only the small file was fetched that way; the image came from the cache),
+an installation with the phone locked, and whether the installed image
+survives a restart of the phone or an iOS update (the persistence asked for
+is "until the next software update"). The program in the seven languages
+whose texts were written by language models, not native speakers.
+Everything listed as untested for 1.6 to 1.8 still applies.

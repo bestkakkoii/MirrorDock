@@ -40,12 +40,28 @@ foreach( shader_spec "vs_fullscreen;vs_5_0;video_present_vs.h"
 endforeach()
 add_custom_target( uxplay_shaders DEPENDS ${UXPLAY_SHADER_HEADERS} )
 
+# What every owned part of the program shares: failure outcomes and the log.
+# A target of its own, so that phone_control (which the engine uses) can use
+# it without depending on the engine.
+add_library( uxplay_base STATIC )
+target_sources( uxplay_base
+  PUBLIC
+    FILE_SET uxplay_base_modules TYPE CXX_MODULES FILES
+      src/uxplay_status.cppm
+      src/uxplay_log.cppm
+  PRIVATE
+    src/uxplay_status.cpp
+    src/uxplay_log.cpp )
+target_compile_features( uxplay_base PUBLIC cxx_std_26 )
+set_target_properties( uxplay_base PROPERTIES CXX_MODULE_STD ON CXX_EXTENSIONS OFF )
+# WIN32_LEAN_AND_MEAN / NOMINMAX are defined by each source before <windows.h>
+target_compile_definitions( uxplay_base PUBLIC UNICODE _UNICODE _WIN32_WINNT=0x0A00 WINVER=0x0A00 )
+uxplay_strict_warnings( uxplay_base uxplay_base_modules )
+
 add_library( uxplay_native STATIC )
 target_sources( uxplay_native
   PUBLIC
     FILE_SET uxplay_modules TYPE CXX_MODULES FILES
-      src/uxplay_status.cppm
-      src/uxplay_log.cppm
       src/uxplay_clock.cppm
       src/uxplay_system_tuning.cppm
       src/uxplay_media_types.cppm
@@ -64,8 +80,6 @@ target_sources( uxplay_native
       src/uxplay_media_engine.cppm
       src/uxplay_usb_link.cppm
   PRIVATE
-    src/uxplay_status.cpp
-    src/uxplay_log.cpp
     src/uxplay_clock.cpp
     src/uxplay_system_tuning.cpp
     src/uxplay_gpu_device.cpp
@@ -91,45 +105,33 @@ target_include_directories( uxplay_native PRIVATE ${UXPLAY_GENERATED} )
 # module interfaces include FFmpeg headers in their global module
 # fragment: importers (and CMake's synthesized BMIs) need them as system headers
 target_include_directories( uxplay_native SYSTEM PUBLIC ${UXPLAY_FFMPEG_INCLUDE_DIRS} )
-# WIN32_LEAN_AND_MEAN / NOMINMAX are defined by each source before <windows.h>
-target_compile_definitions( uxplay_native PUBLIC UNICODE _UNICODE _WIN32_WINNT=0x0A00 WINVER=0x0A00 )
-
-# Strongest practical warning set, as errors, on the owned sources only: the
-# std module that CMake synthesizes from libc++'s std.cppm must not inherit
-# it (libc++'s own `export module std;` triggers -Wreserved-module-identifier).
-get_target_property( UXPLAY_NATIVE_SOURCES uxplay_native SOURCES )
-get_target_property( UXPLAY_NATIVE_MODULES uxplay_native CXX_MODULE_SET_uxplay_modules )
-foreach( owned_source ${UXPLAY_NATIVE_SOURCES} ${UXPLAY_NATIVE_MODULES} )
-  if ( owned_source MATCHES "[.]c$" )
-    set_property( SOURCE ${owned_source} APPEND PROPERTY COMPILE_OPTIONS -Wall -Wextra -Werror -Wno-unused-parameter )
-  elseif ( owned_source MATCHES "[.](cpp|cppm)$" )
-    set_property( SOURCE ${owned_source} APPEND PROPERTY COMPILE_OPTIONS
-      -Wall -Wextra -Wpedantic -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wnull-dereference
-      -Wimplicit-fallthrough -Wno-unused-parameter -Werror )
-  endif()
-endforeach()
+uxplay_strict_warnings( uxplay_native uxplay_modules )
 
 target_link_directories( uxplay_native PUBLIC ${UXPLAY_FFMPEG_LIBRARY_DIRS} )
+# phone_control: remote control of the phone (../phone_control, GPL-3.0)
 target_link_libraries( uxplay_native PUBLIC
+  uxplay_base phone_control
   avcodec swresample avutil
-  d3d11 dxgi dwmapi avrt ole32 uuid user32 gdi32 bcrypt ws2_32 crypt32 iphlpapi cfgmgr32 d2d1 dwrite )
+  d3d11 dxgi dwmapi avrt ole32 uuid user32 gdi32 bcrypt ws2_32 crypt32 iphlpapi cfgmgr32 d2d1 dwrite imm32 )
 
 # ---- tests (not part of the shipped program) -------------------------------
 option( UXPLAY_NATIVE_TESTS "Build the native engine tests" ON )
 if ( UXPLAY_NATIVE_TESTS )
   enable_testing()
+  # CXX_EXTENSIONS OFF as in the libraries whose modules the tests import: one
+  # flavour of every module interface (and of the std module) serves them all.
   add_executable( engine_smoke_test tests/engine_smoke_test.cpp )
   target_link_libraries( engine_smoke_test PRIVATE uxplay_native )
-  set_target_properties( engine_smoke_test PROPERTIES CXX_MODULE_STD ON )
+  set_target_properties( engine_smoke_test PROPERTIES CXX_MODULE_STD ON CXX_EXTENSIONS OFF )
 
   add_executable( usb_link_tests tests/usb_link_tests.cpp )
   target_link_libraries( usb_link_tests PRIVATE uxplay_native )
-  set_target_properties( usb_link_tests PROPERTIES CXX_MODULE_STD ON )
+  set_target_properties( usb_link_tests PROPERTIES CXX_MODULE_STD ON CXX_EXTENSIONS OFF )
   add_test( NAME usb_link_tests COMMAND usb_link_tests )
 
   add_executable( ui_text_tests tests/ui_text_tests.cpp )
   target_link_libraries( ui_text_tests PRIVATE uxplay_native )
-  set_target_properties( ui_text_tests PROPERTIES CXX_MODULE_STD ON )
+  set_target_properties( ui_text_tests PROPERTIES CXX_MODULE_STD ON CXX_EXTENSIONS OFF )
   add_test( NAME ui_text_tests COMMAND ui_text_tests )
 
   foreach( test_source tests/engine_smoke_test.cpp tests/usb_link_tests.cpp tests/ui_text_tests.cpp )

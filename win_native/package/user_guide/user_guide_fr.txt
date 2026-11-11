@@ -2,7 +2,8 @@
 =================================
 
 MirrorDock affiche l’image et diffuse le son d’un iPhone ou d’un iPad sur un
-PC Windows, en Wi-Fi ou par le câble USB. Il tient en un seul fichier,
+PC Windows, en Wi-Fi ou par le câble USB, et permet de contrôler un iPhone
+avec la souris et le clavier du PC (section 5). Il tient en un seul fichier,
 mirror_dock.exe : il n’y a rien d’autre à installer.
 (Jusqu’à la version 1.6, il s’appelait « UxPlay for Windows » ; si vous
 faites la mise à niveau, reportez-vous à la dernière section.)
@@ -181,10 +182,67 @@ filaire qui fonctionne avec les versions actuelles d’iOS.
 - L’interface suit la langue d’affichage de Windows : anglais, chinois
   traditionnel, chinois simplifié, japonais, coréen, espagnol, allemand,
   français, vietnamien et thaï ; dans toute autre langue, l’interface est en
-  anglais. Pour en imposer une, utilisez l’option -ui (section 7).
+  anglais. Pour en imposer une, utilisez l’option -ui (section 8).
 
 
-5. Modes qualité et performances
+5. Contrôler l’iPhone à la souris et au clavier
+-----------------------------------------------
+Quand l’iPhone est relié par le câble USB, ce que vous faites sur l’image
+est reproduit sur le téléphone : appuyez sur F8, ou choisissez « Contrôler
+l’iPhone à la souris et au clavier » dans le menu. Tant que le contrôle est
+actif, le titre de la fenêtre indique « contrôle actif » ; F8 le désactive.
+Le choix est mémorisé.
+
+  Bouton gauche de la souris  un doigt : cliquer, c’est toucher ; maintenir
+                              le bouton enfoncé, c’est maintenir le doigt ;
+                              faire glisser, c’est balayer
+  Molette de la souris        fait défiler ce qui se trouve sous le pointeur
+                              (avec Shift : horizontalement)
+  Bouton central              retour à l’écran d’accueil
+  Clavier                     écrit sur le téléphone, comme un clavier qui y
+                              serait branché. Ctrl correspond à la touche
+                              Commande ; Ctrl+Espace change la langue de
+                              saisie du téléphone
+  Page Down, Page Up, Alt + touches fléchées
+                              passe à la page ou à la vidéo suivante ou
+                              précédente d’un balayage rapide (pour les apps
+                              qui ne réagissent pas au clavier)
+  Bouton droit de la souris   le menu de MirrorDock, comme toujours
+
+F8, F11, Alt+Enter, Alt+F4 et, en plein écran, Esc continuent d’agir sur la
+fenêtre. La barre de contrôle ne s’affiche pas tant que le contrôle est
+actif, car elle masquerait le bas de l’écran du téléphone : utilisez le
+bouton droit de la souris.
+
+Ce qu’il faut :
+- Un iPhone sous iOS 27 ou version ultérieure, relié par le câble USB et qui
+  fait confiance à ce PC (déverrouillez le téléphone et touchez « Se fier »
+  quand il le demande). Seul le contrôle utilise le câble : l’image peut
+  continuer d’arriver en Wi-Fi, et « Wi-Fi uniquement » peut rester
+  sélectionné.
+- Le mode Développeur activé : sur l’iPhone, Réglages > Confidentialité et
+  sécurité > Mode Développeur. Cette option reste masquée tant qu’un outil
+  de développement ne l’a pas demandée ; MirrorDock le fait la première fois
+  que vous appuyez sur F8. Une fois le mode activé, l’iPhone redémarre et
+  demande une dernière confirmation.
+- Internet sur le PC la première fois, puis la première fois après chaque
+  mise à jour d’iOS : MirrorDock installe sur le téléphone l’image disque
+  développeur d’Apple (« Developer Disk Image »), ce qui prend environ une
+  minute. Il télécharge l’image (environ 17 Mo, conservés dans
+  %LOCALAPPDATA%\MirrorDock\developer_disk_image) et demande au service de
+  signature d’Apple de la signer pour ce téléphone ; comme avec Xcode, Apple
+  reçoit ainsi les numéros d’identification de sa puce. Ensuite, le contrôle
+  ne contacte plus personne.
+
+Pourquoi cette méthode : AirPlay n’a aucun canal pour transmettre au
+téléphone les actions de la souris et du clavier. Le contrôle passe donc par
+les services pour développeurs d’iOS, ceux dont Xcode, l’outil d’Apple, se
+sert pour piloter un appareil réel. Le mode Développeur est l’option
+officielle d’Apple qui y donne accès ; ce n’est pas un jailbreak du
+téléphone, et il se désactive au même endroit.
+
+
+6. Modes qualité et performances
 --------------------------------
 Choisissez l’un des trois dans le menu ; le choix est mémorisé :
   - « Qualité » : demande au téléphone la pleine résolution, garde un peu
@@ -205,7 +263,7 @@ que la mise en tampon plus profonde de « Qualité ») ne prend donc pleinement
 effet qu’à la connexion suivante (le programme le signale).
 
 
-6. Fichier journal et rapport de plantage
+7. Fichier journal et rapport de plantage
 -----------------------------------------
 - %LOCALAPPDATA%\MirrorDock\mirror_dock.log (« Ouvrir le fichier journal »
   dans le menu). Chaque ligne est horodatée ; le journal de l’exécution
@@ -221,7 +279,7 @@ effet qu’à la connexion suivante (le programme le signale).
   s’y affiche.
 
 
-7. Options avancées
+8. Options avancées
 -------------------
 Créez un raccourci vers mirror_dock.exe et ajoutez les options à la suite de
 la « Cible », ou écrivez une option par ligne (sans le signe moins) dans
@@ -269,7 +327,7 @@ le journal note qu’elles ont été ignorées et le programme démarre
 normalement.
 
 
-8. Chiffres de référence
+9. Chiffres de référence
 ------------------------
 Mesurés sur un portable de 2016 (Core i7-6700HQ, la puce graphique intégrée
 Intel HD Graphics 530 pilote l’écran, Windows 11). Ils ne sont donnés qu’à
@@ -283,8 +341,8 @@ titre indicatif et varient d’un PC à l’autre :
   en mode flip, et les deux partagent une même ligne de temps.
 
 
-9. Recommandations
-------------------
+10. Recommandations
+-------------------
 - Quand deux écrans dupliquent le bureau avec des fréquences d’actualisation
   différentes (60 Hz et 50 Hz, par exemple), Windows n’en suit qu’un et le
   mouvement est légèrement irrégulier sur l’autre. Si vous ne regardez qu’un
@@ -293,7 +351,7 @@ titre indicatif et varient d’un PC à l’autre :
 - Un portable donne le meilleur de lui-même sur secteur.
 
 
-10. Dépannage
+11. Dépannage
 -------------
 - L’iPhone n’affiche pas le PC dans la liste : les deux doivent être sur le
   même réseau Wi-Fi et le pare-feu doit autoriser le programme (section 1) ;
@@ -320,8 +378,13 @@ titre indicatif et varient d’un PC à l’autre :
   de fonctionner.
 - Les lèvres et la voix sont décalées : affinez avec -vsync et un nombre de
   millisecondes (positif = son plus tard).
+- F8 répond « Impossible de contrôler l’iPhone » : la notification en donne
+  la raison. Branchez le câble USB et faites confiance à ce PC ; activez le
+  mode Développeur (section 5) ; l’iPhone doit être sous iOS 27 ou version
+  ultérieure ; l’installation de l’image disque développeur nécessite
+  Internet sur le PC. Le journal contient les détails.
 - L’image saccade : essayez d’abord le mode « Performances » ; avec des
-  écrans dupliqués, voir la section 9.
+  écrans dupliqués, voir la section 10.
 - L’image devient noire et le programme redémarre de lui-même : le pilote
   graphique a été réinitialisé ou mis à jour. Le programme redémarre une
   fois ; choisissez de nouveau le PC sur l’iPhone. Si cela se répète à bref
@@ -329,7 +392,7 @@ titre indicatif et varient d’un PC à l’autre :
   pilote graphique.
 
 
-11. Mise à niveau depuis UxPlay for Windows (1.6 ou antérieur)
+12. Mise à niveau depuis UxPlay for Windows (1.6 ou antérieur)
 --------------------------------------------------------------
 - Le programme s’appelle désormais MirrorDock et son exécutable est
   mirror_dock.exe. Quittez l’ancien uxplay.exe avant de lancer le nouveau ;
@@ -348,8 +411,9 @@ titre indicatif et varient d’un PC à l’autre :
 
 
 Licence : le programme dans son ensemble est sous GPL-3.0 ; son cœur de
-protocole AirPlay provient du projet open source UxPlay, et le moteur
-multimédia Windows (win_native) est sous MIT. Il contient FFmpeg (composants
+protocole AirPlay provient du projet open source UxPlay, le moteur
+multimédia Windows (win_native) est sous MIT et le contrôle à distance
+(phone_control) est sous GPL-3.0-or-later. Il contient FFmpeg (composants
 LGPL-2.1+), OpenSSL (Apache-2.0), libplist (LGPL-2.1+), LLVM libc++
 (Apache-2.0 WITH LLVM-exception) et winpthreads (MIT). Le code source et le
 texte intégral des licences se trouvent dans les dossiers « source » et

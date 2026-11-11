@@ -2,8 +2,9 @@
 ============================
 
 MirrorDock hiển thị hình ảnh và phát âm thanh của iPhone hoặc iPad trên máy
-tính Windows, qua Wi-Fi hoặc qua cáp USB. Chương trình chỉ gồm một tệp duy
-nhất là mirror_dock.exe: không phải cài thêm gì khác.
+tính Windows, qua Wi-Fi hoặc qua cáp USB, đồng thời cho phép bạn điều khiển
+iPhone bằng chuột và bàn phím của máy tính (mục 5). Chương trình chỉ gồm một
+tệp duy nhất là mirror_dock.exe: không phải cài thêm gì khác.
 (Cho đến phiên bản 1.6, chương trình có tên “UxPlay for Windows”; nếu bạn
 nâng cấp từ bản cũ, hãy xem mục cuối cùng.)
 
@@ -167,10 +168,60 @@ mô tả ở trên là cách phản chiếu qua dây hoạt động được v�
 - Giao diện đi theo ngôn ngữ hiển thị của Windows: tiếng Anh, tiếng Trung
   phồn thể, tiếng Trung giản thể, tiếng Nhật, tiếng Hàn, tiếng Tây Ban Nha,
   tiếng Đức, tiếng Pháp, tiếng Việt và tiếng Thái; mọi ngôn ngữ khác sẽ
-  dùng tiếng Anh. Để cố định một ngôn ngữ, hãy dùng tùy chọn -ui (mục 7).
+  dùng tiếng Anh. Để cố định một ngôn ngữ, hãy dùng tùy chọn -ui (mục 8).
 
 
-5. Chế độ chất lượng và hiệu năng
+5. Điều khiển iPhone bằng chuột và bàn phím
+-------------------------------------------
+Khi iPhone đang cắm cáp USB, bạn làm gì trên hình ảnh thì điện thoại làm theo
+đúng như vậy: hãy nhấn F8, hoặc chọn “Điều khiển iPhone bằng chuột và bàn
+phím” trong menu. Trong lúc tính năng này bật, tiêu đề cửa sổ có chữ
+“đang điều khiển”; nhấn F8 lần nữa để tắt. Lựa chọn được ghi nhớ.
+
+  Nút chuột trái  một ngón tay: bấm là chạm, giữ nút là nhấn giữ, kéo là vuốt
+  Con lăn chuột   cuộn nội dung nằm dưới con trỏ (giữ Shift: cuộn ngang)
+  Nút chuột giữa  về Màn hình chính
+  Bàn phím        gõ chữ trên điện thoại, như thể có bàn phím cắm vào máy.
+                  Ctrl là phím Command; Ctrl+Phím cách chuyển ngôn ngữ nhập
+                  của điện thoại
+  Page Down, Page Up, Alt + phím mũi tên
+                  vuốt nhanh sang trang hoặc video tiếp theo hay trước đó
+                  (dành cho các ứng dụng không nhận phím)
+  Nút chuột phải  menu của MirrorDock, như mọi khi
+
+F8, F11, Alt+Enter, Alt+F4 và, khi ở chế độ toàn màn hình, cả Esc vẫn do
+cửa sổ xử lý. Thanh điều khiển không hiện ra trong lúc đang điều khiển
+iPhone, vì nó sẽ che mất phần dưới cùng của màn hình điện thoại: hãy dùng nút
+chuột phải.
+
+Điều kiện cần có:
+- Một iPhone chạy iOS 27 trở lên đang cắm cáp USB và đã tin cậy máy tính này
+  (hãy mở khóa điện thoại rồi chạm vào “Tin cậy” khi được hỏi). Chỉ riêng
+  việc điều khiển dùng cáp: hình ảnh vẫn có thể truyền qua Wi-Fi, và bạn vẫn
+  có thể để nguyên lựa chọn “Chỉ Wi-Fi”.
+- Chế độ nhà phát triển đang bật: trên iPhone, vào Cài đặt >
+  Quyền riêng tư & Bảo mật > Chế độ nhà phát triển. Công tắc này bị ẩn cho
+  đến khi có một công cụ phát triển yêu cầu; MirrorDock làm việc đó ở lần
+  đầu tiên bạn nhấn F8. Sau khi bật, iPhone khởi động lại và hỏi xác nhận
+  thêm một lần nữa.
+- Máy tính có Internet ở lần đầu tiên, và ở lần đầu tiên sau mỗi lần cập
+  nhật iOS: MirrorDock cài lên điện thoại “Developer Disk Image” của Apple,
+  tức ảnh đĩa chứa các dịch vụ dành cho nhà phát triển, và việc này mất
+  khoảng một phút. Chương trình tải ảnh đĩa về (khoảng 17 MB, lưu trong
+  %LOCALAPPDATA%\MirrorDock\developer_disk_image) rồi yêu cầu dịch vụ ký của
+  Apple ký ảnh đĩa đó cho chiếc điện thoại này; giống như Xcode, việc này
+  cho Apple biết các mã số chip của điện thoại. Sau đó, việc điều khiển
+  không liên lạc với bất kỳ ai nữa.
+
+Lý do chọn cách này: AirPlay không có kênh nào truyền thao tác nhập đến
+điện thoại. Thay vào đó, việc điều khiển dùng các dịch vụ dành cho nhà phát
+triển của iOS, chính là những dịch vụ mà Xcode của Apple dùng để điều khiển
+thiết bị thật. Chế độ nhà phát triển là công tắc do chính Apple làm ra cho
+các dịch vụ này; nó không jailbreak điện thoại, và có thể tắt đi ở chính
+chỗ đó.
+
+
+6. Chế độ chất lượng và hiệu năng
 ---------------------------------
 Chọn một trong ba chế độ trong menu; lựa chọn được ghi nhớ:
   - “Chất lượng”: yêu cầu điện thoại gửi độ phân giải đầy đủ, giữ bộ đệm
@@ -190,7 +241,7 @@ lượng”) chỉ có hiệu lực đầy đủ từ lần kết nối tiếp t
 báo điều này).
 
 
-6. Tệp nhật ký và bản ghi sự cố
+7. Tệp nhật ký và bản ghi sự cố
 -------------------------------
 - %LOCALAPPDATA%\MirrorDock\mirror_dock.log (“Mở tệp nhật ký” trong menu).
   Mỗi dòng đều có ghi thời gian; nhật ký của lần chạy trước được giữ lại
@@ -205,7 +256,7 @@ báo điều này).
   tại đó.
 
 
-7. Tùy chọn nâng cao
+8. Tùy chọn nâng cao
 --------------------
 Tạo một lối tắt đến mirror_dock.exe rồi thêm tùy chọn vào sau ô “Đích”,
 hoặc ghi mỗi tùy chọn một dòng (không có dấu trừ) vào
@@ -247,7 +298,7 @@ như vậy, nhật ký sẽ ghi rằng chúng đã bị bỏ qua và chương tr
 động bình thường.
 
 
-8. Số liệu tham khảo
+9. Số liệu tham khảo
 --------------------
 Đo trên một laptop đời 2016 (Core i7-6700HQ, card tích hợp Intel HD
 Graphics 530 xuất hình ra màn hình, Windows 11). Các số liệu chỉ để tham
@@ -261,8 +312,8 @@ khảo và sẽ khác nhau tùy từng máy tính:
   kiểu flip-model, và cả hai dùng chung một trục thời gian.
 
 
-9. Khuyến nghị
---------------
+10. Khuyến nghị
+---------------
 - Khi hai màn hình cùng nhân đôi màn hình nền với tần số quét khác nhau (ví
   dụ 60 Hz và 50 Hz), Windows chỉ đồng bộ theo một trong hai, và chuyển
   động trên màn hình còn lại hơi không đều. Nếu bạn chỉ xem một màn hình,
@@ -271,7 +322,7 @@ khảo và sẽ khác nhau tùy từng máy tính:
 - Laptop hoạt động tốt nhất khi cắm điện.
 
 
-10. Khắc phục sự cố
+11. Khắc phục sự cố
 -------------------
 - iPhone không liệt kê máy tính: cả hai phải ở trên cùng một mạng Wi-Fi và
   tường lửa phải cho phép chương trình (mục 1); hãy tắt rồi bật lại Wi-Fi
@@ -295,8 +346,12 @@ khảo và sẽ khác nhau tùy từng máy tính:
   qua USB sẽ ngừng hoạt động.
 - Khẩu hình và lời nói không khớp: tinh chỉnh bằng -vsync kèm số mili giây
   (số dương = âm thanh trễ hơn).
+- Nhấn F8 thì hiện “Không điều khiển được iPhone”: thông báo có nêu lý do.
+  Hãy cắm cáp USB và tin cậy máy tính này; bật Chế độ nhà phát triển (mục 5);
+  iPhone cần iOS 27 trở lên; việc cài Developer Disk Image cần máy tính có
+  Internet. Chi tiết có trong nhật ký.
 - Hình ảnh bị giật: trước tiên hãy thử chế độ “Hiệu năng”; nếu đang nhân
-  đôi màn hình, xem mục 9.
+  đôi màn hình, xem mục 10.
 - Hình ảnh chuyển sang màu đen và chương trình tự khởi động lại: trình điều
   khiển đồ họa đã bị đặt lại hoặc được cập nhật. Chương trình khởi động lại
   một lần; hãy chọn lại máy tính trên iPhone. Nếu việc này lặp lại nhiều
@@ -304,7 +359,7 @@ khảo và sẽ khác nhau tùy từng máy tính:
   tra trình điều khiển đồ họa.
 
 
-11. Nâng cấp từ UxPlay for Windows (1.6 trở về trước)
+12. Nâng cấp từ UxPlay for Windows (1.6 trở về trước)
 -----------------------------------------------------
 - Chương trình nay có tên MirrorDock và tệp thực thi là mirror_dock.exe.
   Hãy thoát uxplay.exe cũ trước khi chạy bản mới; có thể xóa tệp thực thi
@@ -323,8 +378,9 @@ khảo và sẽ khác nhau tùy từng máy tính:
 
 
 Giấy phép: toàn bộ chương trình theo GPL-3.0; lõi giao thức AirPlay của nó
-đến từ dự án mã nguồn mở UxPlay, còn bộ máy xử lý đa phương tiện cho
-Windows (win_native) theo MIT. Chương trình có chứa FFmpeg (các thành phần
-LGPL-2.1+), OpenSSL (Apache-2.0), libplist (LGPL-2.1+), LLVM libc++
-(Apache-2.0 WITH LLVM-exception) và winpthreads (MIT). Mã nguồn và toàn văn
-các giấy phép nằm trong thư mục “source” và “licenses”.
+đến từ dự án mã nguồn mở UxPlay, bộ máy xử lý đa phương tiện cho Windows
+(win_native) theo MIT, còn phần điều khiển từ xa (phone_control) theo
+GPL-3.0-or-later. Chương trình có chứa FFmpeg (các thành phần LGPL-2.1+),
+OpenSSL (Apache-2.0), libplist (LGPL-2.1+), LLVM libc++ (Apache-2.0 WITH
+LLVM-exception) và winpthreads (MIT). Mã nguồn và toàn văn các giấy phép nằm
+trong thư mục “source” và “licenses”.

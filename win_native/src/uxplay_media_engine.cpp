@@ -22,6 +22,7 @@ import uxplay_audio_output;
 import uxplay_system_tuning;
 import uxplay_ui_text;
 import uxplay_crop_detector;
+import uxplay_remote_control;
 
 namespace uxplay
 {
@@ -59,6 +60,16 @@ namespace uxplay
         // and a frame around (nearly) everything shown changes nothing
         constexpr int smallest_crop_edge = 32;
         constexpr double whole_selection_fraction = 0.98;
+        // remote control: one notch of the wheel scrolls this share of what is shown
+        constexpr double wheel_notch_fraction = 0.07;
+        constexpr double touch_full_scale = 65535.0;
+        // a flick from the keyboard travels this share of what is shown, and
+        // stays this far from the edges of the screen
+        constexpr double swipe_travel_fraction = 0.45;
+        constexpr double swipe_edge_fraction = 0.04;
+        // so often in a row a control session is started again by itself
+        // after the phone went away in mid-use (then the user is told instead)
+        constexpr int longest_reconnect_streak = 3;
 
         // Sliding-window 95th percentile of observed lateness values.
         class lateness_window
@@ -337,6 +348,37 @@ namespace uxplay
         std::mutex statistics_mutex;
         std::condition_variable statistics_wake;
 
+        // Remote control of the phone.  A control session with it
+        // (uxplay_remote_control) runs while the user wants control and a
+        // stream is shown; the control thread starts and ends it, because
+        // both take a moment (longer while the phone does not answer).
+        std::atomic<bool> control_wanted{false};
+        std::atomic<bool> control_ready{false}; // input reaches the phone
+        std::atomic<bool> control_connecting{false}; // the session is getting ready (shown in the title)
+        std::mutex control_mutex;               // guards the members below
+        std::condition_variable control_wake;
+        std::unique_ptr<remote_control> control;
+        bool control_check = false;   // something changed: the control thread looks again
+        bool control_retry = false;   // a reason to try again after a failure
+        bool control_gave_up = false; // the last attempt failed: wait for such a reason
+        bool control_ended = false;   // the session ended by itself: its object is let go
+        bool control_exit = false;
+        remote_control_problem control_problem = remote_control_problem::none; // of the last failure
+        bool control_hint_shown = false; // "you can control the iPhone now" was shown in this run
+        int control_reconnects = 0;      // restarts in a row after the phone went away
+        std::thread control_thread;
+
+        void control_loop();
+        void control_changed(bool retry);
+        void control_status(remote_control_status const &reported);
+        void control_failed(remote_control_problem problem, std::string_view detail);
+        [[nodiscard]] std::optional<touch_point> control_point(double x, double y, bool touching);
+        void control_pointer(pointer_action action, double x, double y);
+        void control_wheel(double x, double y, double horizontal, double vertical);
+        void control_swipe(swipe_action action, double x, double y);
+        void label_stream(presented_stream const &stream);
+        void relabel_shown_stream();
+
         void decode_loop(media_source source);
         void on_display_change(std::optional<presented_stream> stream);
         void statistics_loop();
@@ -350,6 +392,369 @@ namespace uxplay
         void choose_crop_mode(crop_mode selected);
         void apply_crop_selection(fraction_region selection);
     };
+
+    // Status line, window title and control-bar text for the stream that is
+    // shown: the link, the size of the part shown, and whether the phone can
+    // be controlled.  (Render thread, control thread and the control session's thread.)
+    void media_engine::state::label_stream(presented_stream const &stream)
+    {
+        // AirPlay can arrive over Wi-Fi or over the iPhone USB link; label the
+        // transport the client actually used.
+        std::wstring const label = airplay_over_usb.load() ? L"USB" : L"Wi-Fi";
+        picture_region const visible =
+            stream.visible.empty() ? picture_region{0, 0, stream.width, stream.height} : stream.visible;
+        bool const cropped = visible.width != stream.width || visible.height != stream.height;
+        std::wstring size = std::format(L"{} × {}", visible.width, visible.height);
+        auto const decorate = [&size](ui_text pattern)
+        {
+            std::wstring_view const inner{size};
+            size = ui_format(pattern, std::span<std::wstring_view const>{&inner, 1});
+        };
+        if (cropped)
+        {
+            decorate(ui_text::cropped);
+        }
+        if (control_ready.load())
+        {
+            decorate(ui_text::controlled);
+        }
+        else if (control_connecting.load())
+        {
+            size = std::format(L"{} · {}", size, ui_string(ui_text::control_connecting));
+        }
+        window->set_status(std::format(L"{} · {} · {}", settings.window_title, label, size));
+        window->set_title(std::format(L"{} · {} · {}", settings.window_title, label, size));
+        window->set_stream_info(label, size);
+    }
+
+    // The labels again, for the stream that is on screen (control began or ended).
+    void media_engine::state::relabel_shown_stream()
+    {
+        std::optional<presented_stream> current;
+        {
+            std::scoped_lock lock{shown_mutex};
+            current = shown_stream;
+        }
+        if (current && displayed_source.load() >= 0)
+        {
+            label_stream(*current);
+        }
+    }
+
+    // Something the control thread decides on has changed.  `retry`: there is
+    // a reason to try again after a failure (the user chose it again, a stream
+    // appeared, a device was plugged in).
+    void media_engine::state::control_changed(bool retry)
+    {
+        {
+            std::scoped_lock lock{control_mutex};
+            control_check = true;
+            control_retry = control_retry || retry;
+            if (retry)
+            {
+                control_reconnects = 0; // a new reason to try: the streak starts over
+            }
+        }
+        control_wake.notify_one();
+    }
+
+    // Control cannot be had: the user is told why, the log gets the detail.
+    void media_engine::state::control_failed(remote_control_problem problem, std::string_view detail)
+    {
+        control_ready.store(false);
+        control_connecting.store(false);
+        window->set_remote_control(control_wanted.load(), false);
+        log::warning("remote control: {} ({})", remote_control_problem_name(problem), detail);
+        ui_text reason = ui_text::control_failed_text;
+        switch (problem)
+        {
+        case remote_control_problem::no_device:
+        case remote_control_problem::not_trusted:
+            reason = ui_text::control_needs_cable;
+            break;
+        case remote_control_problem::developer_mode_off:
+            reason = ui_text::control_needs_developer_mode;
+            break;
+        case remote_control_problem::image_mount_failed:
+            reason = ui_text::control_image_failed;
+            break;
+        case remote_control_problem::media_in_use:
+            reason = ui_text::control_camera_in_use;
+            break;
+        case remote_control_problem::unsupported_ios:
+            reason = ui_text::control_needs_ios;
+            break;
+        case remote_control_problem::none:
+        case remote_control_problem::tunnel_failed:
+        case remote_control_problem::stream_failed:
+        case remote_control_problem::connection_lost:
+        case remote_control_problem::internal:
+            break;
+        }
+        window->notify(std::wstring{ui_string(ui_text::control_failed_title)}, std::wstring{ui_string(reason)});
+        relabel_shown_stream();
+    }
+
+    // What the control session says about itself (on its own thread).  Must
+    // not end the session: the control thread does.
+    void media_engine::state::control_status(remote_control_status const &reported)
+    {
+        switch (reported.state)
+        {
+        case remote_control_state::starting:
+            log::debug("remote control: {}", reported.detail);
+            return;
+        case remote_control_state::preparing:
+            // takes up to a minute: the user is told what the wait is for
+            log::info("remote control: {}", reported.detail);
+            window->notify(std::wstring{ui_string(ui_text::control_preparing_title)},
+                           std::wstring{ui_string(ui_text::control_preparing_text)});
+            return;
+        case remote_control_state::ready:
+        {
+            control_ready.store(true);
+            control_connecting.store(false);
+            window->set_remote_control(control_wanted.load(), true);
+            log::info("remote control: ready ({})", reported.detail);
+            bool first_time = false;
+            {
+                std::scoped_lock lock{control_mutex};
+                first_time = !std::exchange(control_hint_shown, true);
+                control_problem = remote_control_problem::none;
+            }
+            if (first_time)
+            {
+                window->notify(std::wstring{ui_string(ui_text::control_ready_title)},
+                               std::wstring{ui_string(ui_text::control_ready_text)});
+            }
+            relabel_shown_stream();
+            return;
+        }
+        case remote_control_state::failed:
+            break;
+        }
+        // the session is over (not because this program ended it: then it is silent)
+        remote_control_problem const problem = reported.problem;
+        bool again = false;
+        {
+            std::scoped_lock lock{control_mutex};
+            control_ended = true;
+            control_check = true;
+            control_problem = problem;
+            // The phone went away in mid-use (the cable has a loose contact,
+            // the phone restarted its services): a new session is started at
+            // once.  Not for ever; with the cable pulled the new session ends
+            // with "no iPhone on a cable", which the user is told.
+            if (problem == remote_control_problem::connection_lost && control_reconnects < longest_reconnect_streak)
+            {
+                ++control_reconnects;
+                control_retry = true;
+                again = true;
+            }
+            else
+            {
+                control_gave_up = true;
+            }
+        }
+        control_wake.notify_one();
+        if (!again)
+        {
+            control_failed(problem, reported.detail);
+            return;
+        }
+        control_ready.store(false);
+        control_connecting.store(true);
+        window->set_remote_control(control_wanted.load(), false);
+        log::info("remote control: the connection to the phone was lost ({}); connecting again", reported.detail);
+        relabel_shown_stream();
+    }
+
+    // Starts a control session when control is wanted and a stream is shown,
+    // ends it when either is no longer so, and lets go of one that ended by
+    // itself.
+    void media_engine::state::control_loop()
+    {
+        std::unique_lock lock{control_mutex};
+        for (;;)
+        {
+            control_wake.wait(lock, [this] { return control_exit || control_check; });
+            if (control_exit)
+            {
+                break;
+            }
+            control_check = false;
+            bool const retry = std::exchange(control_retry, false);
+            if (std::exchange(control_ended, false) && control)
+            {
+                std::unique_ptr<remote_control> ended = std::move(control);
+                lock.unlock();
+                ended.reset();
+                lock.lock();
+            }
+            if (!control_wanted.load() || displayed_source.load() < 0)
+            {
+                control_gave_up = false;
+                if (control)
+                {
+                    std::unique_ptr<remote_control> ending = std::move(control);
+                    lock.unlock();
+                    ending.reset(); // waits until the session has ended
+                    log::info("remote control: ended");
+                    lock.lock();
+                }
+                bool const was_connecting = control_connecting.exchange(false);
+                if (control_ready.exchange(false) || was_connecting)
+                {
+                    lock.unlock();
+                    window->set_remote_control(control_wanted.load(), false);
+                    relabel_shown_stream();
+                    lock.lock();
+                }
+                continue;
+            }
+            if (control || (control_gave_up && !retry))
+            {
+                continue;
+            }
+            control_gave_up = false;
+            lock.unlock();
+            control_connecting.store(true);
+            relabel_shown_stream();
+            log::info("remote control: connecting to the phone");
+            auto started = remote_control::start(
+                [this](remote_control_status const &reported) { control_status(reported); }, settings.control_cache);
+            if (!started)
+            {
+                std::string const cause = started.error().describe();
+                control_failed(remote_control_problem::internal, cause);
+                lock.lock();
+                control_gave_up = true;
+                control_problem = remote_control_problem::internal;
+                continue;
+            }
+            lock.lock();
+            control = std::move(*started);
+            control_check = true; // what is wanted may have changed meanwhile
+        }
+        std::unique_ptr<remote_control> ending = std::move(control);
+        lock.unlock();
+        ending.reset();
+    }
+
+    // A position on the picture as it is shown (fractions) as a position on
+    // the phone's screen: the shown part may be a crop of the picture.
+    std::optional<touch_point> media_engine::state::control_point(double x, double y, bool touching)
+    {
+        std::optional<presented_stream> current;
+        {
+            std::scoped_lock lock{shown_mutex};
+            current = shown_stream;
+        }
+        if (!current || current->width <= 0 || current->height <= 0)
+        {
+            return std::nullopt;
+        }
+        picture_region const visible =
+            current->visible.empty() ? picture_region{0, 0, current->width, current->height} : current->visible;
+        auto const scaled = [](double position, int extent)
+        {
+            return static_cast<std::uint16_t>(
+                std::clamp(std::lround(position / extent * touch_full_scale), 0L, 65535L));
+        };
+        touch_point point;
+        point.identity = 0;
+        point.x = scaled(visible.left + x * visible.width, current->width);
+        point.y = scaled(visible.top + y * visible.height, current->height);
+        point.touching = touching;
+        return point;
+    }
+
+    void media_engine::state::control_pointer(pointer_action action, double x, double y)
+    {
+        std::optional<touch_point> const point = control_point(x, y, action != pointer_action::release);
+        if (!point)
+        {
+            return;
+        }
+        std::scoped_lock lock{control_mutex};
+        if (control)
+        {
+            control->touch(std::span<touch_point const>{&*point, 1});
+        }
+    }
+
+    // The wheel: what is under the pointer is dragged along, like under a
+    // finger (the wheel turned away from the user shows what is further up).
+    void media_engine::state::control_wheel(double x, double y, double horizontal, double vertical)
+    {
+        std::optional<touch_point> const point = control_point(x, y, true);
+        std::optional<presented_stream> current;
+        {
+            std::scoped_lock lock{shown_mutex};
+            current = shown_stream;
+        }
+        if (!point || !current)
+        {
+            return;
+        }
+        picture_region const visible =
+            current->visible.empty() ? picture_region{0, 0, current->width, current->height} : current->visible;
+        auto const distance = [](double notches, int shown, int whole)
+        {
+            return static_cast<int>(std::lround(notches * wheel_notch_fraction * shown / whole * touch_full_scale));
+        };
+        int const delta_x = distance(-horizontal, visible.width, current->width);
+        int const delta_y = distance(vertical, visible.height, current->height);
+        std::scoped_lock lock{control_mutex};
+        if (control)
+        {
+            control->scroll(point->x, point->y, delta_x, delta_y);
+        }
+    }
+
+    // A flick from the keyboard: the finger travels through (x, y), half of
+    // the way before it and half after.  "Previous to the left" keeps its
+    // start when that is at the left edge: from there it is the phone's
+    // "back" gesture.
+    void media_engine::state::control_swipe(swipe_action action, double x, double y)
+    {
+        double direction_x = 0.0;
+        double direction_y = 0.0;
+        switch (action)
+        {
+        case swipe_action::next_below:
+            direction_y = -1.0;
+            break;
+        case swipe_action::previous_above:
+            direction_y = 1.0;
+            break;
+        case swipe_action::next_right:
+            direction_x = -1.0;
+            break;
+        case swipe_action::previous_left:
+            direction_x = 1.0;
+            break;
+        }
+        double const low = swipe_edge_fraction;
+        double const high = 1.0 - swipe_edge_fraction;
+        bool const from_left_edge = action == swipe_action::previous_left && x <= swipe_edge_fraction;
+        double start_x = from_left_edge ? 0.0 : std::clamp(x - direction_x * swipe_travel_fraction / 2, low, high);
+        double const start_y = std::clamp(y - direction_y * swipe_travel_fraction / 2, low, high);
+        double const end_x = std::clamp(start_x + direction_x * swipe_travel_fraction, from_left_edge ? 0.0 : low, high);
+        double const end_y = std::clamp(start_y + direction_y * swipe_travel_fraction, low, high);
+        std::optional<touch_point> const from = control_point(start_x, start_y, true);
+        std::optional<touch_point> const to = control_point(end_x, end_y, true);
+        if (!from || !to)
+        {
+            return;
+        }
+        std::scoped_lock lock{control_mutex};
+        if (control)
+        {
+            control->swipe(from->x, from->y, static_cast<int>(to->x) - static_cast<int>(from->x),
+                           static_cast<int>(to->y) - static_cast<int>(from->y));
+        }
+    }
 
     // Timing margins per mode (the presenter applies its own part: frame
     // dropping, queue depth and scaling).  The delay is
@@ -397,6 +802,7 @@ namespace uxplay
         if (!stream)
         {
             displayed_source.store(-1);
+            control_changed(false); // nothing to control: the control session ends
             system_tuning::set_session_active(false);
             window->set_status(
                 std::format(L"{} · {}", settings.window_title, ui_string(ui_text::waiting_for_connection)));
@@ -414,24 +820,26 @@ namespace uxplay
             // window is neither resized nor shown again for it.
             return;
         }
-        displayed_source.store(static_cast<int>(stream->source));
+        bool const became_shown = displayed_source.exchange(static_cast<int>(stream->source)) < 0;
         system_tuning::set_session_active(true);
-        // AirPlay can arrive over Wi-Fi or over the iPhone USB link; label the
-        // transport the client actually used.
         bool const over_usb = airplay_over_usb.load();
-        std::wstring const label = over_usb ? L"USB" : L"Wi-Fi";
         // the window follows the part of the picture that is shown
         picture_region const visible =
             stream->visible.empty() ? picture_region{0, 0, stream->width, stream->height} : stream->visible;
         bool const cropped = visible.width != stream->width || visible.height != stream->height;
-        std::wstring const shown_size = std::format(L"{} × {}", visible.width, visible.height);
-        std::wstring_view const shown_size_view{shown_size};
-        std::wstring const size =
-            cropped ? ui_format(ui_text::cropped, std::span<std::wstring_view const>{&shown_size_view, 1}) : shown_size;
-        window->set_status(std::format(L"{} · {} · {}", settings.window_title, label, size));
-        window->set_title(std::format(L"{} · {} · {}", settings.window_title, label, size));
-        window->set_stream_info(label, size);
+        label_stream(*stream);
         window->show_for_video(visible.width, visible.height);
+        // Remote control: a stream to control appeared (worth another try
+        // after a failure), or its picture changed - the phone may have been
+        // turned, and only the control session can ask it which way.
+        {
+            std::scoped_lock lock{control_mutex};
+            if (control)
+            {
+                control->picture_changed();
+            }
+        }
+        control_changed(became_shown);
         char const *const path = over_usb ? "AirPlay over the USB cable" : "AirPlay over Wi-Fi";
         if (cropped)
         {
@@ -1022,6 +1430,16 @@ namespace uxplay
         {
             impl->window->detach_callbacks();
         }
+        // the control session ends with its thread (its reports use the window)
+        {
+            std::scoped_lock lock{impl->control_mutex};
+            impl->control_exit = true;
+        }
+        impl->control_wake.notify_all();
+        if (impl->control_thread.joinable())
+        {
+            impl->control_thread.join();
+        }
         {
             // under the mutex the statistics thread waits with: no lost wake-up
             std::scoped_lock lock{impl->statistics_mutex};
@@ -1108,6 +1526,18 @@ namespace uxplay
         };
         window_events.on_usb_device_change = [engine]
         {
+            // a phone that was missing may have been plugged in
+            bool phone_was_missing = false;
+            {
+                std::scoped_lock lock{engine->control_mutex};
+                phone_was_missing = engine->control_gave_up &&
+                                    (engine->control_problem == remote_control_problem::no_device ||
+                                     engine->control_problem == remote_control_problem::not_trusted);
+            }
+            if (phone_was_missing)
+            {
+                engine->control_changed(true);
+            }
             if (engine->callbacks.on_usb_device_change)
             {
                 engine->callbacks.on_usb_device_change();
@@ -1137,6 +1567,34 @@ namespace uxplay
         window_events.on_crop_selected = [engine](fraction_region selection)
         {
             engine->apply_crop_selection(selection);
+        };
+        window_events.on_pointer = [engine](pointer_action action, double x, double y)
+        {
+            engine->control_pointer(action, x, y);
+        };
+        window_events.on_wheel = [engine](double x, double y, double horizontal, double vertical)
+        {
+            engine->control_wheel(x, y, horizontal, vertical);
+        };
+        window_events.on_keys = [engine](std::span<std::uint8_t const> usages)
+        {
+            std::scoped_lock lock{engine->control_mutex};
+            if (engine->control)
+            {
+                engine->control->keys(usages);
+            }
+        };
+        window_events.on_swipe = [engine](swipe_action action, double x, double y)
+        {
+            engine->control_swipe(action, x, y);
+        };
+        window_events.on_home_button = [engine]
+        {
+            std::scoped_lock lock{engine->control_mutex};
+            if (engine->control)
+            {
+                engine->control->press(phone_button::home);
+            }
         };
         window_events.on_second_launch = [engine]
         {
@@ -1229,6 +1687,12 @@ namespace uxplay
         {
             engine->statistics_loop();
         }};
+        created->control_wanted.store(created->settings.remote_control);
+        created->window->set_remote_control(created->settings.remote_control, false);
+        created->control_thread = std::thread{[engine]
+        {
+            engine->control_loop();
+        }};
         return std::unique_ptr<media_engine>{new media_engine{std::move(created)}};
     }
 
@@ -1260,6 +1724,14 @@ namespace uxplay
         impl->base_crop.store(standing);
         impl->choose_crop_mode(standing);
         log::info("crop: {}", crop_mode_name(standing));
+    }
+
+    void media_engine::set_remote_control(bool wanted)
+    {
+        impl->control_wanted.store(wanted);
+        impl->window->set_remote_control(wanted, wanted && impl->control_ready.load());
+        log::info("remote control: {}", wanted ? "wanted" : "not wanted");
+        impl->control_changed(true);
     }
 
     bool media_engine::showing_video() const

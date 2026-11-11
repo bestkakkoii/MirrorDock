@@ -2,9 +2,10 @@
 
 # MirrorDock (up to 1.6: "UxPlay for Windows (native)"; see README_AI.md).
 # Internal names (targets, modules) keep the uxplay prefix:
-#   uxplay.cpp   program: options, AirPlay callbacks, main loop (GPL-3.0)
-#   lib/         AirPlay protocol core (upstream UxPlay; GPL-3.0 / LGPL-2.1+)
-#   win_native/  C++26 media engine: Direct3D 11 + FFmpeg D3D11VA, WASAPI (MIT)
+#   uxplay.cpp      program: options, AirPlay callbacks, main loop (GPL-3.0)
+#   lib/            AirPlay protocol core (upstream UxPlay; GPL-3.0 / LGPL-2.1+)
+#   win_native/     C++26 media engine: Direct3D 11 + FFmpeg D3D11VA, WASAPI (MIT)
+#   phone_control/  C++26 remote control of the iPhone over its developer services (GPL-3.0)
 if ( NOT CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows" )
   message( FATAL_ERROR "This tree builds the Windows-native UxPlay only (MSYS2 CLANG64); see README_AI.md." )
 endif()
@@ -22,12 +23,34 @@ set( CMAKE_CXX_STANDARD_REQUIRED ON )
 set( CMAKE_CXX_EXTENSIONS ON )
 set( CMAKE_CXX_MODULE_STD ON )
 
+# Strongest practical warning set, as errors, on a target's owned sources
+# only: the std module that CMake synthesizes from libc++'s std.cppm must not
+# inherit it (libc++'s own `export module std;` triggers
+# -Wreserved-module-identifier).  To be called from the directory that
+# defines the target, after its sources are named.
+function( uxplay_strict_warnings target module_set )
+  get_target_property( owned_sources ${target} SOURCES )
+  get_target_property( owned_modules ${target} CXX_MODULE_SET_${module_set} )
+  foreach( owned_source ${owned_sources} ${owned_modules} )
+    if ( owned_source MATCHES "[.]c$" )
+      set_property( SOURCE ${owned_source} APPEND PROPERTY COMPILE_OPTIONS -Wall -Wextra -Werror -Wno-unused-parameter )
+    elseif ( owned_source MATCHES "[.](cpp|cppm)$" )
+      set_property( SOURCE ${owned_source} APPEND PROPERTY COMPILE_OPTIONS
+        -Wall -Wextra -Wpedantic -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wnull-dereference
+        -Wimplicit-fallthrough -Wno-unused-parameter -Werror )
+    endif()
+  endforeach()
+endfunction()
+
 # service discovery: UxPlay's own minimal mDNS responder (lib/mdnsd)
 add_subdirectory( lib/mdnsd )
 add_subdirectory( lib/llhttp )
 add_subdirectory( lib/playfair )
 add_subdirectory( lib )
+# win_native defines uxplay_base (which phone_control uses) and the engine
+# (which uses phone_control)
 add_subdirectory( win_native )
+add_subdirectory( phone_control )
 
 add_executable( uxplay uxplay.cpp )
 set_property( SOURCE uxplay.cpp APPEND PROPERTY COMPILE_OPTIONS -Wall -Wextra -Wno-unused-parameter -Werror )

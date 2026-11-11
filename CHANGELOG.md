@@ -4,6 +4,16 @@ All releases of MirrorDock. Up to 1.6 the program was published as *UxPlay for W
 
 Mirroring over Wi-Fi and over USB was verified with an iPhone 16 Pro Max (iOS 26) up to version 1.5. From 1.6 on, every entry ends with how far that release was tested.
 
+## 1.9 — 2026-11-12
+
+- 🖱️ **Control the iPhone with mouse and keyboard.** Press **F8**: the left button is a finger (tap, long press, swipe), the wheel scrolls, the middle button is Home, the keyboard types on the phone (Ctrl is ⌘), Page Down / Page Up and Alt + arrow keys flick to the next or previous page or video. Needs iOS 27, the USB cable and Developer Mode; the picture may still come over Wi-Fi.
+- 🧩 It is built into `mirror_dock.exe`: a new part of the program, `phone_control/` (C++26 modules, GPL-3.0-or-later), speaks to the developer services of iOS directly — Apple's driver service, lockdown, the developer tunnel with an IPv6/TCP implementation of its own (no network adapter, no administrator rights), RemoteXPC and the phone's input service. No helper program, no Python, no jailbreak.
+- 📦 A phone that lacks Apple's Developer Disk Image gets it installed on first use (and after an iOS update): the image is downloaded from a pinned commit of the DeveloperDiskImage repository and checked against pinned hashes, Apple's signing service signs it for the phone (over HTTPS that accepts Apple's root certificate only), and the phone's own installer takes it. A notification says what the wait is for.
+- 🪟 While control is on the window title says so, the control bar stays out of the way and F8, F11, Alt+Enter and Alt+F4 keep working on the window. When control cannot be had, a notification names the reason (cable, trust, Developer Mode, iOS version, image).
+- 🌐 All new texts in the ten interface languages; README and user guide updated in all ten.
+- 🔧 Build: the failure and log modules are a target of their own (`uxplay_base`), so that `phone_control` does not depend on the engine that uses it; the executable is now about 12 MB (TLS towards the phone).
+- *Tested:* with an iPhone 16 Pro Max (iOS 27.2.1) on the cable, through a console probe built from the same code: the connection, the control session (ready after 1.0 s; touch and keyboard reports accepted, the touch report being byte for byte the one the reference implementation builds; the keyboard registered), and the installation of the Developer Disk Image on a phone that lacked it (2.3 s with the image cached), including Apple's signature. With an interim build that spoke the same protocol through a Python helper, the owner clicked, scrolled and typed on the phone. *Not yet seen:* a click arriving in an app through the built-in code in MirrorDock itself, the flicks, a phone held sideways, and the failure messages.
+
 ## 1.8 — 2026-11-11
 
 - 🌐 **Ten interface languages**, chosen from the Windows display language: English, Traditional Chinese, Simplified Chinese, Japanese, Korean, Spanish, German, French, Vietnamese and Thai (`-ui` forces one).

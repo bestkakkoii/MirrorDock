@@ -47,6 +47,9 @@ namespace
     constexpr std::wstring_view setting_prefer_usb_link = L"prefer_usb_link";
     constexpr std::wstring_view setting_performance_mode = L"performance_mode";
     constexpr std::wstring_view setting_crop_mode = L"crop_mode"; // 0 off, 1 automatic
+    constexpr std::wstring_view setting_remote_control = L"remote_control"; // 0 off, 1 wanted
+    // next to the log file: what remote control keeps of the Developer Disk Image
+    constexpr wchar_t developer_image_folder[] = L"developer_disk_image";
     constexpr std::wstring_view setting_ready_hint_shown = L"ready_hint_shown";
     constexpr std::wstring_view setting_close_hint_shown = L"close_hint_shown";
     // how long Windows' shutdown waits for the network goodbye
@@ -109,6 +112,8 @@ namespace
         std::atomic<bool> prefer_usb_link{true};
         // uxplay::performance_mode in force
         std::atomic<int> mode{static_cast<int>(uxplay::performance_mode::balanced)};
+        // mouse and keyboard operate the phone (persisted in HKCU)
+        std::atomic<bool> remote_control{false};
         std::mutex display_mutex;
         std::optional<uxplay::display_mode_info> display; // guarded by display_mutex
         native_media_event_callback event_callback = nullptr;
@@ -455,6 +460,18 @@ namespace
         uxplay::settings::store_number(setting_crop_mode, static_cast<std::uint32_t>(mode));
     }
 
+    // The user switched "control the iPhone" on or off (UI thread).
+    void apply_remote_control(bool wanted)
+    {
+        bridge_state &state = bridge();
+        state.remote_control.store(wanted);
+        if (uxplay::media_engine *const ready = state.engine.load(std::memory_order_acquire); ready != nullptr)
+        {
+            ready->set_remote_control(wanted);
+        }
+        uxplay::settings::store_number(setting_remote_control, wanted ? 1U : 0U);
+    }
+
     // "Start with Windows" (UI thread)
     void toggle_autostart()
     {
@@ -640,6 +657,9 @@ namespace
             case uxplay::tray_command::crop_automatic:
                 apply_crop_mode(uxplay::crop_mode::automatic);
                 break;
+            case uxplay::tray_command::toggle_remote_control:
+                apply_remote_control(!current.remote_control.load());
+                break;
             case uxplay::tray_command::toggle_autostart:
                 toggle_autostart();
                 break;
@@ -811,6 +831,13 @@ extern "C" int native_media_start(const native_media_settings *settings)
             ? requested_crop == 1
             : uxplay::settings::stored_number(setting_crop_mode).value_or(0) == 1;
     engine_settings.crop = automatic_crop ? uxplay::crop_mode::automatic : uxplay::crop_mode::off;
+    // remote control of the phone: the last choice
+    state.remote_control.store(uxplay::settings::stored_number(setting_remote_control).value_or(0) == 1);
+    engine_settings.remote_control = state.remote_control.load();
+    if (!state.log_path.empty())
+    {
+        engine_settings.control_cache = std::filesystem::path{state.log_path}.parent_path() / developer_image_folder;
+    }
     engine_settings.gpu = settings->gpu_preference == 1   ? uxplay::gpu_preference::integrated
                           : settings->gpu_preference == 2 ? uxplay::gpu_preference::discrete
                           : settings->gpu_preference == 3 ? uxplay::gpu_preference::software

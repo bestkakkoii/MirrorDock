@@ -2,9 +2,10 @@
 =============================
 
 MirrorDock zeigt das Bild eines iPhone oder iPad auf einem Windows-PC an und
-gibt dessen Ton wieder – über Wi-Fi oder über das USB-Kabel. Das Programm
-besteht aus einer einzigen Datei, mirror_dock.exe; sonst muss nichts
-installiert werden.
+gibt dessen Ton wieder – über Wi-Fi oder über das USB-Kabel. Außerdem lässt
+sich ein iPhone mit Maus und Tastatur des PCs bedienen (Abschnitt 5). Das
+Programm besteht aus einer einzigen Datei, mirror_dock.exe; sonst muss
+nichts installiert werden.
 (Bis Version 1.6 hieß es „UxPlay for Windows“. Wenn Sie von einer älteren
 Version umsteigen, lesen Sie bitte den letzten Abschnitt.)
 
@@ -191,10 +192,63 @@ kabelgebundene Spiegelung, die mit aktuellem iOS funktioniert.
   traditionelles Chinesisch, vereinfachtes Chinesisch, Japanisch,
   Koreanisch, Spanisch, Deutsch, Französisch, Vietnamesisch und Thai; bei
   jeder anderen Sprache erscheint sie auf Englisch. Um eine Sprache fest
-  vorzugeben, verwenden Sie die Option -ui (Abschnitt 7).
+  vorzugeben, verwenden Sie die Option -ui (Abschnitt 8).
 
 
-5. Qualitäts- und Leistungsmodi
+5. Das iPhone mit Maus und Tastatur steuern
+-------------------------------------------
+Hängt das iPhone am USB-Kabel, führt das Smartphone aus, was Sie im Bild tun:
+Drücken Sie dazu F8 oder wählen Sie im Menü „iPhone mit Maus und Tastatur
+steuern“. Solange die Steuerung eingeschaltet ist, steht im Fenstertitel
+„Steuerung“; F8 schaltet sie wieder aus. Die Auswahl wird gespeichert.
+
+  Linke Maustaste     ein Finger: Klicken ist Tippen,
+                      Halten ist langes Drücken, Ziehen ist Wischen
+  Mausrad             scrollt den Inhalt unter dem Mauszeiger (mit Shift:
+                      seitwärts)
+  Mittlere Maustaste  zum Home-Bildschirm
+  Tastatur            schreibt auf dem Smartphone, als wäre eine Tastatur
+                      daran angeschlossen. Ctrl entspricht der Befehlstaste;
+                      Ctrl+Leertaste wechselt die Eingabesprache des
+                      Smartphones
+  Page Down, Page Up, Alt + Pfeiltasten
+                      schneller Wisch zur nächsten oder vorherigen Seite
+                      bzw. zum nächsten oder vorherigen Video (für Apps,
+                      die auf Tasten nicht reagieren)
+  Rechte Maustaste    wie gewohnt das Menü von MirrorDock
+
+F8, F11, Alt+Enter, Alt+F4 und im Vollbild auch Esc wirken weiterhin auf das
+Fenster. Solange die Steuerung eingeschaltet ist, bleibt die Steuerleiste
+ausgeblendet, weil sie den unteren Rand des Smartphone-Bildschirms verdecken
+würde: Verwenden Sie stattdessen die rechte Maustaste.
+
+Was Sie dafür brauchen:
+- Ein iPhone mit iOS 27 oder neuer, das am USB-Kabel hängt und diesem PC
+  vertraut (entsperren Sie das Smartphone und tippen Sie auf „Vertrauen“,
+  wenn es danach fragt). Nur die Steuerung nutzt das Kabel: Das Bild darf
+  weiterhin über Wi-Fi kommen, und „Nur Wi-Fi“ kann gewählt bleiben.
+- Den eingeschalteten Entwicklermodus: auf dem iPhone unter Einstellungen >
+  Datenschutz & Sicherheit > Entwicklermodus. Der Schalter bleibt verborgen,
+  bis ein Entwicklerwerkzeug ihn angefordert hat; MirrorDock tut das, wenn
+  Sie zum ersten Mal F8 drücken. Nach dem Einschalten startet das iPhone neu
+  und bittet noch einmal um Bestätigung.
+- Internet am PC, und zwar beim ersten Mal sowie beim ersten Mal nach jedem
+  iOS-Update: MirrorDock installiert dann Apples „Developer Disk Image“,
+  ein Datenträgerabbild mit den Entwicklerdiensten, auf dem Smartphone; das
+  dauert etwa eine Minute. Das Programm lädt das Image herunter (etwa 17 MB,
+  abgelegt in %LOCALAPPDATA%\MirrorDock\developer_disk_image) und lässt es
+  von Apples Signierdienst für dieses Smartphone signieren; wie bei Xcode
+  erfährt Apple dabei die Chipnummern des Smartphones. Danach nimmt die
+  Steuerung zu niemandem mehr Kontakt auf.
+
+Warum dieser Weg: AirPlay hat keinen Kanal, der Eingaben zum Smartphone
+überträgt. Die Steuerung nutzt stattdessen die Entwicklerdienste von iOS –
+dieselben, mit denen Apples Xcode ein echtes Gerät bedient. Der
+Entwicklermodus ist Apples eigener Schalter dafür; er ist kein Jailbreak und
+lässt sich an derselben Stelle wieder ausschalten.
+
+
+6. Qualitäts- und Leistungsmodi
 -------------------------------
 Wählen Sie im Menü einen von drei Modi; die Auswahl wird gespeichert:
   - „Qualität“: fordert vom Smartphone die volle Auflösung an, puffert
@@ -216,7 +270,7 @@ mit der nächsten Verbindung vollständig aus (das Programm weist darauf
 hin).
 
 
-6. Protokolldatei und Absturzbericht
+7. Protokolldatei und Absturzbericht
 ------------------------------------
 - %LOCALAPPDATA%\MirrorDock\mirror_dock.log („Protokolldatei öffnen“ im
   Menü). Jede Zeile trägt die Uhrzeit; das Protokoll des vorherigen Laufs
@@ -232,7 +286,7 @@ hin).
   Protokoll dort ausgegeben.
 
 
-7. Erweiterte Optionen
+8. Erweiterte Optionen
 ----------------------
 Erstellen Sie eine Verknüpfung mit mirror_dock.exe und hängen Sie die
 Optionen hinter dem „Ziel“ an, oder schreiben Sie eine Option pro Zeile
@@ -280,7 +334,7 @@ vermerkt das Protokoll, dass sie ignoriert wurden, und das Programm startet
 normal.
 
 
-8. Richtwerte
+9. Richtwerte
 -------------
 Gemessen auf einem Notebook von 2016 (Core i7-6700HQ, die integrierte Intel
 HD Graphics 530 steuert den Monitor an, Windows 11). Die Werte dienen nur
@@ -294,8 +348,8 @@ der Orientierung und fallen von PC zu PC unterschiedlich aus:
   DXGI-Swapchain im Flip-Modell; beide teilen sich eine Zeitachse.
 
 
-9. Empfehlungen
----------------
+10. Empfehlungen
+----------------
 - Duplizieren zwei Monitore den Desktop mit unterschiedlichen
   Bildwiederholfrequenzen (etwa 60 Hz und 50 Hz), richtet sich Windows nur
   nach einem von ihnen, und Bewegungen wirken auf dem anderen leicht
@@ -305,7 +359,7 @@ der Orientierung und fallen von PC zu PC unterschiedlich aus:
 - Ein Notebook arbeitet am besten im Netzbetrieb.
 
 
-10. Problembehandlung
+11. Problembehandlung
 ---------------------
 - Das iPhone zeigt den PC nicht an: Beide Geräte müssen sich im selben
   Wi-Fi-Netzwerk befinden, und die Firewall muss das Programm zulassen
@@ -333,8 +387,14 @@ der Orientierung und fallen von PC zu PC unterschiedlich aus:
   USB-Spiegelung funktioniert nicht mehr.
 - Lippenbewegung und Stimme passen nicht zusammen: Justieren Sie mit -vsync
   und einer Zahl in Millisekunden nach (positiv = Ton später).
+- Nach F8 erscheint „Das iPhone lässt sich nicht steuern“: Die
+  Benachrichtigung nennt den Grund. Schließen Sie das USB-Kabel an und
+  vertrauen Sie diesem PC; schalten Sie den Entwicklermodus ein
+  (Abschnitt 5); das iPhone benötigt iOS 27 oder neuer; für die Installation
+  des Developer Disk Image braucht der PC Internet. Die Einzelheiten stehen
+  im Protokoll.
 - Das Bild ruckelt: Probieren Sie zuerst den Modus „Leistung“; bei
-  duplizierten Monitoren siehe Abschnitt 9.
+  duplizierten Monitoren siehe Abschnitt 10.
 - Das Bild wird schwarz, und das Programm startet von selbst neu: Der
   Grafiktreiber wurde zurückgesetzt oder aktualisiert. Das Programm startet
   einmal neu; wählen Sie den PC auf dem iPhone erneut aus. Passiert das
@@ -342,7 +402,7 @@ der Orientierung und fallen von PC zu PC unterschiedlich aus:
   an: Überprüfen Sie den Grafiktreiber.
 
 
-11. Umstieg von UxPlay for Windows (1.6 oder älter)
+12. Umstieg von UxPlay for Windows (1.6 oder älter)
 ---------------------------------------------------
 - Das Programm heißt jetzt MirrorDock, und seine ausführbare Datei ist
   mirror_dock.exe. Beenden Sie die alte uxplay.exe, bevor Sie die neue
@@ -361,8 +421,9 @@ der Orientierung und fallen von PC zu PC unterschiedlich aus:
 
 
 Lizenz: Das Programm als Ganzes steht unter GPL-3.0; sein
-AirPlay-Protokollkern stammt aus dem Open-Source-Projekt UxPlay, und die
-Windows-Medien-Engine (win_native) steht unter MIT. Enthalten sind FFmpeg
+AirPlay-Protokollkern stammt aus dem Open-Source-Projekt UxPlay, die
+Windows-Medien-Engine (win_native) steht unter MIT und die Fernsteuerung
+(phone_control) unter GPL-3.0-or-later. Enthalten sind FFmpeg
 (LGPL-2.1+-Komponenten), OpenSSL (Apache-2.0), libplist (LGPL-2.1+), LLVM
 libc++ (Apache-2.0 WITH LLVM-exception) und winpthreads (MIT). Der
 Quellcode und die vollständigen Lizenztexte liegen in den Ordnern „source“

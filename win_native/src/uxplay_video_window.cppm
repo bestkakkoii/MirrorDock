@@ -23,6 +23,17 @@
 // the video swap chain is not touched) and releasing the button reports the
 // framed part; Esc or the right button cancels.
 //
+// Remote control (set_remote_control, F8): while the phone can be operated,
+// what the user does on the picture goes to the phone instead of the window -
+// the left button is a finger, the wheel scrolls (with Shift: sideways), the
+// middle button is Home, keys are typed there (Ctrl acts as the Command
+// key, except with Space: Control + Space is the phone's "next input
+// source").  Page Down / Page Up and Alt + arrow keys are not sent as keys:
+// they flick the screen (next / previous page or video), which works in
+// every app.  The window keeps F8, F11, Alt+Enter, Alt+F4,
+// Esc in fullscreen and the right button (the menu); the control bar stays
+// away, because it would cover the bottom of the phone's screen.
+//
 // All public members may be called from any thread; they post messages to
 // the UI thread.  Callbacks are invoked on the UI thread and must not block.
 export module uxplay_video_window;
@@ -48,10 +59,29 @@ export namespace uxplay
         crop_off,       // show the whole picture
         crop_automatic, // cut black bars off automatically
         crop_select,    // frame the part to show with the mouse; handled by the window itself
+        toggle_remote_control, // operate the phone with mouse and keyboard on / off
         toggle_autostart, // start with Windows
         open_log,
         about,
         exit
+    };
+
+    // what the left mouse button does on the picture while the phone is controlled
+    enum class pointer_action
+    {
+        press,
+        move, // while pressed
+        release
+    };
+
+    // a flick on the phone's screen, named by what it is for (the finger
+    // moves the other way: "next" pushes the content up or to the left)
+    enum class swipe_action
+    {
+        next_below,     // Page Down, Alt+Down: the finger moves up
+        previous_above, // Page Up, Alt+Up
+        next_right,     // Alt+Right: the finger moves left
+        previous_left   // Alt+Left (from the left edge: back)
     };
 
     struct window_callbacks
@@ -71,6 +101,20 @@ export namespace uxplay
         // the user framed the part of the picture to show, as fractions of
         // the picture as it is shown now (tray_command::crop_select)
         std::function<void(fraction_region selection)> on_crop_selected;
+        // Remote control (only while set_remote_control(..., true)).  Positions
+        // are fractions of the picture as it is shown now, (0, 0) top left.
+        std::function<void(pointer_action action, double x, double y)> on_pointer;
+        // the wheel turned over the picture, in notches: vertical > 0 is away
+        // from the user, horizontal > 0 to the right
+        std::function<void(double x, double y, double horizontal, double vertical)> on_wheel;
+        // the middle button: the phone's Home
+        std::function<void()> on_home_button;
+        // Page Up / Page Down / Alt + arrow: a flick around (x, y) - the
+        // pointer's place on the picture, or its middle when the pointer is
+        // elsewhere
+        std::function<void(swipe_action action, double x, double y)> on_swipe;
+        // the HID keyboard usages (page 7) held down now; empty: none
+        std::function<void(std::span<std::uint8_t const> usages)> on_keys;
     };
 
     // name of the window message a second start posts to the running instance
@@ -125,6 +169,9 @@ export namespace uxplay
         // file exists to open
         void set_performance_mode(performance_mode mode);
         void set_crop_mode(crop_mode mode);
+        // wanted: the menu item is ticked; ready: input on the picture goes to
+        // the phone (on_pointer, on_wheel, on_keys) instead of the window
+        void set_remote_control(bool wanted, bool ready);
         void set_autostart(bool enabled);
         void set_log_available(bool available);
         // false while no new picture arrives: a kept last frame does not keep

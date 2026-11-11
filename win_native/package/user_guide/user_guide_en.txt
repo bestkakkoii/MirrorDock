@@ -2,7 +2,8 @@
 =====================
 
 MirrorDock shows the picture and plays the sound of an iPhone or iPad on a
-Windows PC, over Wi-Fi or over the USB cable. It is a single file,
+Windows PC, over Wi-Fi or over the USB cable, and lets you operate an iPhone
+with the mouse and the keyboard of the PC (section 5). It is a single file,
 mirror_dock.exe: there is nothing else to install.
 (Up to version 1.6 it was called "UxPlay for Windows"; if you are upgrading,
 see the last section.)
@@ -162,10 +163,57 @@ the way described above is the wired mirroring that works with current iOS.
 - The interface follows the Windows display language: English, Traditional
   Chinese, Simplified Chinese, Japanese, Korean, Spanish, German, French,
   Vietnamese and Thai; any other language gets English. To fix one, use the
-  -ui option (section 7).
+  -ui option (section 8).
 
 
-5. Quality and performance modes
+5. Controlling the iPhone with mouse and keyboard
+-------------------------------------------------
+With the iPhone on the USB cable, what you do on the picture is done on the
+phone: press F8, or choose "Control the iPhone with mouse and keyboard" in
+the menu. While it is on, the title of the window says "control"; F8
+switches it off again. The choice is remembered.
+
+  Left mouse button   a finger: a click is a tap, holding is a long press,
+                      dragging is a swipe
+  Mouse wheel         scrolls what is under the pointer (with Shift:
+                      sideways)
+  Middle button       Home
+  Keyboard            types on the phone, like a keyboard plugged into it.
+                      Ctrl is the Command key; Ctrl+Space switches the
+                      phone's input language
+  Page Down, Page Up, Alt + arrow keys
+                      flick to the next or previous page or video (for
+                      apps that take no keys)
+  Right mouse button  the menu of MirrorDock, as always
+
+F8, F11, Alt+Enter, Alt+F4 and, in full screen, Esc keep working on the
+window. The control bar stays away while control is on, because it would
+cover the bottom of the phone's screen: use the right mouse button.
+
+What it takes:
+- An iPhone with iOS 27 or later on the USB cable, with this PC trusted
+  (unlock the phone and tap "Trust" when it asks). Only control uses the
+  cable: the picture may still come over Wi-Fi, and "Wi-Fi only" may stay
+  chosen.
+- Developer Mode switched on: on the iPhone, Settings > Privacy & Security >
+  Developer Mode. The switch is hidden until a developer tool has asked for
+  it; MirrorDock does that the first time you press F8. The iPhone then
+  restarts and asks once more for confirmation.
+- Internet on the PC the first time, and the first time after each iOS
+  update: MirrorDock installs Apple's "Developer Disk Image" on the phone,
+  which takes about a minute. It downloads the image (about 17 MB, kept in
+  %LOCALAPPDATA%\MirrorDock\developer_disk_image) and asks Apple's signing
+  service to sign it for this phone; as Xcode does, it tells Apple the
+  phone's chip numbers. After that, control contacts nobody.
+
+Why this way: AirPlay has no channel that carries input to the phone.
+Control uses the developer services of iOS instead, the ones Apple's Xcode
+uses to operate a real device. Developer Mode is Apple's own switch for
+them; it does not jailbreak the phone, and it can be switched off again at
+the same place.
+
+
+6. Quality and performance modes
 --------------------------------
 Choose one of three in the menu; it is remembered:
   - "Quality": asks the phone for the full resolution, keeps a little more
@@ -185,7 +233,7 @@ of "Quality") takes full effect with the next connection (the program says
 so).
 
 
-6. Log file and crash record
+7. Log file and crash record
 ----------------------------
 - %LOCALAPPDATA%\MirrorDock\mirror_dock.log ("Open log file" in the menu).
   Every line carries the time; the log of the previous run is kept as
@@ -200,7 +248,7 @@ so).
   there.
 
 
-7. Advanced options
+8. Advanced options
 -------------------
 Create a shortcut to mirror_dock.exe and add options after the "Target", or
 write one option per line (without the minus sign) into
@@ -241,7 +289,7 @@ old settings file contains such options, the log notes that they were
 ignored and the program starts normally.
 
 
-8. Reference figures
+9. Reference figures
 --------------------
 Measured on one laptop from 2016 (Core i7-6700HQ, the integrated Intel HD
 Graphics 530 drives the monitor, Windows 11). They are for orientation only
@@ -255,8 +303,8 @@ and differ from PC to PC:
   chain, and both share one timeline.
 
 
-9. Recommendations
-------------------
+10. Recommendations
+-------------------
 - When two monitors duplicate the desktop with different refresh rates
   (60 Hz and 50 Hz, for example), Windows follows only one of them and
   motion on the other is slightly uneven. If you watch only one monitor, set
@@ -264,7 +312,7 @@ and differ from PC to PC:
 - A laptop works best on mains power.
 
 
-10. Troubleshooting
+11. Troubleshooting
 -------------------
 - The iPhone does not list the PC: both must be on the same Wi-Fi network
   and the firewall must allow the program (section 1); turn the iPhone's
@@ -287,15 +335,19 @@ and differ from PC to PC:
   that removes Apple's driver and USB mirroring stops working.
 - Lips and voice do not match: fine-tune with -vsync and a number of
   milliseconds (positive = sound later).
+- F8 answers "The iPhone cannot be controlled": the notification says why.
+  Plug in the USB cable and trust this PC; switch Developer Mode on
+  (section 5); the iPhone needs iOS 27 or later; installing the Developer
+  Disk Image needs the internet on the PC. The log has the details.
 - The picture stutters: try "Performance" mode first; with duplicated
-  monitors see section 9.
+  monitors see section 10.
 - The picture goes black and the program restarts by itself: the graphics
   driver was reset or updated. The program restarts once; choose the PC
   again on the iPhone. If it happens repeatedly within a short time the
   program stops and shows the reason: check the graphics driver.
 
 
-11. Upgrading from UxPlay for Windows (1.6 or earlier)
+12. Upgrading from UxPlay for Windows (1.6 or earlier)
 ------------------------------------------------------
 - The program is now called MirrorDock and its executable is
   mirror_dock.exe. Exit the old uxplay.exe before starting the new one; the
@@ -313,8 +365,9 @@ and differ from PC to PC:
 
 
 Licence: the program as a whole is GPL-3.0; its AirPlay protocol core comes
-from the open-source project UxPlay, and the Windows media engine
-(win_native) is MIT. It contains FFmpeg (LGPL-2.1+ components), OpenSSL
-(Apache-2.0), libplist (LGPL-2.1+), LLVM libc++ (Apache-2.0 WITH
-LLVM-exception) and winpthreads (MIT). The source code and the full licence
-texts are in the folders "source" and "licenses".
+from the open-source project UxPlay, the Windows media engine (win_native)
+is MIT and the remote control (phone_control) is GPL-3.0-or-later. It
+contains FFmpeg (LGPL-2.1+ components), OpenSSL (Apache-2.0), libplist
+(LGPL-2.1+), LLVM libc++ (Apache-2.0 WITH LLVM-exception) and winpthreads
+(MIT). The source code and the full licence texts are in the folders
+"source" and "licenses".

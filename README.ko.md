@@ -4,7 +4,7 @@
 
 # MirrorDock
 
-**iPhone이나 iPad 화면을 Wi-Fi 또는 USB 케이블로 Windows PC에 미러링하세요.**
+**iPhone이나 iPad 화면을 Wi-Fi 또는 USB 케이블로 Windows PC에 미러링하고, 마우스와 키보드로 iPhone을 제어하세요.**
 
 [![Release](https://img.shields.io/github/v/release/bestkakkoii/MirrorDock?label=release&color=126BDB)](https://github.com/bestkakkoii/MirrorDock/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/bestkakkoii/MirrorDock/total?color=33B8FF)](https://github.com/bestkakkoii/MirrorDock/releases)
@@ -33,9 +33,10 @@ MirrorDock은 Windows용 AirPlay 수신기입니다. iPhone의 *화면 미러링
 | 🔊 **어긋나지 않는 소리** | 지연이 짧은 WASAPI 출력을 영상과 같은 타임라인에 맞추므로 입 모양과 목소리가 일치합니다. |
 | 🎛️ **세 가지 모드** | *화질 우선*, *균형*(기본값), *성능 우선* 가운데, 가장 선명한 화면과 가장 짧은 지연 사이에서 원하는 쪽을 고르면 됩니다. |
 | ✂️ **검은 여백 자르기** | 영화 주위의 검은 여백을 자동으로 잘라내거나, 마우스로 원하는 부분만 골라서 볼 수 있습니다. |
+| 🖱️ **iPhone 제어** | 영상 위에서 클릭하고, 드래그하고, 스크롤하고, 입력하면 iPhone이 그대로 따라 합니다. 프로그램에 내장된 기능이라 보조 프로그램도 탈옥도 필요 없습니다(iOS 27, USB 케이블, 개발자 모드 필요). |
 | 🪟 **제대로 된 창** | 알맞은 크기로 열리고, 크기를 바꿔도 화면 비율이 유지되며, 크기와 위치를 기억합니다. 키 하나로 전체 화면이 되고, 항상 위에 표시할 수도 있습니다. |
 | 🌐 **10개 언어** | 인터페이스는 Windows 표시 언어를 따릅니다. |
-| 🧳 **파일 하나** | 약 10 MB짜리 실행 파일 하나면 되고, Windows 말고는 아무것도 필요 없습니다. |
+| 🧳 **파일 하나** | 약 12 MB짜리 실행 파일 하나면 되고, Windows 말고는 아무것도 필요 없습니다. |
 
 ## 🚀 빠른 시작
 
@@ -74,6 +75,30 @@ MirrorDock은 Windows용 AirPlay 수신기입니다. iPhone의 *화면 미러링
 - **자동**(**C** 키): 여백을 잘라내고 창을 영상에 딱 맞춥니다. 다음 영화로 넘어가도 자르기는 그대로 유지됩니다. 플레이어의 컨트롤처럼 다른 무언가가 여백 자리에 나타나 계속 남아 있으면, 약 1초 안에 전체 영상이 다시 표시됩니다.
 - **수동**(**X** 키): 보고 싶은 부분을 드래그해 틀로 지정합니다. **Esc**를 누르면 취소됩니다.
 
+## 🖱️ iPhone 제어하기
+
+**F8**을 누르거나 메뉴에서 **마우스와 키보드로 iPhone 제어**를 선택하면 영상이 곧 iPhone 화면이 됩니다. 영상 위에서 하는 동작을 iPhone이 그대로 수행합니다.
+
+| PC에서 | iPhone에서 |
+|---|---|
+| 왼쪽 버튼: 클릭, 누르고 있기, 드래그 | 손가락 하나: 탭, 길게 터치, 쓸어넘기기 |
+| 마우스 휠(**Shift**를 누르면 좌우로) | 포인터 아래의 내용을 스크롤 |
+| 가운데 버튼 | 홈 화면으로 이동 |
+| 키보드 | iPhone에 키보드를 연결한 것처럼 입력. **Ctrl**은 ⌘ 역할을 하고, **Ctrl+Space**는 iPhone의 입력 언어를 전환 |
+| **Page Down** / **Page Up**, **Alt** + 방향키 | 다음 또는 이전 페이지나 동영상으로 빠르게 쓸어넘기기 |
+| 오른쪽 버튼 | 평소처럼 MirrorDock 메뉴 |
+
+필요한 조건:
+
+1. **iOS 27 이상**의 iPhone이 **USB 케이블**로 연결되어 있고, iPhone에서 이 PC를 신뢰한 상태여야 합니다. 케이블은 제어에만 쓰이며, 영상은 계속 Wi-Fi로 받아도 됩니다.
+2. iPhone에서 **개발자 모드**가 켜져 있어야 합니다(*설정 → 개인정보 보호 및 보안 → 개발자 모드*). 이 스위치는 개발 도구가 요청하기 전까지 숨겨져 있으며, F8을 처음 누를 때 MirrorDock이 그 요청을 보냅니다.
+3. 처음 사용할 때, 그리고 iOS를 업데이트한 뒤 처음 사용할 때마다 인터넷 연결이 필요합니다. MirrorDock이 Apple의 개발자 디스크 이미지(*Developer Disk Image*)를 iPhone에 설치하기 때문입니다. 1분 정도 걸립니다.
+
+> [!NOTE]
+> AirPlay로는 입력을 전달할 수 없어서, 제어는 다른 경로를 이용합니다. 바로 iOS의 개발자 서비스로, Xcode가 실제 기기를 다룰 때 쓰는 것과 같은 서비스입니다. 이 서비스를 설치하기 위해 MirrorDock은 [DeveloperDiskImage](https://github.com/doronz88/DeveloperDiskImage) 저장소에서 Apple의 이미지를 내려받고, Apple의 서명 서비스(`gs.apple.com`)에 사용자의 iPhone에 맞게 서명해 달라고 요청합니다. 이때 Xcode가 하는 것과 똑같이 iPhone의 칩 식별 번호가 Apple에 전달됩니다. 그 뒤로는 제어할 때 어디에도 접속하지 않습니다.
+
+제어가 켜져 있는 동안에도 **F8**, **F11**, **Alt+Enter**, **Alt+F4**는 여전히 창에서 동작합니다. 컨트롤 바는 iPhone 화면의 아랫부분을 가리게 되므로 나타나지 않습니다.
+
 ## ⌨️ 키보드와 마우스
 
 | 동작 | 키 |
@@ -83,8 +108,11 @@ MirrorDock은 Windows용 AirPlay 수신기입니다. iPhone의 *화면 미러링
 | 표시할 영역을 틀로 지정 | **X** |
 | 항상 위에 표시 | **T** |
 | 음소거(PC 쪽만) | **M** |
+| iPhone 제어 켜기 / 끄기 | **F8** |
 | 컨트롤 바 | 영상 위에서 마우스를 움직이기 |
 | 메뉴 | 영상 위 아무 곳이나 오른쪽 클릭 |
+
+iPhone을 제어하는 동안에는 문자 키가 iPhone에 입력됩니다. **F8**을 누르면 이 키들을 다시 창에서 쓸 수 있습니다.
 
 ## ⚙️ 옵션
 
@@ -123,6 +151,8 @@ flowchart LR
 
 영상과 소리는 하나의 타임라인에 맞춰 예약됩니다. 지연은 네트워크 상태와 PC의 디코딩 속도에 따라 조정되며, 끊김이 없는 범위에서 최대한 짧게 유지됩니다.
 
+제어는 이와 별개인 두 번째 경로로 이루어집니다. MirrorDock은 USB 케이블을 통해 iPhone의 개발자 터널을 열고(작은 IPv6 및 TCP 구현을 자체적으로 갖추고 있어 네트워크 어댑터도 관리자 권한도 필요 없습니다), 터치와 키보드 리포트를 iPhone의 입력 서비스로 보냅니다.
+
 ## 📊 측정 결과
 
 2016년형 노트북 한 대(Intel Core i7-6700HQ, Intel HD Graphics 530), 2872×1320 60 fps H.265 테스트 스트림, *균형* 모드, 버전 1.6:
@@ -150,6 +180,12 @@ Wi-Fi 미러링과 USB 미러링은 버전 1.5까지 iPhone 16 Pro Max(iOS 26)�
 **입 모양과 목소리가 맞지 않습니다.**
 `-vsync` 뒤에 밀리초 값을 붙여 미세하게 조정하세요(양수 값은 소리를 늦춥니다).
 
+**F8을 누르면 ‘iPhone을 제어할 수 없습니다’라고 나옵니다.**
+원인은 메시지에 나와 있습니다. 케이블이 연결되어 있지 않거나 이 PC를 신뢰하지 않은 경우, 개발자 모드가 꺼져 있는 경우, iPhone의 iOS가 27보다 낮은 경우, 개발자 디스크 이미지를 설치하지 못한 경우(이 단계에는 인터넷이 필요합니다) 가운데 하나입니다. 개발자 모드를 켜면 iPhone이 재시동되고 한 번 더 확인을 요청합니다.
+
+**개발자 모드를 계속 켜 두어도 안전한가요?**
+개발자 모드는 앱을 만드는 사람들을 위해 Apple이 직접 마련한 스위치입니다. 켜 두면 신뢰하는 컴퓨터가 앱을 설치하고 디버깅하며 개발자 서비스를 이용할 수 있게 됩니다. iPhone을 탈옥시키는 것이 아니며, 같은 곳에서 다시 끌 수 있습니다.
+
 **로그는 어디에 있나요?**
 `%LOCALAPPDATA%\MirrorDock\mirror_dock.log`에 있으며, 메뉴의 **로그 파일 열기**로도 열 수 있습니다.
 
@@ -167,12 +203,13 @@ MSYSTEM=CLANG64 bash -lc 'bash win_native/build_scripts/build_uxplay_native.sh <
 
 ## 📜 라이선스
 
-MirrorDock은 UxPlay의 GPL-3.0 코드를 기반으로 하므로 **GNU General Public License v3**([LICENSE](LICENSE))에 따라 배포됩니다. [`win_native/`](win_native)의 Windows 미디어 엔진은 독자적으로 작성한 것으로 **MIT 라이선스**([win_native/LICENSE](win_native/LICENSE))를 따릅니다. 릴리스 zip에는 포함된 모든 라이브러리의 라이선스 전문과 그에 해당하는 소스 코드 전체가 들어 있습니다.
+MirrorDock은 UxPlay의 GPL-3.0 코드를 기반으로 하므로 **GNU General Public License v3**([LICENSE](LICENSE))에 따라 배포됩니다. [`win_native/`](win_native)의 Windows 미디어 엔진은 독자적으로 작성한 것으로 **MIT 라이선스**([win_native/LICENSE](win_native/LICENSE))를 따릅니다. [`phone_control/`](phone_control)의 iPhone 제어 기능도 독자적으로 작성한 것으로 **GPL-3.0-or-later**를 따릅니다. 릴리스 zip에는 포함된 모든 라이브러리의 라이선스 전문과 그에 해당하는 소스 코드 전체가 들어 있습니다.
 
 ## 🙏 감사의 말
 
 - [UxPlay](https://github.com/FDH2/UxPlay)(F. Duncanh와 기여자들) — MirrorDock의 기반이 되는 AirPlay 서버입니다.
 - [RPiPlay](https://github.com/FD-/RPiPlay)(Florian Draschbacher)와 [shairplay](https://github.com/juhovh/shairplay)(Juho Vähä-Herttua) — 그 프로토콜 코어의 출처입니다.
+- [pymobiledevice3](https://github.com/doronz88/pymobiledevice3)(doronz88과 기여자들) — iPhone 제어 기능의 바탕이 된 iOS 개발자 서비스 관련 지식의 출처입니다.
 - playfair, llhttp, csrp, FFmpeg, OpenSSL, libplist.
 
 AirPlay, iPhone, iPad는 Apple Inc.의 상표입니다. MirrorDock은 독립적인 오픈 소스 프로젝트이며 Apple과 아무런 관련이 없습니다.

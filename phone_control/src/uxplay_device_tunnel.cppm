@@ -14,8 +14,10 @@
 // (TLS over the USB connection), so no packet is ever lost, duplicated or
 // reordered between the two ends.  It therefore keeps sequence numbers,
 // acknowledgements and both flow-control windows, and has no retransmission
-// or congestion control.  UDP towards a port opened with discard_port() is
-// accepted and dropped; other packets are ignored.
+// or congestion control.  It answers the phone's keep-alive probes (the
+// phone resets a silent connection that does not).  UDP towards a port
+// opened with discard_port() is accepted and dropped; other packets are
+// ignored.
 //
 // All members may be called from any thread.
 export module uxplay_device_tunnel;

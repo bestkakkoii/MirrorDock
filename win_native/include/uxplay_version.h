@@ -27,8 +27,8 @@
 
 #define UXPLAY_VERSION_MAJOR 1
 #define UXPLAY_VERSION_MINOR 9
-#define UXPLAY_VERSION_PATCH 0
-#define UXPLAY_VERSION_TEXT "1.9.0"
+#define UXPLAY_VERSION_PATCH 1
+#define UXPLAY_VERSION_TEXT "1.9.1"
 #define UXPLAY_CORE_VERSION "1.74"
 #define UXPLAY_PROJECT_URL "https://github.com/bestkakkoii/MirrorDock"
 

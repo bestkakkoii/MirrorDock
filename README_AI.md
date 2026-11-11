@@ -10,7 +10,7 @@ architecture, invariants, build inputs and verification state.
 single Windows-native program for the iPhone → Windows AirPlay use case. The tree
 builds **only** this program (MSYS2 CLANG64; the top-level CMakeLists stops
 on other hosts). The program has its own name and version (`win_native/include/
-uxplay_version.h`, currently MirrorDock 1.9.0: the one place they are written
+uxplay_version.h`, currently MirrorDock 1.9.1: the one place they are written
 — log, "About", the version resource and the settings/log locations read it;
 only `uxplay.manifest`, `package_zip.py` and the CMake `OUTPUT_NAME` repeat
 them); `UXPLAY_CORE_VERSION` there is the upstream UxPlay release the
@@ -635,7 +635,11 @@ input services are missing: install the Developer Disk Image (state
   stage the phone hangs in otherwise.
 * The tunnel's TCP has no retransmission and no congestion control: the link
   below it is TLS over the USB connection, which neither loses nor reorders.
-  This is the reason control is USB-only so far.
+  This is the reason control is USB-only so far. It does answer every
+  segment that does not begin where the next byte is expected: that is how
+  the phone probes a silent connection (keep-alive), and it resets a
+  connection whose probes go unanswered (1.9 did not answer; see "State of
+  1.9.1").
 * A failure of the touch path ends the session (`connection_lost`); the
   engine starts a new one, three times in a row at most. A keyboard the
   phone will not register, a button service that is missing or an
@@ -972,3 +976,40 @@ survives a restart of the phone or an iOS update (the persistence asked for
 is "until the next software update"). The program in the seven languages
 whose texts were written by language models, not native speakers.
 Everything listed as untested for 1.6 to 1.8 still applies.
+
+## State of 1.9.1 (2026-11-12)
+
+**The owner's first session with 1.9** (2026-11-12 03:15 to 03:27, picture
+over Wi-Fi, control over the cable; read from the log, nothing was started or
+stopped for it): control was ready 1.1 s after the stream appeared, a
+keyboard was registered when the first key was pressed, the phone was turned
+sideways and the session followed. Three times the log says "the connection
+to the phone was lost (... reset by the phone); connecting again", each time
+at a moment of input after a pause, and each time a new session was ready in
+under a second.
+
+**Cause and fix.** The phone probes a connection that has been silent with
+TCP keep-alive segments (no data, one byte before the next expected one) and
+resets it when nobody answers. `device_tunnel`'s TCP answered only segments
+that carried data or a FIN. It now answers every segment that does not begin
+where the next byte is expected with an acknowledgement, as TCP asks.
+Reproduced with the probe (`idle 180`: two connections that send nothing):
+before the fix the phone had reset them after 180 s, with the fix they
+answer. A control session held for 200 s without input stayed ready.
+`remote_xpc_connection::alive()` lets the session notice a connection the
+phone ended without waiting for the next report.
+
+**Also seen:** with a still picture the screen stream delivers no datagrams
+at all (0 in every 5-second window for three minutes, with the phone awake
+and unlocked), so a silent stream says nothing about the gate. In one of the
+probe sessions the tunnel and the SpringBoard connection ended at the same
+moment after 139 s, with the cable in place; the cause is not known (the
+engine starts a new session in that case).
+
+**Not explained:** the log of the run that ended at 03:03 (an interim build)
+was found as 604 797 zero bytes followed by its last three lines: something
+shortened the file to nothing between that run's last statistics line and
+its exit, and the run's own handle then wrote at its old position. The exit
+of 1.9 at 03:27 left its log whole. Nothing in the exit path opens the log
+again; a second start that takes over truncates only after waiting for the
+file. Worth watching when a log is needed after an exit.

@@ -4,6 +4,12 @@ All releases of MirrorDock. Up to 1.6 the program was published as *UxPlay for W
 
 Mirroring over Wi-Fi and over USB was verified with an iPhone 16 Pro Max (iOS 26) up to version 1.5. From 1.6 on, every entry ends with how far that release was tested.
 
+## 1.9.1 — 2026-11-12
+
+- 🔧 **Fixed: control stopped answering after a while without input.** The phone checks a silent connection with keep-alive probes, and the program's own TCP did not answer them, so after two to three quiet minutes the phone reset the connection. The next click then went nowhere while MirrorDock connected again (under a second). The probes are answered now; a control session that sat idle for 200 seconds stayed up.
+- 🔍 A session now notices at once when the phone ends one of its two connections, instead of at the next click.
+- *Tested:* found in the owner's first session with 1.9 (three resets in twelve minutes, each followed by an automatic reconnect) and reproduced with the console probe: a connection that says nothing for 180 seconds was reset by the phone before the fix and answers after it. With the fix, a whole control session stayed ready through 200 idle seconds. Otherwise as 1.9.
+
 ## 1.9 — 2026-11-12
 
 - 🖱️ **Control the iPhone with mouse and keyboard.** Press **F8**: the left button is a finger (tap, long press, swipe), the wheel scrolls, the middle button is Home, the keyboard types on the phone (Ctrl is ⌘), Page Down / Page Up and Alt + arrow keys flick to the next or previous page or video. Needs iOS 27, the USB cable and Developer Mode; the picture may still come over Wi-Fi.

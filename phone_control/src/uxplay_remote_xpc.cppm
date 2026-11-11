@@ -92,6 +92,8 @@ export namespace uxplay
         [[nodiscard]] status send_file(std::uint64_t transfer, std::span<std::uint8_t const> content);
         // the next message of the phone (a dictionary that is not empty)
         [[nodiscard]] outcome<xpc_value> receive(std::chrono::milliseconds patience);
+        // false once the connection is over (closed or reset by the phone, the tunnel gone)
+        [[nodiscard]] bool alive() const;
 
     private:
         struct state;

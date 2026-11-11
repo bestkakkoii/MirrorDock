@@ -380,6 +380,15 @@ namespace uxplay
                     link_state.peer_window = static_cast<std::uint32_t>(window) << link_state.peer_window_shift;
                     link_state.changed.notify_all();
                 }
+                // A segment that does not begin with the byte this end expects next is answered
+                // with what is expected.  The phone probes a connection that has been silent this
+                // way (a "keep-alive": no data, one byte before the expected one) and resets the
+                // connection when nobody answers - which is what happened to every connection
+                // that stayed silent for a few minutes, the one of the screen stream first.
+                if (sequence != link_state.receive_next)
+                {
+                    answer = true;
+                }
                 std::uint32_t end_of_data = sequence;
                 if (!payload.empty())
                 {

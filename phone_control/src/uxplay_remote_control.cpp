@@ -1123,6 +1123,14 @@ namespace uxplay
                 return session_problem{remote_control_problem::connection_lost,
                                        "the connection to the iPhone ended (cable pulled?)"};
             }
+            // (the phone ended one of the two connections: input would go nowhere, or the
+            // screen stream that lets it through is no longer this session's)
+            if (!input->alive() || !display->alive())
+            {
+                return session_problem{remote_control_problem::connection_lost,
+                                       std::format("the phone ended the connection to its {} service",
+                                                   input->alive() ? "display" : "input")};
+            }
             if (next)
             {
                 if (status const done = handle(*next); !done)

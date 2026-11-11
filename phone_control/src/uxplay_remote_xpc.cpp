@@ -698,7 +698,7 @@ namespace uxplay
     {
         std::unique_ptr<byte_stream> stream;
         std::thread reader;
-        std::mutex mutex;
+        mutable std::mutex mutex;
         std::condition_variable changed;
         // guarded by mutex
         std::deque<xpc_value> received;
@@ -1115,5 +1115,11 @@ namespace uxplay
     outcome<xpc_value> remote_xpc_connection::receive(std::chrono::milliseconds patience)
     {
         return impl->await_message(patience);
+    }
+
+    bool remote_xpc_connection::alive() const
+    {
+        std::scoped_lock lock{impl->mutex};
+        return impl->failure_text.empty();
     }
 }

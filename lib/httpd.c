@@ -1,4 +1,4 @@
-/**
+﻿/**
  *  Copyright (C) 2011-2012  Juho Vähä-Herttua
  *
  *  This library is free software; you can redistribute it and/or
@@ -53,9 +53,15 @@ struct httpd_s {
     http_connection_t *connections;
     char nohold;
 
-    /* These variables only edited mutex locked */
+    /* These variables only edited mutex locked:
+     * running  - the server thread is serving.  Cleared by httpd_stop(), or by
+     *            the thread itself when it leaves its loop after an error
+     *            (httpd_is_running() then reports 0);
+     * joined   - there is no thread to join (never started, or joined);
+     * stopping - httpd_stop() is joining the thread. */
     int running;
     int joined;
+    int stopping;
     thread_handle_t thread;
     mutex_handle_t run_mutex;
 
@@ -152,6 +158,24 @@ httpd_get_connection_by_type (httpd_t *httpd, connection_type_t type, int instan
     return NULL;
 }
 
+/* Seconds since data was last received on the connection of user_data, or -1
+ * if user_data has no connection.  For use by the conn_request callback (like
+ * the other connection queries, it runs on the server thread). */
+int
+httpd_get_connection_idle_time (httpd_t *httpd, void *user_data) {
+    for (int i = 0; i < httpd->max_connections; i++) {
+        http_connection_t *connection = &httpd->connections[i];
+        if (!connection->connected) {
+            continue;
+        }
+        if (connection->user_data == user_data) {
+            time_t idle = time(NULL) - connection->last_active;
+            return (idle > 0 ? (int) idle : 0);
+        }
+    }
+    return -1;
+}
+
 #define MAX_CONNECTIONS 12  /* value used in AppleTV 3*/
 httpd_t *
 httpd_init(logger_t *logger, httpd_callbacks_t *callbacks, int nohold)
@@ -192,6 +216,9 @@ httpd_init(logger_t *logger, httpd_callbacks_t *callbacks, int nohold)
     /* Initial status joined */
     httpd->running = 0;
     httpd->joined = 1;
+    httpd->stopping = 0;
+    httpd->server_fd4 = -1;
+    httpd->server_fd6 = -1;
     httpd->wakeup_fd = -1;
 
     return httpd;
@@ -267,7 +294,8 @@ httpd_add_connection(httpd_t *httpd, int fd, unsigned char *local, int local_len
     }
     user_data = httpd->callbacks.conn_init(httpd->callbacks.opaque, local, local_len, remote, remote_len, zone_id);
     if (!user_data) {
-        logger_log(httpd->logger, LOGGER_ERR, "Error initializing HTTP request handler");
+        /* not admitted by the host, or out of memory: the caller closes the socket */
+        logger_log(httpd->logger, LOGGER_INFO, "connection on socket %d was not set up; closing it", fd);
         return -1;
     }
 
@@ -360,12 +388,44 @@ httpd_remove_connections_by_type(httpd_t *httpd, connection_type_t type) {
     }
 }
 
+/* A failing accept() or select() does not end the server: an accept error
+ * concerns only the connection that was being accepted (for example the peer
+ * gave up during the handshake), and select can fail for a passing reason.
+ * The call is retried; once more than HTTPD_FAILURE_BACKOFF_AFTER failures
+ * have happened in a row each retry first waits HTTPD_FAILURE_BACKOFF_MS, and
+ * after HTTPD_MAX_FAILURES in a row the server thread gives up and ends:
+ * httpd_is_running() then returns 0, and httpd_stop() + httpd_start() bring
+ * the server back with new sockets. */
+#define HTTPD_FAILURE_BACKOFF_AFTER 3
+#define HTTPD_FAILURE_BACKOFF_MS 100
+#define HTTPD_MAX_FAILURES 30
+
+/* Returns 1 if the server thread should give up after this many failures in
+ * a row, otherwise 0 (after the back-off wait, if one is due). */
+static int
+httpd_failure_backoff(int failures)
+{
+    if (failures >= HTTPD_MAX_FAILURES) {
+        return 1;
+    }
+    if (failures > HTTPD_FAILURE_BACKOFF_AFTER) {
+        Sleep(HTTPD_FAILURE_BACKOFF_MS);
+    }
+    return 0;
+}
+
 static THREAD_RETVAL
 httpd_thread(void *arg)
 {
     httpd_t *httpd = arg;
     char buffer[1024];
     int timeout_limit = 60; //drop connection after 60 secs of silence
+    /* failures in a row of select() and of accept() on each server socket */
+    int select_failures = 0;
+    int accept_failures4 = 0;
+    int accept_failures6 = 0;
+    /* the thread leaves because of an error, not because of httpd_stop() */
+    bool gave_up = false;
 
     bool logger_debug = (logger_get_level(httpd->logger) >= LOGGER_DEBUG);
     assert(httpd);
@@ -438,37 +498,67 @@ httpd_thread(void *arg)
         nfds_set = select(nfds, &rfds, NULL, NULL, &tv);
         if (nfds_set == 0) {
             /* Timeout happened */
+            select_failures = 0;
             continue;
         } else if (nfds_set == -1) {
             int sock_err = SOCKET_GET_ERROR();
+            select_failures++;
             logger_log(httpd->logger, LOGGER_ERR,
-                       "httpd error in select: %d %s", sock_err, SOCKET_ERROR_STRING(sock_err));
-            break;
+                       "httpd error in select: %d %s (%d in a row)", sock_err, SOCKET_ERROR_STRING(sock_err),
+                       select_failures);
+            if (httpd_failure_backoff(select_failures)) {
+                logger_log(httpd->logger, LOGGER_ERR, "httpd: select keeps failing (last error %d %s): "
+                           "ending the server thread", sock_err, SOCKET_ERROR_STRING(sock_err));
+                gave_up = true;
+                break;
+            }
+            /* retry: the loop re-checks httpd->running first */
+            continue;
         }
+        select_failures = 0;
         if (httpd->wakeup_fd != -1 && FD_ISSET(httpd->wakeup_fd, &rfds)) {
             /* stop request (or spurious wakeup): re-check httpd->running */
             netutils_wakeup_drain(httpd->wakeup_fd);
             continue;
         }
 
+        /* A failed accept (logged with its error code by httpd_accept_connection)
+         * is not an error of the server socket: the data of the open connections
+         * is still handled below, and the next select tries again. */
         if (httpd->open_connections < httpd->max_connections &&
             httpd->server_fd4 != -1 && FD_ISSET(httpd->server_fd4, &rfds)) {
             int ret = httpd_accept_connection(httpd, httpd->server_fd4, 0);
             if (ret == -1) {
-                logger_log(httpd->logger, LOGGER_ERR, "httpd error in accept ipv4");
-                break;
-            } else if (ret == 0) {
-                continue;
+                accept_failures4++;
+                if (httpd_failure_backoff(accept_failures4)) {
+                    logger_log(httpd->logger, LOGGER_ERR, "httpd: accept failed %d times in a row on the IPv4 "
+                               "server socket: ending the server thread", accept_failures4);
+                    gave_up = true;
+                    break;
+                }
+            } else {
+                accept_failures4 = 0;
+                if (ret == 0) {
+                    continue;
+                }
             }
         }
         if (httpd->open_connections < httpd->max_connections &&
             httpd->server_fd6 != -1 && FD_ISSET(httpd->server_fd6, &rfds)) {
             int ret = httpd_accept_connection(httpd, httpd->server_fd6, 1);
             if (ret == -1) {
-                logger_log(httpd->logger, LOGGER_ERR, "httpd error in accept ipv6");
-                break;
-            } else if (ret == 0) {
-                continue;
+                accept_failures6++;
+                if (httpd_failure_backoff(accept_failures6)) {
+                    logger_log(httpd->logger, LOGGER_ERR, "httpd: accept failed %d times in a row on the IPv6 "
+                               "server socket: ending the server thread", accept_failures6);
+                    gave_up = true;
+                    break;
+                }
+            } else {
+                accept_failures6 = 0;
+                if (ret == 0) {
+                    continue;
+                }
             }
         }
         for (int i = 0; i < httpd->max_connections; i++) {
@@ -609,13 +699,34 @@ httpd_thread(void *arg)
     }
 
     // Ensure running reflects the actual state
+    /* (last use of run_mutex by this thread: httpd_start() relies on it when
+     * it joins a thread that ended by itself) */
     MUTEX_LOCK(httpd->run_mutex);
     httpd->running = 0;
     MUTEX_UNLOCK(httpd->run_mutex);
 
+    if (gave_up) {
+        logger_log(httpd->logger, LOGGER_ERR, "httpd: the server thread ended after the errors above: all "
+                   "connections were closed and the server no longer listens (httpd_is_running() reports 0) "
+                   "until httpd_stop() and httpd_start() are called");
+    }
     logger_log(httpd->logger, LOGGER_DEBUG, "Exiting httpd thread");
 
     return 0;
+}
+
+/* closes the server sockets of a start that did not complete */
+static void
+httpd_close_server_sockets(httpd_t *httpd)
+{
+    if (httpd->server_fd4 != -1) {
+        CLOSESOCKET(httpd->server_fd4);
+        httpd->server_fd4 = -1;
+    }
+    if (httpd->server_fd6 != -1) {
+        CLOSESOCKET(httpd->server_fd6);
+        httpd->server_fd6 = -1;
+    }
 }
 
 int
@@ -628,14 +739,25 @@ httpd_start(httpd_t *httpd, unsigned short *port)
     assert(port);
 
     MUTEX_LOCK(httpd->run_mutex);
-    if (httpd->running || !httpd->joined) {
+    if (httpd->running || httpd->stopping) {
+        /* already serving (or httpd_stop() is still joining the thread) */
         MUTEX_UNLOCK(httpd->run_mutex);
         return 0;
+    }
+    if (!httpd->joined) {
+        /* The previous server thread ended by itself after an error and was not
+         * stopped since: join it before starting again.  It no longer needs
+         * run_mutex (clearing running was its last locked step). */
+        THREAD_JOIN(httpd->thread);
+        httpd->joined = 1;
+        netutils_wakeup_close(httpd->wakeup_fd);
+        httpd->wakeup_fd = -1;
     }
 
     httpd->server_fd4 = netutils_init_socket(port, 0, 0);
     if (httpd->server_fd4 == -1) {
-        logger_log(httpd->logger, LOGGER_ERR, "Error initialising socket %d", SOCKET_GET_ERROR());
+        int sock_err = SOCKET_GET_ERROR();
+        logger_log(httpd->logger, LOGGER_ERR, "Error initialising socket %d %s", sock_err, SOCKET_ERROR_STRING(sock_err));
         MUTEX_UNLOCK(httpd->run_mutex);
         return -1;
     }
@@ -646,16 +768,18 @@ httpd_start(httpd_t *httpd, unsigned short *port)
         }
 
     if (httpd->server_fd4 != -1 && listen(httpd->server_fd4, backlog) == -1) {
-        logger_log(httpd->logger, LOGGER_ERR, "Error listening to IPv4 socket");
-        CLOSESOCKET(httpd->server_fd4);
-        CLOSESOCKET(httpd->server_fd6);
+        int sock_err = SOCKET_GET_ERROR();
+        logger_log(httpd->logger, LOGGER_ERR, "Error listening to IPv4 socket: %d %s",
+                   sock_err, SOCKET_ERROR_STRING(sock_err));
+        httpd_close_server_sockets(httpd);
         MUTEX_UNLOCK(httpd->run_mutex);
         return -2;
     }
     if (httpd->server_fd6 != -1 && listen(httpd->server_fd6, backlog) == -1) {
-        logger_log(httpd->logger, LOGGER_ERR, "Error listening to IPv6 socket");
-        CLOSESOCKET(httpd->server_fd4);
-        CLOSESOCKET(httpd->server_fd6);
+        int sock_err = SOCKET_GET_ERROR();
+        logger_log(httpd->logger, LOGGER_ERR, "Error listening to IPv6 socket: %d %s",
+                   sock_err, SOCKET_ERROR_STRING(sock_err));
+        httpd_close_server_sockets(httpd);
         MUTEX_UNLOCK(httpd->run_mutex);
         return -2;
     }
@@ -669,12 +793,27 @@ httpd_start(httpd_t *httpd, unsigned short *port)
     /* Set values correctly and create new thread */
     httpd->running = 1;
     httpd->joined = 0;
-    THREAD_CREATE(httpd->thread, httpd_thread, httpd);
+    /* (pthread_create directly rather than THREAD_CREATE, to keep its error code) */
+    int thread_err = pthread_create(&httpd->thread, NULL, httpd_thread, httpd);
+    if (thread_err) {
+        logger_log(httpd->logger, LOGGER_ERR, "httpd: could not create the server thread: error %d", thread_err);
+        httpd->running = 0;
+        httpd->joined = 1;
+        httpd_close_server_sockets(httpd);
+        netutils_wakeup_close(httpd->wakeup_fd);
+        httpd->wakeup_fd = -1;
+        MUTEX_UNLOCK(httpd->run_mutex);
+        return -3;
+    }
     MUTEX_UNLOCK(httpd->run_mutex);
 
     return 1;
 }
 
+/* Whether the server thread is serving.  Returns 0 before httpd_start(), from
+ * the moment httpd_stop() is called, and also once the thread has ended by
+ * itself after an error: in that case call httpd_stop() and then httpd_start()
+ * (from any one thread) to bring the server back. */
 int
 httpd_is_running(httpd_t *httpd)
 {
@@ -683,7 +822,7 @@ httpd_is_running(httpd_t *httpd)
     assert(httpd);
 
     MUTEX_LOCK(httpd->run_mutex);
-    running = httpd->running || !httpd->joined;
+    running = httpd->running;
     MUTEX_UNLOCK(httpd->run_mutex);
 
     return running;
@@ -694,11 +833,16 @@ httpd_stop(httpd_t *httpd)
 {
     assert(httpd);
 
+    /* Nothing to do if the thread was never started or is already joined (or
+     * is being joined by another caller).  Otherwise it is joined whatever
+     * "running" says: a thread that ended by itself has cleared that flag,
+     * and must still be joined here before httpd_start() can be used again. */
     MUTEX_LOCK(httpd->run_mutex);
-    if (!httpd->running || httpd->joined) {
+    if (httpd->joined || httpd->stopping) {
         MUTEX_UNLOCK(httpd->run_mutex);
         return;
     }
+    httpd->stopping = 1;
     httpd->running = 0;
     MUTEX_UNLOCK(httpd->run_mutex);
 
@@ -707,6 +851,7 @@ httpd_stop(httpd_t *httpd)
 
     MUTEX_LOCK(httpd->run_mutex);
     httpd->joined = 1;
+    httpd->stopping = 0;
     netutils_wakeup_close(httpd->wakeup_fd);
     httpd->wakeup_fd = -1;
     MUTEX_UNLOCK(httpd->run_mutex);

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 // Media engine smoke test without a phone: plays an Annex-B elementary stream
 // (with access-unit delimiters) at its frame rate as a fake mirroring source,
 // plus a 440 Hz tone with matching timestamps, then reports what was decoded

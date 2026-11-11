@@ -1,4 +1,4 @@
-/**  Copyright (C) 2011-2012  Juho Vähä-Herttua
+﻿/**  Copyright (C) 2011-2012  Juho Vähä-Herttua
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -96,14 +96,59 @@ struct raop_conn_s {
 
     unsigned int zone_id;
 
-    connection_type_t connection_type; 
+    connection_type_t connection_type;
 
     bool authenticated;
     bool have_active_remote;
+
+    /* the host's conn_init callback was called for this connection (done when
+       it is classified as RAOP): only then is its conn_destroy callback called */
+    bool host_conn_init;
 };
 typedef struct raop_conn_s raop_conn_t;
 
 #include "raop_handlers.h"
+
+/* A new RAOP connection from the address of the connected client replaces
+ * that client's connection(s) once they have been silent for this many
+ * seconds (a connected client sends /feedback every 2 seconds): the client
+ * lost its connection and is connecting again.  While the existing
+ * connection is alive the new one is answered 409 as before, so that a
+ * second connection from the same device (for example a query from its
+ * AirPlay menu) cannot end a running session.  0 = replace without waiting. */
+#define RAOP_HANDOVER_IDLE_SECS 5
+
+/* Whether the new connection conn may take over from the RAOP connections
+ * that exist: every one of them must come from the address conn comes from
+ * (the address bytes and, for IPv6 link-local addresses, the zone are
+ * compared, not strings) and must have been silent for
+ * RAOP_HANDOVER_IDLE_SECS.  *idle_secs receives the shortest silence found
+ * (-1 if another address is connected). */
+static bool
+raop_conn_is_handover(raop_t *raop, raop_conn_t *conn, int *idle_secs) {
+    int count = httpd_count_connection_type(raop->httpd, CONNECTION_TYPE_RAOP);
+    bool handover = (count > 0);
+    *idle_secs = -1;
+    for (int instance = 1; instance <= count; instance++) {
+        raop_conn_t *other = httpd_get_connection_by_type(raop->httpd, CONNECTION_TYPE_RAOP, instance);
+        if (!other || other == conn) {
+            continue;
+        }
+        if (other->remotelen != conn->remotelen || other->zone_id != conn->zone_id ||
+            memcmp(other->remote, conn->remote, (size_t) conn->remotelen)) {
+            *idle_secs = -1;
+            return false;
+        }
+        int idle = httpd_get_connection_idle_time(raop->httpd, other);
+        if (*idle_secs < 0 || idle < *idle_secs) {
+            *idle_secs = idle;
+        }
+        if (idle < RAOP_HANDOVER_IDLE_SECS) {
+            handover = false;
+        }
+    }
+    return handover;
+}
 
 static void *
 conn_init(void *opaque, unsigned char *local, int locallen, unsigned char *remote, int remotelen, unsigned int zone_id) {
@@ -112,6 +157,14 @@ conn_init(void *opaque, unsigned char *local, int locallen, unsigned char *remot
     char ip_address[40] = { '\0' };
     char local_address[40] = { '\0' };
     assert(raop);
+
+    utils_ipaddress_to_string(locallen, local, zone_id, local_address, (int) sizeof(local_address));
+    utils_ipaddress_to_string(remotelen, remote, zone_id, ip_address, (int) sizeof(ip_address));
+    if (raop->callbacks.conn_admit &&
+        !raop->callbacks.conn_admit(raop->callbacks.cls, local_address, ip_address)) {
+        /* the host logged its reason; httpd closes the socket */
+        return NULL;
+    }
 
     conn = calloc(1, sizeof(raop_conn_t));
     if (!conn) {
@@ -134,10 +187,7 @@ conn_init(void *opaque, unsigned char *local, int locallen, unsigned char *remot
         return NULL;
     }
 
-    utils_ipaddress_to_string(locallen, local, zone_id, local_address, (int) sizeof(local_address));
     logger_log(raop->logger, LOGGER_INFO, "Local : %s", local_address);
-
-    utils_ipaddress_to_string(remotelen, remote, zone_id, ip_address, (int) sizeof(ip_address));
     logger_log(raop->logger, LOGGER_INFO, "Remote: %s", ip_address);
 
     conn->local = (unsigned char *) malloc(locallen);
@@ -158,13 +208,12 @@ conn_init(void *opaque, unsigned char *local, int locallen, unsigned char *remot
     conn->authenticated = false;
 
     conn->have_active_remote = false;
-    
-    if (raop->callbacks.conn_init) {
-        raop->callbacks.conn_init(raop->callbacks.cls);
-    }
-    if (raop->callbacks.conn_transport) {
-        raop->callbacks.conn_transport(raop->callbacks.cls, local_address);
-    }
+
+    /* The host is told about the connection (conn_init, conn_transport) when
+       its first request shows that it is a RAOP client: see conn_request.  A
+       connection that never gets that far (a port probe, a client that is
+       answered 409) is not a session and is not counted as one. */
+    conn->host_conn_init = false;
 
     return conn;
 }
@@ -229,15 +278,31 @@ conn_request(void *ptr, http_request_t *request, http_response_t **response) {
     if (conn->connection_type == CONNECTION_TYPE_UNKNOWN) {
         if (httpd_count_connection_type(raop->httpd, CONNECTION_TYPE_RAOP)) {
             char ipaddr[40] = { '\0' };
+            int idle_secs = -1;
             utils_ipaddress_to_string(conn->remotelen, conn->remote, conn->zone_id, ipaddr, (int) (sizeof(ipaddr)));
             if (httpd_nohold(raop->httpd)) {
-                logger_log(raop->logger, LOGGER_INFO, "*****\"nohold\" feature: switch to new connection request from %s", ipaddr);		  
+                logger_log(raop->logger, LOGGER_INFO, "*****\"nohold\" feature: switch to new connection request from %s", ipaddr);
+                httpd_remove_known_connections(raop->httpd);
+                if (raop->callbacks.video_reset) {
+                    raop->callbacks.video_reset(raop->callbacks.cls, RESET_TYPE_NOHOLD);
+                }
+            } else if (raop_conn_is_handover(raop, conn, &idle_secs)) {
+                /* the connected client is connecting again: its old connection is dead */
+                logger_log(raop->logger, LOGGER_INFO, "hand-over: new connection request from %s, the address of the "
+                           "connected client, whose connection has been silent for %d seconds: replacing it",
+                           ipaddr, idle_secs);
                 httpd_remove_known_connections(raop->httpd);
                 if (raop->callbacks.video_reset) {
                     raop->callbacks.video_reset(raop->callbacks.cls, RESET_TYPE_NOHOLD);
                 }
             } else {
-                logger_log(raop->logger, LOGGER_WARNING, "rejecting new connection request from %s", ipaddr);
+                if (idle_secs >= 0) {
+                    logger_log(raop->logger, LOGGER_WARNING, "rejecting new connection request from %s: its existing "
+                               "connection is alive (last heard %d seconds ago, hand-over after %d)",
+                               ipaddr, idle_secs, RAOP_HANDOVER_IDLE_SECS);
+                } else {
+                    logger_log(raop->logger, LOGGER_WARNING, "rejecting new connection request from %s", ipaddr);
+                }
                 *response = http_response_create();
                 http_response_init(*response, protocol, 409, "Conflict: Server is connected to another client");
                 goto finish;
@@ -246,6 +311,19 @@ conn_request(void *ptr, http_request_t *request, http_response_t **response) {
         logger_log(raop->logger, LOGGER_DEBUG, "New connection %p identified as Connection type RAOP", ptr);
         httpd_set_connection_type(raop->httpd, ptr, CONNECTION_TYPE_RAOP);
         conn->connection_type = CONNECTION_TYPE_RAOP;
+
+        /* now it is a client connection: tell the host (which counts it) and
+           report the server-side address it arrived on */
+        conn->host_conn_init = true;
+        if (raop->callbacks.conn_init) {
+            raop->callbacks.conn_init(raop->callbacks.cls);
+        }
+        if (raop->callbacks.conn_transport) {
+            char local_address[40] = { '\0' };
+            utils_ipaddress_to_string(conn->locallen, conn->local, conn->zone_id, local_address,
+                                      (int) sizeof(local_address));
+            raop->callbacks.conn_transport(raop->callbacks.cls, local_address);
+        }
     }
 
     /* this response code and message  will be modified by the handler if necessary */
@@ -425,7 +503,8 @@ conn_destroy(void *ptr) {
     raop_t *raop = conn->raop;
     logger_log(raop->logger, LOGGER_DEBUG, "Destroying connection");
 
-    if (raop->callbacks.conn_destroy) {
+    /* only for a connection the host was told about (see conn_request) */
+    if (conn->host_conn_init && raop->callbacks.conn_destroy) {
         raop->callbacks.conn_destroy(raop->callbacks.cls);
     }
 

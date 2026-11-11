@@ -1,4 +1,4 @@
-/**
+﻿/**
  *  Copyright (C) 2018  Juho Vähä-Herttua
  *
  *  This library is free software; you can redistribute it and/or

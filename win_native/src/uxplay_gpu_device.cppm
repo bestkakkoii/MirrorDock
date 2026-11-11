@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 // D3D11 device bound to the GPU that scans out the monitor.
 //
 // On this Optimus laptop the monitor is driven by the Intel HD Graphics 530
@@ -6,6 +6,10 @@
 // that owns the output keeps decoded NV12 surfaces zero-copy all the way to
 // the swap chain (no cross-adapter copies over PCIe) and lets DXGI use
 // independent flip for the borderless fullscreen window.
+//
+// The device is also where presenter and decoder meet: it reports device
+// loss (device_removed_reason) and carries the number of decoded pictures the
+// presenter may keep alive, which the decoder uses to size its surface pool.
 module;
 
 #define WIN32_LEAN_AND_MEAN
@@ -86,6 +90,18 @@ export namespace uxplay
         // Guards every use of the immediate context, shared with FFmpeg's
         // D3D11VA lock callbacks so decode and present never interleave.
         [[nodiscard]] std::recursive_mutex &context_mutex();
+
+        // ID3D11Device::GetDeviceRemovedReason() as text with its HRESULT once
+        // the device was removed or reset (driver update, GPU reset, adapter
+        // gone); nothing while the device is healthy.  Any thread.
+        [[nodiscard]] std::optional<std::string> device_removed_reason() const;
+
+        // Decoded pictures the presenter may keep alive at once (its queue
+        // limit plus the displayed and in-flight ones).  The presenter sets it
+        // when its mode changes; the video decoder reads it when it creates a
+        // surface pool and never hands out more pictures than that.  Any thread.
+        void set_presentation_hold(unsigned int pictures);
+        [[nodiscard]] unsigned int presentation_hold() const;
 
         // Primary desktop monitor: geometry, DWM composition rate, targets.
         [[nodiscard]] static outcome<display_mode_info> primary_display_mode();

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 module;
 
 #define WIN32_LEAN_AND_MEAN
@@ -29,8 +29,48 @@ namespace uxplay
 {
     namespace
     {
-        constexpr std::size_t max_queued_frames_per_source = 8;
+        // Pictures alive beside the queue at any moment: the displayed one,
+        // one on its way in from the decoder and one being replaced or evicted.
+        constexpr unsigned int pictures_beside_queue = 3;
+        constexpr std::int64_t error_report_interval_ns = 10 * clock::ns_per_second;
+        constexpr std::size_t most_interval_samples = 4096;
+        constexpr std::int64_t no_deadline = std::numeric_limits<std::int64_t>::max();
+        // longest wait for the previous picture to be flipped (a hidden window never flips)
+        constexpr DWORD flip_wait_ms = 100;
 
+        struct presentation_policy
+        {
+            std::size_t queue_limit;
+            // in-order presentation: a due picture that is more than this many
+            // refresh periods late gives way to a successor that is due too
+            int late_periods;
+            bool newest_due_wins;
+            bool bilinear_only;
+        };
+
+        constexpr presentation_policy policy_for(performance_mode mode)
+        {
+            switch (mode)
+            {
+            case performance_mode::quality:
+                return presentation_policy{13, 2, false, false};
+            case performance_mode::performance:
+                return presentation_policy{5, 0, true, true};
+            case performance_mode::balanced:
+                break;
+            }
+            return presentation_policy{8, 1, false, false};
+        }
+
+        constexpr unsigned int presentation_hold_for(performance_mode mode)
+        {
+            return static_cast<unsigned int>(policy_for(mode).queue_limit) + pictures_beside_queue;
+        }
+
+        // a crop that leaves less than this in either direction is not applied
+        constexpr int smallest_crop = 16;
+
+        // layout of cbuffer present_constants in video_present.hlsl
         struct alignas(16) present_constants
         {
             float color_row0[4];
@@ -38,10 +78,13 @@ namespace uxplay
             float color_row2[4];
             float luma_size[2];
             float visible_scale[2];
+            float visible_origin[2];
             float filter_mode;
-            float padding[3];
+            float padding;
+            float luma_bounds[4];
+            float chroma_bounds[4];
         };
-        static_assert(sizeof(present_constants) % 16 == 0);
+        static_assert(sizeof(present_constants) == 7 * 16);
 
         struct pending_frame
         {
@@ -52,8 +95,84 @@ namespace uxplay
         struct source_slot
         {
             std::deque<pending_frame> queue;
-            std::unique_ptr<decoded_frame> current;
+            // shared with the render thread while it draws the picture
+            std::shared_ptr<decoded_frame> current;
             bool active = false;
+            // The part of the pictures to show (empty: all of it).  It belongs
+            // to pictures of crop_width x crop_height; 0 x 0 means it was asked
+            // for before any picture existed and is checked against the first.
+            picture_region crop;
+            int crop_width = 0;
+            int crop_height = 0;
+
+            void drop_crop()
+            {
+                crop = {};
+                crop_width = 0;
+                crop_height = 0;
+            }
+        };
+
+        // `wanted` applied to a width x height picture: clamped to the picture,
+        // edges moved inwards to even positions (4:2:0 chroma).  An empty
+        // result means the whole picture; no result means that less than
+        // smallest_crop would remain in one direction.
+        std::optional<picture_region> fit_region(picture_region const &wanted, int width, int height)
+        {
+            if (wanted.empty())
+            {
+                return picture_region{};
+            }
+            std::int64_t const wanted_right = std::int64_t{wanted.left} + wanted.width;
+            std::int64_t const wanted_bottom = std::int64_t{wanted.top} + wanted.height;
+            int left = std::clamp(wanted.left, 0, width);
+            int top = std::clamp(wanted.top, 0, height);
+            int right = static_cast<int>(std::clamp<std::int64_t>(wanted_right, left, width));
+            int bottom = static_cast<int>(std::clamp<std::int64_t>(wanted_bottom, top, height));
+            if (left == 0 && top == 0 && right == width && bottom == height)
+            {
+                return picture_region{};
+            }
+            left += left & 1;
+            top += top & 1;
+            right -= right & 1;
+            bottom -= bottom & 1;
+            if (right - left < smallest_crop || bottom - top < smallest_crop)
+            {
+                return std::nullopt;
+            }
+            return picture_region{left, top, right - left, bottom - top};
+        }
+
+        std::string crop_complaint(picture_region const &wanted, int width, int height)
+        {
+            return std::format("crop {}x{} at ({}, {}) leaves less than {}x{} of a {}x{} picture: the whole picture "
+                               "is shown",
+                               wanted.width, wanted.height, wanted.left, wanted.top, smallest_crop, smallest_crop,
+                               width, height);
+        }
+
+        struct owned_handle
+        {
+            HANDLE value = nullptr;
+
+            owned_handle() = default;
+            owned_handle(owned_handle const &) = delete;
+            owned_handle &operator=(owned_handle const &) = delete;
+
+            ~owned_handle()
+            {
+                reset();
+            }
+
+            void reset(HANDLE replacement = nullptr)
+            {
+                if (value != nullptr)
+                {
+                    CloseHandle(value);
+                }
+                value = replacement;
+            }
         };
 
         // YCbCr (8-bit code values normalized to [0,1]) to RGB.
@@ -128,11 +247,15 @@ namespace uxplay
         gpu_device *gpu = nullptr;
         HWND window = nullptr;
         std::atomic<std::int64_t> refresh_period{16'666'667};
+        std::atomic<performance_mode> mode{performance_mode::balanced};
+        std::atomic<bool> device_lost{false};
         display_change_listener listener;
+        // auto-reset: something the render thread waits for has changed
+        owned_handle wake_event;
 
         // GPU objects (render thread only, under gpu->context_mutex())
         ComPtr<IDXGISwapChain2> swap_chain;
-        HANDLE frame_latency_waitable = nullptr;
+        owned_handle frame_latency_waitable;
         ComPtr<ID3D11VertexShader> vertex_shader;
         ComPtr<ID3D11PixelShader> pixel_shader_nv12;
         ComPtr<ID3D11PixelShader> pixel_shader_i420;
@@ -142,40 +265,58 @@ namespace uxplay
         int swap_width = 0;
         int swap_height = 0;
 
-        // hardware frame views cached per (texture, slice)
+        // per stream: hardware frame views cached per slice of one decoder texture array
         ID3D11Texture2D *cached_texture = nullptr;
         std::map<UINT, plane_views> slice_views;
-        // copy target when decoder textures are not shader-readable
+        // per stream: copy target when decoder textures are not shader-readable
         ComPtr<ID3D11Texture2D> copy_texture;
         plane_views copy_views;
-        // upload targets for software-decoded frames
+        // per stream: upload targets for software-decoded frames
         std::array<ComPtr<ID3D11Texture2D>, 3> upload_textures;
         plane_views upload_views;
         int upload_width = 0;
         int upload_height = 0;
         frame_memory upload_kind = frame_memory::cpu_yuv420p;
 
-        // shared state (guarded by mutex)
+        // render thread only
+        std::optional<presented_stream> announced;
+        bool occluded = false; // the last Present reported an invisible window
+        clock::interval_gate render_error_gate{error_report_interval_ns};
+        std::string last_render_error;
+
+        // shared state (guarded by mutex; never held during GPU work)
         mutable std::mutex mutex;
-        std::condition_variable wake;
         std::array<source_slot, media_source_count> slots;
         bool redraw_requested = false;
+        bool release_requested = false; // free the per-stream GPU objects once nothing is displayed
         int requested_width = 0;
         int requested_height = 0;
         bool stopping = false;
         presenter_statistics stats;
-        std::optional<presented_stream> announced;
+        std::vector<std::int64_t> interval_lateness;
+        std::size_t interval_peak_depth = 0;
+        std::int64_t interval_wake_overshoot = 0;
+        int interval_stream_width = 0;
+        int interval_stream_height = 0;
 
         std::thread render_thread;
 
+        void wake() const;
         status create_pipeline();
         status ensure_swap_chain(int width, int height);
+        void release_stream_objects();
         outcome<plane_views const *> views_for(decoded_frame const &frame);
         status upload(decoded_frame const &frame);
-        void draw(decoded_frame const *frame);
+        status draw(decoded_frame const &frame, picture_region const &visible, bool bilinear_only);
+        void report_render_failure(failure const &problem);
         void render_loop();
         [[nodiscard]] std::optional<media_source> displayed_source() const;
     };
+
+    void video_presenter::state::wake() const
+    {
+        SetEvent(wake_event.value);
+    }
 
     status video_presenter::state::create_pipeline()
     {
@@ -228,6 +369,8 @@ namespace uxplay
         {
             return {};
         }
+        // nothing may refer to the back buffers while they are replaced
+        gpu->context()->OMSetRenderTargets(0, nullptr, nullptr);
         back_buffer_view.Reset();
         if (!swap_chain)
         {
@@ -250,14 +393,25 @@ namespace uxplay
                 return std::unexpected(make_hresult_failure("CreateSwapChainForHwnd", result));
             }
             // Alt+Enter is handled by the window (borderless toggle), never DXGI.
-            gpu->factory()->MakeWindowAssociation(window, DXGI_MWA_NO_ALT_ENTER | DXGI_MWA_NO_WINDOW_CHANGES);
-            result = created.As(&swap_chain);
+            result = gpu->factory()->MakeWindowAssociation(window, DXGI_MWA_NO_ALT_ENTER | DXGI_MWA_NO_WINDOW_CHANGES);
+            if (FAILED(result))
+            {
+                log::warning("{}", make_hresult_failure("IDXGIFactory::MakeWindowAssociation", result).describe());
+            }
+            ComPtr<IDXGISwapChain2> waitable_chain;
+            result = created.As(&waitable_chain);
             if (FAILED(result))
             {
                 return std::unexpected(make_hresult_failure("IDXGISwapChain2 query", result));
             }
-            swap_chain->SetMaximumFrameLatency(1);
-            frame_latency_waitable = swap_chain->GetFrameLatencyWaitableObject();
+            result = waitable_chain->SetMaximumFrameLatency(1);
+            if (FAILED(result))
+            {
+                return std::unexpected(make_hresult_failure("IDXGISwapChain2::SetMaximumFrameLatency", result));
+            }
+            swap_chain = std::move(waitable_chain);
+            frame_latency_waitable.reset(swap_chain->GetFrameLatencyWaitableObject());
+            occluded = false;
         }
         else
         {
@@ -272,6 +426,43 @@ namespace uxplay
         swap_width = width;
         swap_height = height;
         return {};
+    }
+
+    // Everything that exists only while a stream is shown.  The views are the
+    // last presenter objects that refer to decoder textures.
+    void video_presenter::state::release_stream_objects()
+    {
+        bool const usable = !device_lost.load(std::memory_order_relaxed);
+        if (usable)
+        {
+            // drop every binding (draw() sets the whole pipeline state anew):
+            // a bound back buffer would keep the swap chain alive
+            gpu->context()->ClearState();
+        }
+        slice_views.clear();
+        cached_texture = nullptr;
+        copy_views = {};
+        copy_texture.Reset();
+        upload_views = {};
+        for (auto &texture : upload_textures)
+        {
+            texture.Reset();
+        }
+        upload_width = 0;
+        upload_height = 0;
+        back_buffer_view.Reset();
+        frame_latency_waitable.reset();
+        swap_chain.Reset();
+        swap_width = 0;
+        swap_height = 0;
+        occluded = false;
+        if (usable)
+        {
+            // D3D11 destroys released objects lazily and nothing else flushes
+            // while no stream is shown; the window also cannot get its next
+            // flip-model swap chain before the old one is really gone
+            gpu->context()->Flush();
+        }
     }
 
     status video_presenter::state::upload(decoded_frame const &frame)
@@ -289,6 +480,8 @@ namespace uxplay
             {
                 texture.Reset();
             }
+            upload_width = 0;
+            upload_height = 0;
             for (int plane = 0; plane < plane_count; ++plane)
             {
                 bool const chroma = plane > 0;
@@ -302,12 +495,13 @@ namespace uxplay
                 description.Usage = D3D11_USAGE_DYNAMIC;
                 description.BindFlags = D3D11_BIND_SHADER_RESOURCE;
                 description.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-                HRESULT const result = device->CreateTexture2D(&description, nullptr, &upload_textures[plane]);
+                auto &target = upload_textures[static_cast<std::size_t>(plane)];
+                HRESULT const result = device->CreateTexture2D(&description, nullptr, &target);
                 if (FAILED(result))
                 {
                     return std::unexpected(make_hresult_failure("CreateTexture2D upload plane", result));
                 }
-                auto view = make_slice_view(device, upload_textures[plane].Get(), description.Format, 0);
+                auto view = make_slice_view(device, target.Get(), description.Format, 0);
                 if (!view)
                 {
                     return std::unexpected(view.error());
@@ -324,8 +518,9 @@ namespace uxplay
             bool const chroma = plane > 0;
             int const rows = chroma ? (height + 1) / 2 : height;
             int const row_bytes = chroma ? (nv12 ? ((width + 1) / 2) * 2 : (width + 1) / 2) : width;
+            ID3D11Texture2D *const target = upload_textures[static_cast<std::size_t>(plane)].Get();
             D3D11_MAPPED_SUBRESOURCE mapped{};
-            HRESULT const result = context->Map(upload_textures[plane].Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+            HRESULT const result = context->Map(target, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
             if (FAILED(result))
             {
                 return std::unexpected(make_hresult_failure("ID3D11DeviceContext::Map upload", result));
@@ -338,7 +533,7 @@ namespace uxplay
                             source + static_cast<std::ptrdiff_t>(row) * frame.stride(plane),
                             static_cast<std::size_t>(row_bytes));
             }
-            context->Unmap(upload_textures[plane].Get(), 0);
+            context->Unmap(target, 0);
         }
         return {};
     }
@@ -379,6 +574,7 @@ namespace uxplay
                 copy_description.BindFlags = D3D11_BIND_SHADER_RESOURCE;
                 copy_description.MiscFlags = 0;
                 copy_description.Usage = D3D11_USAGE_DEFAULT;
+                copy_views = {};
                 copy_texture.Reset();
                 HRESULT const result = device->CreateTexture2D(&copy_description, nullptr, &copy_texture);
                 if (FAILED(result))
@@ -389,6 +585,7 @@ namespace uxplay
                 auto chroma = make_slice_view(device, copy_texture.Get(), chroma_format, 0);
                 if (!luma || !chroma)
                 {
+                    copy_texture.Reset();
                     return std::unexpected(!luma ? luma.error() : chroma.error());
                 }
                 copy_views = plane_views{std::move(*luma), std::move(*chroma), nullptr};
@@ -401,6 +598,7 @@ namespace uxplay
 
         if (texture != cached_texture)
         {
+            // a new decoder pool (stream start, rotation): the old views go
             slice_views.clear();
             cached_texture = texture;
         }
@@ -419,41 +617,94 @@ namespace uxplay
         return &inserted.first->second;
     }
 
-    void video_presenter::state::draw(decoded_frame const *frame)
+    // Draws the part `visible` of the picture (never empty, inside the picture)
+    // letterboxed into the client area.  Decoder slices, the copy texture and
+    // software uploads all go through here: `visible` is in picture pixels,
+    // which are the texels of each of those textures from their top-left corner.
+    status video_presenter::state::draw(decoded_frame const &frame, picture_region const &visible,
+                                        bool bilinear_only)
     {
         ID3D11DeviceContext *context = gpu->context();
         if (!back_buffer_view)
         {
             ComPtr<ID3D11Texture2D> back_buffer;
-            HRESULT const result = swap_chain->GetBuffer(0, IID_PPV_ARGS(&back_buffer));
+            HRESULT result = swap_chain->GetBuffer(0, IID_PPV_ARGS(&back_buffer));
             if (FAILED(result))
             {
-                log::error("{}", make_hresult_failure("IDXGISwapChain::GetBuffer", result).describe());
-                return;
+                return std::unexpected(make_hresult_failure("IDXGISwapChain::GetBuffer", result));
             }
-            gpu->device()->CreateRenderTargetView(back_buffer.Get(), nullptr, &back_buffer_view);
+            result = gpu->device()->CreateRenderTargetView(back_buffer.Get(), nullptr, &back_buffer_view);
+            if (FAILED(result) || !back_buffer_view)
+            {
+                back_buffer_view.Reset();
+                return std::unexpected(make_hresult_failure("CreateRenderTargetView", result));
+            }
         }
+
+        auto views = views_for(frame);
+        if (!views)
+        {
+            return std::unexpected(views.error());
+        }
+
+        ComPtr<ID3D11Resource> luma_resource;
+        (*views)->luma->GetResource(&luma_resource);
+        ComPtr<ID3D11Texture2D> luma_texture;
+        if (HRESULT const result = luma_resource.As(&luma_texture); FAILED(result))
+        {
+            return std::unexpected(make_hresult_failure("luma plane texture query", result));
+        }
+        D3D11_TEXTURE2D_DESC texture_description{};
+        luma_texture->GetDesc(&texture_description);
+
+        // aspect-correct letterbox of the visible part inside the client area:
+        // in a window of that part's aspect ratio it touches all four edges
+        double const scale = std::min(static_cast<double>(swap_width) / visible.width,
+                                      static_cast<double>(swap_height) / visible.height);
+        double const view_width = visible.width * scale;
+        double const view_height = visible.height * scale;
+
+        present_constants constants{};
+        fill_color_matrix(constants, frame.color_matrix(), frame.color_range());
+        double const texture_width = texture_description.Width;
+        double const texture_height = texture_description.Height;
+        constants.luma_size[0] = static_cast<float>(texture_width);
+        constants.luma_size[1] = static_cast<float>(texture_height);
+        constants.visible_origin[0] = static_cast<float>(visible.left / texture_width);
+        constants.visible_origin[1] = static_cast<float>(visible.top / texture_height);
+        constants.visible_scale[0] = static_cast<float>(visible.width / texture_width);
+        constants.visible_scale[1] = static_cast<float>(visible.height / texture_height);
+        // 0 bilinear, 1 Catmull-Rom (enlarging), 2 four-tap supersampling (shrinking)
+        constants.filter_mode = bilinear_only ? 0.0F : (scale >= 1.02 ? 1.0F : (scale <= 0.98 ? 2.0F : 0.0F));
+        // Every fetch is clamped to the centres of the outermost texels of the
+        // visible part, so no filter tap reads what lies beside it (the bars
+        // that were cut off, or the padding of a decoder surface).
+        int const right = visible.left + visible.width;
+        int const bottom = visible.top + visible.height;
+        constants.luma_bounds[0] = static_cast<float>((visible.left + 0.5) / texture_width);
+        constants.luma_bounds[1] = static_cast<float>((visible.top + 0.5) / texture_height);
+        constants.luma_bounds[2] = static_cast<float>((right - 0.5) / texture_width);
+        constants.luma_bounds[3] = static_cast<float>((bottom - 0.5) / texture_height);
+        // chroma planes have half the size (rounded up for odd software pictures)
+        double const chroma_width = (texture_description.Width + 1) / 2;
+        double const chroma_height = (texture_description.Height + 1) / 2;
+        constants.chroma_bounds[0] = static_cast<float>((visible.left / 2 + 0.5) / chroma_width);
+        constants.chroma_bounds[1] = static_cast<float>((visible.top / 2 + 0.5) / chroma_height);
+        constants.chroma_bounds[2] = static_cast<float>(((right + 1) / 2 - 0.5) / chroma_width);
+        constants.chroma_bounds[3] = static_cast<float>(((bottom + 1) / 2 - 0.5) / chroma_height);
+        D3D11_MAPPED_SUBRESOURCE mapped{};
+        if (HRESULT const result = context->Map(constant_buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+            FAILED(result))
+        {
+            return std::unexpected(make_hresult_failure("ID3D11DeviceContext::Map constants", result));
+        }
+        std::memcpy(mapped.pData, &constants, sizeof(constants));
+        context->Unmap(constant_buffer.Get(), 0);
+
         float const black[4] = {0.0F, 0.0F, 0.0F, 1.0F};
         context->ClearRenderTargetView(back_buffer_view.Get(), black);
         ID3D11RenderTargetView *targets[] = {back_buffer_view.Get()};
         context->OMSetRenderTargets(1, targets, nullptr);
-        if (frame == nullptr)
-        {
-            return;
-        }
-
-        auto views = views_for(*frame);
-        if (!views)
-        {
-            log::error("video frame views: {}", views.error().describe());
-            return;
-        }
-
-        // aspect-correct letterbox inside the client area
-        double const scale = std::min(static_cast<double>(swap_width) / frame->width(),
-                                      static_cast<double>(swap_height) / frame->height());
-        double const view_width = frame->width() * scale;
-        double const view_height = frame->height() * scale;
         D3D11_VIEWPORT viewport{};
         viewport.TopLeftX = static_cast<float>(std::floor((swap_width - view_width) / 2.0));
         viewport.TopLeftY = static_cast<float>(std::floor((swap_height - view_height) / 2.0));
@@ -462,29 +713,7 @@ namespace uxplay
         viewport.MaxDepth = 1.0F;
         context->RSSetViewports(1, &viewport);
 
-        ComPtr<ID3D11Resource> luma_resource;
-        (*views)->luma->GetResource(&luma_resource);
-        ComPtr<ID3D11Texture2D> luma_texture;
-        luma_resource.As(&luma_texture);
-        D3D11_TEXTURE2D_DESC texture_description{};
-        luma_texture->GetDesc(&texture_description);
-
-        present_constants constants{};
-        fill_color_matrix(constants, frame->color_matrix(), frame->color_range());
-        constants.luma_size[0] = static_cast<float>(texture_description.Width);
-        constants.luma_size[1] = static_cast<float>(texture_description.Height);
-        constants.visible_scale[0] = static_cast<float>(frame->width()) / static_cast<float>(texture_description.Width);
-        constants.visible_scale[1] =
-            static_cast<float>(frame->height()) / static_cast<float>(texture_description.Height);
-        constants.filter_mode = scale >= 1.02 ? 1.0F : (scale <= 0.98 ? 2.0F : 0.0F);
-        D3D11_MAPPED_SUBRESOURCE mapped{};
-        if (SUCCEEDED(context->Map(constant_buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
-        {
-            std::memcpy(mapped.pData, &constants, sizeof(constants));
-            context->Unmap(constant_buffer.Get(), 0);
-        }
-
-        bool const three_planes = frame->memory() == frame_memory::cpu_yuv420p;
+        bool const three_planes = frame.memory() == frame_memory::cpu_yuv420p;
         ID3D11ShaderResourceView *resources[3] = {(*views)->luma.Get(), (*views)->chroma.Get(),
                                                   (*views)->chroma_second.Get()};
         ID3D11Buffer *buffers[] = {constant_buffer.Get()};
@@ -499,6 +728,36 @@ namespace uxplay
         context->Draw(3, 0);
         ID3D11ShaderResourceView *cleared[3] = {nullptr, nullptr, nullptr};
         context->PSSetShaderResources(0, 3, cleared);
+        return {};
+    }
+
+    // A failed GPU call.  Device loss is reported once and ends all GPU work;
+    // anything else may repeat every frame, so it is logged the first time
+    // and then as a count.
+    void video_presenter::state::report_render_failure(failure const &problem)
+    {
+        if (std::optional<std::string> const reason = gpu->device_removed_reason(); reason)
+        {
+            if (!device_lost.exchange(true))
+            {
+                log::error("D3D11 device lost: {}; noticed when {}; video output has stopped", *reason,
+                           problem.describe());
+            }
+            return;
+        }
+        last_render_error = problem.describe();
+        if (std::optional<std::uint64_t> const earlier = render_error_gate.pass(clock::now_ns()); earlier)
+        {
+            if (*earlier == 0)
+            {
+                log::error("video presentation: {}", last_render_error);
+            }
+            else
+            {
+                log::error("video presentation: {} ({} more failures since the last report)", last_render_error,
+                           *earlier);
+            }
+        }
     }
 
     std::optional<media_source> video_presenter::state::displayed_source() const
@@ -525,120 +784,239 @@ namespace uxplay
     void video_presenter::state::render_loop()
     {
         system_tuning::mmcss_scope const mmcss{L"Playback"};
+        clock::precise_waiter waiter;
+        if (!waiter.high_resolution())
+        {
+            log::warning("video pacing: this Windows version has no high-resolution timers, frame wake-ups follow "
+                         "the system timer tick");
+        }
         double lateness_average = 0.0;
+        std::int64_t wake_overshoot = 0; // worst since it was last added to the interval figures
 
         for (;;)
         {
-            std::unique_lock lock{mutex};
-            // recomputed each cycle so a monitor/refresh change takes effect live
-            std::int64_t const lead = refresh_period.load(std::memory_order_relaxed) / 2;
-            // wait until a frame is due, a redraw is needed, or we stop
-            for (;;)
+            // ---- sleep until a picture is due, a redraw or release is wanted, or we stop
+            std::int64_t deadline = no_deadline;
+            bool work_pending = false;
+            bool displayable = false;
             {
+                std::scoped_lock lock{mutex};
                 if (stopping)
                 {
                     return;
                 }
-                std::optional<media_source> const shown = displayed_source();
-                bool due = false;
-                std::int64_t next_due = std::numeric_limits<std::int64_t>::max();
-                if (shown)
+                work_pending = redraw_requested || release_requested;
+                if (std::optional<media_source> const shown = displayed_source(); shown)
                 {
+                    displayable = true;
                     source_slot const &slot = slots[source_index(*shown)];
                     if (!slot.queue.empty())
                     {
-                        next_due = slot.queue.front().present_time_ns - lead;
-                        due = next_due <= clock::now_ns();
+                        // recomputed each cycle so a monitor/refresh change takes effect live
+                        deadline = slot.queue.front().present_time_ns -
+                                   refresh_period.load(std::memory_order_relaxed) / 2;
                     }
                 }
-                if (due || redraw_requested)
-                {
-                    break;
-                }
-                if (next_due == std::numeric_limits<std::int64_t>::max())
-                {
-                    wake.wait(lock);
-                }
-                else
-                {
-                    wake.wait_for(lock, std::chrono::nanoseconds{std::max<std::int64_t>(next_due - clock::now_ns(), 0)});
-                }
             }
-            lock.unlock();
-
-            // the previous frame must have been flipped before we render the next
-            if (frame_latency_waitable != nullptr)
+            if (!work_pending && deadline > clock::now_ns())
             {
-                WaitForSingleObjectEx(frame_latency_waitable, 100, TRUE);
+                if (deadline == no_deadline)
+                {
+                    if (WaitForSingleObject(wake_event.value, INFINITE) == WAIT_FAILED)
+                    {
+                        report_render_failure(make_win32_failure("WaitForSingleObject (render wake)", GetLastError()));
+                        Sleep(10);
+                    }
+                }
+                else if (!waiter.wait_until(wake_event.value, deadline))
+                {
+                    // the timer ended the wait: how late did the thread get to run?
+                    wake_overshoot = std::max(wake_overshoot, clock::now_ns() - deadline);
+                }
+                continue; // whatever woke us, look at the state again
             }
 
-            lock.lock();
-            if (stopping)
+            // ---- the previous picture must have been flipped before the next is rendered
+            if (displayable && frame_latency_waitable.value != nullptr && !device_lost.load(std::memory_order_relaxed))
             {
-                return;
+                WaitForSingleObjectEx(frame_latency_waitable.value, occluded ? DWORD{0} : flip_wait_ms, FALSE);
             }
-            std::int64_t const now = clock::now_ns();
-            std::optional<media_source> const shown = displayed_source();
-            decoded_frame const *to_draw = nullptr;
+
+            // ---- choose what to show (queue lock only)
+            presentation_policy const policy = policy_for(mode.load(std::memory_order_relaxed));
+            std::shared_ptr<decoded_frame> to_draw;
+            std::shared_ptr<decoded_frame> replaced;
+            std::vector<std::unique_ptr<decoded_frame>> superseded;
             std::optional<presented_stream> stream;
-            if (shown)
+            picture_region visible;                  // the part of to_draw that is shown
+            std::optional<std::string> crop_warning; // logged after the queue lock
+            int width = 0;
+            int height = 0;
+            bool release_now = false;
             {
-                source_slot &slot = slots[source_index(*shown)];
-                // newest due frame wins; older due frames are dropped
-                std::optional<pending_frame> chosen;
-                while (!slot.queue.empty() && slot.queue.front().present_time_ns - lead <= now)
+                std::scoped_lock lock{mutex};
+                if (stopping)
                 {
+                    return;
+                }
+                std::int64_t const now = clock::now_ns();
+                std::int64_t const period = refresh_period.load(std::memory_order_relaxed);
+                std::int64_t const lead = period / 2;
+                std::optional<media_source> const shown = displayed_source();
+                if (shown)
+                {
+                    source_slot &slot = slots[source_index(*shown)];
+                    auto const due = [now, lead](pending_frame const &queued)
+                    {
+                        return queued.present_time_ns - lead <= now;
+                    };
+                    std::optional<pending_frame> chosen;
+                    if (policy.newest_due_wins)
+                    {
+                        while (!slot.queue.empty() && due(slot.queue.front()))
+                        {
+                            if (chosen)
+                            {
+                                superseded.push_back(std::move(chosen->frame));
+                            }
+                            chosen = std::move(slot.queue.front());
+                            slot.queue.pop_front();
+                        }
+                    }
+                    else
+                    {
+                        // in order: a picture that is too late gives way, but only
+                        // to a successor that can be shown right now
+                        std::int64_t const tolerance = policy.late_periods * period;
+                        while (slot.queue.size() >= 2 && due(slot.queue[1]) &&
+                               now - slot.queue.front().present_time_ns > tolerance)
+                        {
+                            superseded.push_back(std::move(slot.queue.front().frame));
+                            slot.queue.pop_front();
+                        }
+                        if (!slot.queue.empty() && due(slot.queue.front()))
+                        {
+                            chosen = std::move(slot.queue.front());
+                            slot.queue.pop_front();
+                        }
+                    }
                     if (chosen)
                     {
-                        ++stats.dropped;
+                        std::int64_t const lateness = now - chosen->present_time_ns;
+                        lateness_average = 0.95 * lateness_average + 0.05 * static_cast<double>(lateness);
+                        if (interval_lateness.size() < most_interval_samples)
+                        {
+                            interval_lateness.push_back(lateness);
+                        }
+                        replaced = std::move(slot.current);
+                        slot.current = std::move(chosen->frame);
+                        // a crop belongs to pictures of one size
+                        int const picture_width = slot.current->width();
+                        int const picture_height = slot.current->height();
+                        if (slot.crop.empty())
+                        {
+                            slot.drop_crop();
+                        }
+                        else if (slot.crop_width == 0 && slot.crop_height == 0)
+                        {
+                            // asked for before any picture existed: this is the first
+                            std::optional<picture_region> const fitted =
+                                fit_region(slot.crop, picture_width, picture_height);
+                            if (!fitted)
+                            {
+                                crop_warning = crop_complaint(slot.crop, picture_width, picture_height);
+                            }
+                            slot.crop = fitted.value_or(picture_region{});
+                            slot.crop_width = picture_width;
+                            slot.crop_height = picture_height;
+                        }
+                        else if (slot.crop_width != picture_width || slot.crop_height != picture_height)
+                        {
+                            slot.drop_crop();
+                        }
                     }
-                    chosen = std::move(slot.queue.front());
-                    slot.queue.pop_front();
+                    if (slot.current)
+                    {
+                        to_draw = slot.current;
+                        visible = slot.crop.empty() ? picture_region{0, 0, to_draw->width(), to_draw->height()}
+                                                    : slot.crop;
+                        stream = presented_stream{*shown, to_draw->width(), to_draw->height(), visible};
+                    }
                 }
-                if (chosen)
-                {
-                    lateness_average = 0.95 * lateness_average + 0.05 * static_cast<double>(now - chosen->present_time_ns);
-                    slot.current = std::move(chosen->frame);
-                }
-                if (slot.current)
-                {
-                    to_draw = slot.current.get();
-                    stream = presented_stream{*shown, to_draw->width(), to_draw->height()};
-                }
+                stats.dropped_late += superseded.size();
+                stats.dropped = stats.dropped_late + stats.dropped_overflow;
+                stats.mean_lateness_ns = static_cast<std::int64_t>(lateness_average);
+                interval_wake_overshoot = std::max(interval_wake_overshoot, std::exchange(wake_overshoot, 0));
+                width = requested_width;
+                height = requested_height;
+                redraw_requested = false;
+                release_now = std::exchange(release_requested, false) && !shown;
             }
-            int const width = requested_width;
-            int const height = requested_height;
-            redraw_requested = false;
-            bool const announce = stream != announced;
-            announced = stream;
+            // pictures that will not be shown go back to the decoder at once
+            superseded.clear();
+            replaced.reset();
+            if (crop_warning)
+            {
+                log::warning("video presentation: {}", *crop_warning);
+            }
 
+            // ---- draw and present (GPU lock only)
+            bool presented = false;
+            std::optional<failure> problem;
+            if (to_draw && !device_lost.load(std::memory_order_relaxed))
             {
                 std::scoped_lock gpu_lock{gpu->context_mutex()};
-                status const ready = ensure_swap_chain(width, height);
-                if (!ready)
+                status rendered = ensure_swap_chain(width, height);
+                if (rendered)
                 {
-                    log::error("{}", ready.error().describe());
+                    rendered = draw(*to_draw, visible, policy.bilinear_only);
                 }
-                else
+                if (rendered)
                 {
-                    draw(to_draw);
                     HRESULT const result = swap_chain->Present(1, 0);
                     if (FAILED(result))
                     {
-                        log::error("{}", make_hresult_failure("IDXGISwapChain::Present", result).describe());
+                        rendered = std::unexpected(make_hresult_failure("IDXGISwapChain::Present", result));
                     }
-                    else if (to_draw != nullptr)
+                    else
                     {
-                        ++stats.presented;
+                        presented = true;
+                        occluded = result == DXGI_STATUS_OCCLUDED;
                     }
                 }
+                if (!rendered)
+                {
+                    problem = rendered.error();
+                }
             }
-            stats.mean_lateness_ns = static_cast<std::int64_t>(lateness_average);
-            lock.unlock();
+            if (problem)
+            {
+                report_render_failure(*problem);
+            }
+            else if (std::uint64_t const overdue = render_error_gate.take_overdue(clock::now_ns()); overdue > 0)
+            {
+                log::error("video presentation: {} more failures, most recent: {}", overdue, last_render_error);
+            }
+            if (presented)
+            {
+                std::scoped_lock lock{mutex};
+                ++stats.presented;
+                interval_stream_width = to_draw->width();
+                interval_stream_height = to_draw->height();
+            }
+            to_draw.reset();
 
+            // ---- tell the owner what is on screen, then free what an ended stream left
+            bool const announce = stream != announced;
+            announced = stream;
             if (announce && listener)
             {
                 listener(stream);
+            }
+            if (release_now)
+            {
+                std::scoped_lock gpu_lock{gpu->context_mutex()};
+                release_stream_objects();
             }
         }
     }
@@ -654,16 +1032,14 @@ namespace uxplay
             std::scoped_lock lock{impl->mutex};
             impl->stopping = true;
         }
-        impl->wake.notify_all();
+        impl->wake();
         if (impl->render_thread.joinable())
         {
             impl->render_thread.join();
         }
         std::scoped_lock gpu_lock{impl->gpu->context_mutex()};
         impl->slots = {};
-        impl->slice_views.clear();
-        impl->back_buffer_view.Reset();
-        impl->swap_chain.Reset();
+        impl->release_stream_objects();
     }
 
     outcome<std::unique_ptr<video_presenter>> video_presenter::create(gpu_device &device, void *window_handle,
@@ -675,6 +1051,11 @@ namespace uxplay
         created->window = static_cast<HWND>(window_handle);
         created->refresh_period = refresh_period_ns > 0 ? refresh_period_ns : 16'666'667;
         created->listener = std::move(listener);
+        created->wake_event.reset(CreateEventW(nullptr, FALSE, FALSE, nullptr));
+        if (created->wake_event.value == nullptr)
+        {
+            return std::unexpected(make_win32_failure("CreateEventW (render wake)", GetLastError()));
+        }
         RECT client{};
         GetClientRect(created->window, &client);
         created->requested_width = std::max<int>(client.right - client.left, 1);
@@ -687,6 +1068,7 @@ namespace uxplay
                 return std::unexpected(pipeline.error());
             }
         }
+        device.set_presentation_hold(presentation_hold_for(created->mode.load()));
         state *const running = created.get();
         created->render_thread = std::thread{[running]
         {
@@ -703,12 +1085,18 @@ namespace uxplay
             impl->requested_height = std::max(client_height, 1);
             impl->redraw_requested = true;
         }
-        impl->wake.notify_all();
+        impl->wake();
     }
 
     void video_presenter::submit(media_source source, std::unique_ptr<decoded_frame> frame,
                                  std::int64_t present_time_ns)
     {
+        if (!frame)
+        {
+            return;
+        }
+        std::vector<std::unique_ptr<decoded_frame>> evicted;
+        bool head_changed = false;
         {
             std::scoped_lock lock{impl->mutex};
             source_slot &slot = impl->slots[source_index(source)];
@@ -718,36 +1106,87 @@ namespace uxplay
                                                    {
                                                        return time < queued.present_time_ns;
                                                    });
+            head_changed = position == slot.queue.begin();
             slot.queue.insert(position, pending_frame{std::move(frame), present_time_ns});
-            while (slot.queue.size() > max_queued_frames_per_source)
+            std::size_t const limit = policy_for(impl->mode.load(std::memory_order_relaxed)).queue_limit;
+            while (slot.queue.size() > limit)
             {
+                evicted.push_back(std::move(slot.queue.front().frame));
                 slot.queue.pop_front();
-                ++impl->stats.dropped;
+                ++impl->stats.dropped_overflow;
+                head_changed = true;
             }
+            impl->stats.dropped = impl->stats.dropped_late + impl->stats.dropped_overflow;
+            impl->interval_peak_depth = std::max(impl->interval_peak_depth, slot.queue.size());
         }
-        impl->wake.notify_all();
+        if (head_changed)
+        {
+            // the render thread sleeps until the head of the queue is due
+            impl->wake();
+        }
     }
 
     void video_presenter::release_source(media_source source, bool keep_last_frame)
     {
-        std::unique_ptr<decoded_frame> released;
+        std::shared_ptr<decoded_frame> released;
         std::deque<pending_frame> released_queue;
         {
             std::scoped_lock lock{impl->mutex};
             source_slot &slot = impl->slots[source_index(source)];
             slot.active = false;
+            slot.drop_crop(); // a kept last picture is shown whole again
             released_queue.swap(slot.queue);
             if (!keep_last_frame)
             {
                 released = std::move(slot.current);
+                impl->release_requested = true;
             }
             impl->redraw_requested = true;
         }
-        impl->wake.notify_all();
-        // decoder textures must be released under the GPU lock
+        impl->wake();
+        // decoder textures are released under the GPU lock
         std::scoped_lock gpu_lock{impl->gpu->context_mutex()};
         released.reset();
         released_queue.clear();
+    }
+
+    void video_presenter::set_crop(media_source source, picture_region region)
+    {
+        std::optional<std::string> warning;
+        {
+            std::scoped_lock lock{impl->mutex};
+            source_slot &slot = impl->slots[source_index(source)];
+            slot.drop_crop();
+            if (!region.empty())
+            {
+                if (slot.current)
+                {
+                    // the picture on screen says at once whether the region fits
+                    int const picture_width = slot.current->width();
+                    int const picture_height = slot.current->height();
+                    std::optional<picture_region> const fitted = fit_region(region, picture_width, picture_height);
+                    if (!fitted)
+                    {
+                        warning = crop_complaint(region, picture_width, picture_height);
+                    }
+                    slot.crop = fitted.value_or(picture_region{});
+                    slot.crop_width = picture_width;
+                    slot.crop_height = picture_height;
+                }
+                else
+                {
+                    // no picture yet: the render thread checks it against the first one
+                    slot.crop = region;
+                }
+            }
+            // the picture on screen is drawn again, also while the stream is still
+            impl->redraw_requested = true;
+        }
+        impl->wake();
+        if (warning)
+        {
+            log::warning("video presentation: {}", *warning);
+        }
     }
 
     std::int64_t video_presenter::refresh_period_ns() const
@@ -760,12 +1199,56 @@ namespace uxplay
         if (refresh_period_ns > 0)
         {
             impl->refresh_period.store(refresh_period_ns, std::memory_order_relaxed);
+            impl->wake(); // the due time of the waiting picture moved
         }
+    }
+
+    void video_presenter::set_performance_mode(performance_mode mode)
+    {
+        impl->mode.store(mode, std::memory_order_relaxed);
+        impl->gpu->set_presentation_hold(presentation_hold_for(mode));
+        {
+            // the picture on screen is drawn again with the mode's filter
+            std::scoped_lock lock{impl->mutex};
+            impl->redraw_requested = true;
+        }
+        impl->wake();
     }
 
     presenter_statistics video_presenter::statistics() const
     {
-        std::scoped_lock lock{impl->mutex};
-        return impl->stats;
+        presenter_statistics result;
+        {
+            std::scoped_lock lock{impl->mutex};
+            result = impl->stats;
+        }
+        result.device_lost = impl->device_lost.load(std::memory_order_relaxed);
+        return result;
+    }
+
+    presenter_interval video_presenter::take_interval()
+    {
+        presenter_interval result;
+        std::vector<std::int64_t> lateness;
+        {
+            std::scoped_lock lock{impl->mutex};
+            lateness.swap(impl->interval_lateness);
+            result.peak_queue_depth = std::exchange(impl->interval_peak_depth, 0);
+            result.worst_wake_overshoot_ns = std::exchange(impl->interval_wake_overshoot, 0);
+            result.stream_width = std::exchange(impl->interval_stream_width, 0);
+            result.stream_height = std::exchange(impl->interval_stream_height, 0);
+        }
+        if (!lateness.empty())
+        {
+            auto const percentile = [&lateness](std::size_t percent)
+            {
+                auto const rank = lateness.begin() + static_cast<std::ptrdiff_t>((lateness.size() * percent) / 100);
+                std::nth_element(lateness.begin(), rank, lateness.end());
+                return *rank;
+            };
+            result.lateness_p50_ns = percentile(50);
+            result.lateness_p95_ns = percentile(95);
+        }
+        return result;
     }
 }

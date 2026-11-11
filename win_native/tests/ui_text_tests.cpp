@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 // Tests for the interface language: Windows display language names mapped to
 // Traditional Chinese / Simplified Chinese / English, and the text lookup of
 // the selected language (the table itself is checked at compile time).

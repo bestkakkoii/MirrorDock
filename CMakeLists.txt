@@ -1,4 +1,4 @@
-cmake_minimum_required( VERSION 4.4 )
+﻿cmake_minimum_required( VERSION 4.4 )
 
 # UxPlay, Windows-native build (see README_AI.md):
 #   uxplay.cpp   program: options, AirPlay callbacks, main loop (GPL-3.0)

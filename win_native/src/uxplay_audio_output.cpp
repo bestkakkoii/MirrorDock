@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 module;
 
 #define WIN32_LEAN_AND_MEAN
@@ -35,6 +35,38 @@ namespace uxplay
         constexpr double max_gap_fill_ns = 500'000'000.0;
         constexpr std::size_t max_queued_frames = 48000 * 4;
 
+        // The stream runs only while a source has queued audio.  After
+        // idle_stop_ns without any it is stopped (no period wake-ups).  The
+        // stopped endpoint is released, which ends the audio session, after
+        // idle_release_ns when no source is in use, or after
+        // idle_release_live_ns of silence from a source that still is.
+        constexpr std::int64_t idle_stop_ns = 3 * clock::ns_per_second;
+        constexpr std::int64_t idle_release_ns = 2 * clock::ns_per_second;
+        constexpr std::int64_t idle_release_live_ns = 300 * clock::ns_per_second;
+        // a running stream is served at the latest after this time without a period event
+        constexpr DWORD period_watchdog_ms = 200;
+        // upper bound of one timed sleep, above every deadline used here (it is evaluated again afterwards)
+        constexpr std::int64_t longest_timed_wait_ms = 3'600'000;
+        // pause of a pass whose wait failed, so the thread cannot spin
+        constexpr DWORD wait_failure_pause_ms = 10;
+
+        // Back-off between attempts to open a failed endpoint: doubles while
+        // the failures continue, starts over after retry_settled_ns without one.
+        constexpr std::int64_t retry_delay_min_ns = 250 * clock::ns_per_ms;
+        constexpr std::int64_t retry_delay_max_ns = 5 * clock::ns_per_second;
+        constexpr std::int64_t retry_settled_ns = 10 * clock::ns_per_second;
+        // attempts to open an endpoint that no source is waiting for (after
+        // a start failure or an endpoint change), so format() follows the device
+        constexpr int endpoint_probe_attempts = 6;
+        // repetitions of one failure are written at most this often
+        constexpr std::int64_t failure_report_interval_ns = 10 * clock::ns_per_second;
+        // default endpoint poll, used only when endpoint notifications are unavailable
+        constexpr std::int64_t endpoint_poll_ns = 3 * clock::ns_per_second;
+
+        // failure::code of an HRESULT (see make_hresult_failure)
+        constexpr std::int64_t device_invalidated_code =
+            static_cast<std::int64_t>(static_cast<std::uint32_t>(AUDCLNT_E_DEVICE_INVALIDATED));
+
         // KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, defined locally (no ksuser.lib)
         constexpr GUID subtype_ieee_float = {0x00000003, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};
 
@@ -61,9 +93,75 @@ namespace uxplay
             return ((c3 * fraction + c2) * fraction + c1) * fraction + current;
         }
 
+        // Interleaved samples of one source in a block of memory that is
+        // allocated once: queueing and playing never touch the heap, so the
+        // lock shared by the network thread and the audio thread is held for
+        // copies only.  It has the sequence semantics of the growing queue it
+        // replaces (append at the end, drop at the front, index from the
+        // front); enqueue() keeps the size within the capacity, which is the
+        // overflow limit of that queue.
+        class sample_ring
+        {
+        public:
+            [[nodiscard]] std::size_t size() const
+            {
+                return count;
+            }
+
+            [[nodiscard]] float operator[](std::size_t index) const
+            {
+                return storage[wrapped(head + index)];
+            }
+
+            void clear()
+            {
+                head = 0;
+                count = 0;
+            }
+
+            void append(std::span<float const> samples)
+            {
+                std::span<float const> const accepted = samples.first(std::min(samples.size(), storage.size() - count));
+                std::size_t const end = wrapped(head + count);
+                std::size_t const before_wrap = std::min(accepted.size(), storage.size() - end);
+                std::ranges::copy(accepted.first(before_wrap), storage.begin() + static_cast<std::ptrdiff_t>(end));
+                std::ranges::copy(accepted.subspan(before_wrap), storage.begin());
+                count += accepted.size();
+            }
+
+            void append_silence(std::size_t sample_count)
+            {
+                std::size_t const accepted = std::min(sample_count, storage.size() - count);
+                std::size_t const end = wrapped(head + count);
+                std::size_t const before_wrap = std::min(accepted, storage.size() - end);
+                std::fill_n(storage.begin() + static_cast<std::ptrdiff_t>(end), before_wrap, 0.0F);
+                std::fill_n(storage.begin(), accepted - before_wrap, 0.0F);
+                count += accepted;
+            }
+
+            void drop_front(std::size_t sample_count)
+            {
+                std::size_t const dropped = std::min(sample_count, count);
+                head = wrapped(head + dropped);
+                count -= dropped;
+            }
+
+        private:
+            // positions stay below twice the capacity
+            [[nodiscard]] std::size_t wrapped(std::size_t position) const
+            {
+                return position < storage.size() ? position : position - storage.size();
+            }
+
+            // the overflow limit in samples; one more is kept when a chunk had an odd sample count
+            std::vector<float> storage = std::vector<float>(max_queued_frames * 2 + 2);
+            std::size_t head = 0;
+            std::size_t count = 0;
+        };
+
         struct source_timeline
         {
-            std::deque<float> samples; // interleaved stereo
+            sample_ring samples; // interleaved stereo
             double base_time_ns = 0.0; // time of frame 0 in `samples`
             double read_position = 0.0; // frames from base, fractional
             bool anchored = false;
@@ -89,10 +187,106 @@ namespace uxplay
                 {
                     return;
                 }
-                samples.erase(samples.begin(), samples.begin() + static_cast<std::ptrdiff_t>(count * 2));
+                samples.drop_front(count * 2);
                 read_position -= static_cast<double>(count);
                 base_time_ns += static_cast<double>(count) * frame_ns;
             }
+        };
+
+        // What the sources ask of the endpoint (read under the queue lock).
+        struct source_demand
+        {
+            bool pending = false; // a source has queued audio: the stream has to run
+            bool live = false;    // a source is in use (first chunk ... release_source())
+        };
+
+        // Failures of the audio thread.  The first failure of a kind (stage
+        // and code) is written at once; its repetitions are counted and
+        // written as one line at most every failure_report_interval_ns, so a
+        // broken endpoint cannot flood the log and no failure goes unreported.
+        class failure_report
+        {
+        public:
+            void add(failure const &failed, std::int64_t now_ns)
+            {
+                bool const same_kind = reported && failed.stage == last.stage && failed.code == last.code;
+                if (same_kind && now_ns - written_ns < failure_report_interval_ns)
+                {
+                    ++unreported;
+                    return;
+                }
+                if (!same_kind)
+                {
+                    flush(); // the count of the previous kind
+                }
+                last = failed;
+                reported = true;
+                if (unreported > 0)
+                {
+                    write(std::format("{} (and {} more since the previous report)", last.describe(), unreported));
+                }
+                else
+                {
+                    write(last.describe());
+                }
+                unreported = 0;
+                written_ns = now_ns;
+            }
+
+            // writes a count that is still waiting for its interval
+            void flush()
+            {
+                if (unreported > 0)
+                {
+                    write(std::format("{} ({} more since the previous report)", last.describe(), unreported));
+                    unreported = 0;
+                }
+            }
+
+        private:
+            void write(std::string const &text) const
+            {
+                if (last.code == device_invalidated_code)
+                {
+                    log::warning("audio output: {}", text); // the ordinary start of an endpoint switch
+                    return;
+                }
+                log::error("audio output: {}", text);
+            }
+
+            failure last;
+            std::int64_t written_ns = 0;
+            std::uint64_t unreported = 0;
+            bool reported = false;
+        };
+
+        // COM (multithreaded apartment) on the audio thread for its lifetime
+        class com_apartment
+        {
+        public:
+            com_apartment()
+                : initialized{CoInitializeEx(nullptr, COINIT_MULTITHREADED)}
+            {
+            }
+
+            ~com_apartment()
+            {
+                if (SUCCEEDED(initialized))
+                {
+                    CoUninitialize();
+                }
+            }
+
+            com_apartment(com_apartment const &) = delete;
+            com_apartment &operator=(com_apartment const &) = delete;
+
+            [[nodiscard]] HRESULT result() const
+            {
+                return initialized;
+            }
+
+        private:
+            HRESULT initialized;
         };
 
         class endpoint_notifier final : public IMMNotificationClient
@@ -182,15 +376,18 @@ namespace uxplay
 
     struct audio_output::state
     {
+        ~state();
+
         audio_format_listener listener;
         std::thread thread;
-        HANDLE audio_event = nullptr;
-        HANDLE wake_event = nullptr;
+        HANDLE audio_event = nullptr; // period event of the running stream
+        HANDLE wake_event = nullptr;  // shutdown, endpoint change, audio for a stopped stream, released source
         std::atomic<bool> stopping{false};
         std::atomic<bool> endpoint_changed{false};
 
-        mutable std::mutex mutex; // guards timelines, format, volume
+        mutable std::mutex mutex; // guards timelines, live, format, volume, wake_on_enqueue
         std::array<source_timeline, media_source_count> timelines;
+        std::array<bool, media_source_count> live{}; // in use: from the first chunk to release_source()
         std::array<std::atomic<std::int64_t>, media_source_count> delays{};
         audio_device_format device_format{};
         std::array<float, media_source_count> target_gains = []
@@ -202,26 +399,72 @@ namespace uxplay
         std::array<std::uint64_t, media_source_count> frames_played_since_report{}; // reset by take_flow()
         bool muted = false;
         std::int64_t latency_ns = 0;
+        bool wake_on_enqueue = false; // the audio thread sleeps until a source has queued audio
+
+        // Left by the audio thread for another thread to write to the log
+        // (write_notes): it does not wait for the log sink while it feeds the
+        // device.
+        std::atomic<int> heard_note{0};                 // 1 + index of the source that became audible
+        std::atomic<std::int64_t> restart_note_ns{-1};  // wake-up of the stopped stream: request to first buffer
+        std::atomic<std::int64_t> wake_requested_ns{0}; // when enqueue() asked for that wake-up
 
         // audio-thread-only
         ComPtr<IMMDeviceEnumerator> enumerator;
         ComPtr<IAudioClient> client;
         ComPtr<IAudioRenderClient> render_client;
         ComPtr<IAudioClock> audio_clock;
+        UINT64 clock_frequency = 0; // units of IAudioClock positions per second
         UINT32 buffer_frames = 0;
-        std::uint64_t frames_written = 0;
+        std::uint64_t frames_written = 0; // since the stream started
         int device_channels = 2;
         float current_gain = 1.0F;
         float heard_gain = 1.0F;
         std::vector<float> scratch;
         std::optional<media_source> heard_source;
+        bool stream_running = false;
+        std::optional<std::int64_t> silent_since_ns; // running without queued audio since then
+        std::int64_t stopped_since_ns = 0;           // the open endpoint is stopped since then
+        int probe_attempts = 0;                      // attempts left to open an endpoint nobody waits for
+        std::int64_t retry_at_ns = 0;                // no attempt to open before this time
+        std::int64_t retry_delay_ns = retry_delay_min_ns;
+        std::int64_t last_failure_ns = 0;
+        failure_report failures;
+        bool notifications_registered = false;
+        std::int64_t next_poll_ns = 0;   // polling fallback
+        std::wstring observed_endpoint;  // polling fallback: default endpoint at the previous poll
 
-        status open_endpoint();
+        [[nodiscard]] status open_endpoint();
         void close_endpoint();
-        void render_block(UINT32 frame_count, double first_frame_time_ns, float *destination);
+        [[nodiscard]] status start_stream();
+        [[nodiscard]] status stop_stream();
+        [[nodiscard]] bool poll_default_endpoint();
+        [[nodiscard]] source_demand demand_or_arm_wake();
+        [[nodiscard]] bool render_block(UINT32 frame_count, double first_frame_time_ns, float *destination);
+        [[nodiscard]] status serve_period(std::int64_t now_ns);
+        [[nodiscard]] DWORD service(std::int64_t now_ns);
+        [[nodiscard]] DWORD idle_wait_ms(std::int64_t now_ns, source_demand demand) const;
+        void endpoint_failed(failure const &failed, std::int64_t now_ns);
+        void schedule_retry(std::int64_t now_ns);
+        void write_notes();
         void thread_main(std::promise<status> &ready);
     };
 
+    audio_output::state::~state()
+    {
+        if (audio_event != nullptr)
+        {
+            CloseHandle(audio_event);
+        }
+        if (wake_event != nullptr)
+        {
+            CloseHandle(wake_event);
+        }
+    }
+
+    // Opens the default render endpoint and leaves its stream stopped
+    // (start_stream).  The stream is prepared completely before any member
+    // changes: the local interface pointers release a half-opened client, so
+    // every failure leaves the endpoint closed and service() opens it again.
     status audio_output::state::open_endpoint()
     {
         close_endpoint();
@@ -300,40 +543,71 @@ namespace uxplay
                 return std::unexpected(make_hresult_failure("IAudioClient::Initialize", result));
             }
         }
-        client = client3;
-        result = client->SetEventHandle(audio_event);
+        result = client3->SetEventHandle(audio_event);
         if (FAILED(result))
         {
             return std::unexpected(make_hresult_failure("IAudioClient::SetEventHandle", result));
         }
-        result = client->GetBufferSize(&buffer_frames);
+        UINT32 opened_buffer_frames = 0;
+        result = client3->GetBufferSize(&opened_buffer_frames);
         if (FAILED(result))
         {
             return std::unexpected(make_hresult_failure("IAudioClient::GetBufferSize", result));
         }
-        result = client->GetService(IID_PPV_ARGS(&render_client));
+        ComPtr<IAudioRenderClient> opened_render_client;
+        result = client3->GetService(IID_PPV_ARGS(&opened_render_client));
         if (FAILED(result))
         {
             return std::unexpected(make_hresult_failure("GetService IAudioRenderClient", result));
         }
-        result = client->GetService(IID_PPV_ARGS(&audio_clock));
+        ComPtr<IAudioClock> opened_clock;
+        result = client3->GetService(IID_PPV_ARGS(&opened_clock));
         if (FAILED(result))
         {
             return std::unexpected(make_hresult_failure("GetService IAudioClock", result));
         }
+        UINT64 opened_frequency = 0; // fixed for the lifetime of the stream
+        result = opened_clock->GetFrequency(&opened_frequency);
+        if (FAILED(result))
+        {
+            return std::unexpected(make_hresult_failure("IAudioClock::GetFrequency", result));
+        }
+        if (opened_buffer_frames == 0 || opened_frequency == 0)
+        {
+            return std::unexpected(make_failure("audio endpoint open", 0,
+                                                std::format("unusable stream: buffer {} frames, clock frequency {}",
+                                                            opened_buffer_frames, opened_frequency)));
+        }
         REFERENCE_TIME stream_latency = 0;
-        client->GetStreamLatency(&stream_latency);
+        result = client3->GetStreamLatency(&stream_latency);
+        if (FAILED(result))
+        {
+            // only device_latency_ns() depends on it: the stream itself is usable
+            log::warning("audio output: {}", make_hresult_failure("IAudioClient::GetStreamLatency", result).describe());
+            stream_latency = 0;
+        }
 
+        client = client3;
+        render_client = opened_render_client;
+        audio_clock = opened_clock;
+        clock_frequency = opened_frequency;
+        buffer_frames = opened_buffer_frames;
         device_channels = chosen->nChannels;
         frames_written = 0;
+        scratch.assign(static_cast<std::size_t>(buffer_frames) * 2, 0.0F); // sized here, not in the period loop
         audio_device_format const opened{static_cast<int>(chosen->nSamplesPerSec), static_cast<int>(chosen->nChannels)};
         bool format_changed = false;
         {
             std::scoped_lock lock{mutex};
             format_changed = opened != device_format;
             device_format = opened;
-            double const period_ns = low_latency ? 1e9 * minimum_period / opened.sample_rate
-                                                 : 1e9 * buffer_frames / opened.sample_rate;
+            // what the render loop keeps queued in the endpoint is the whole
+            // buffer, which a low-latency stream reports larger than its
+            // period: the presentation delay must cover that, or a source
+            // would always be judged too late to be played
+            double const queued_frames = std::max(static_cast<double>(low_latency ? minimum_period : buffer_frames),
+                                                  static_cast<double>(buffer_frames));
+            double const period_ns = 1e9 * queued_frames / opened.sample_rate;
             latency_ns = static_cast<std::int64_t>(period_ns) + clock::hundred_ns_to_ns(stream_latency);
             if (format_changed)
             {
@@ -342,11 +616,6 @@ namespace uxplay
                     timeline.clear();
                 }
             }
-        }
-        result = client->Start();
-        if (FAILED(result))
-        {
-            return std::unexpected(make_hresult_failure("IAudioClient::Start", result));
         }
         log::info("audio output: {} Hz, {} ch, {} buffer {} frames ({} low-latency period {} frames), latency {:.1f} ms",
                   opened.sample_rate, opened.channels, native_float ? "float32" : "converted float32", buffer_frames,
@@ -361,20 +630,129 @@ namespace uxplay
 
     void audio_output::state::close_endpoint()
     {
-        if (client)
+        if (client && stream_running)
         {
-            client->Stop();
+            HRESULT const result = client->Stop();
+            if (FAILED(result))
+            {
+                // the client is released next; after a device loss this repeats the reported failure
+                log::debug("audio output: {}", make_hresult_failure("IAudioClient::Stop (closing)", result).describe());
+            }
         }
+        stream_running = false;
+        silent_since_ns.reset();
         audio_clock.Reset();
         render_client.Reset();
         client.Reset();
+        clock_frequency = 0;
         buffer_frames = 0;
+        frames_written = 0;
     }
 
-    void audio_output::state::render_block(UINT32 frame_count, double first_frame_time_ns, float *destination)
+    // Starts the stopped stream.  It is empty and at device position zero
+    // (new, or reset by stop_stream), so frames_written and the IAudioClock
+    // position count from the same origin again.
+    status audio_output::state::start_stream()
+    {
+        HRESULT const result = client->Start();
+        if (FAILED(result))
+        {
+            return std::unexpected(make_hresult_failure("IAudioClient::Start", result));
+        }
+        frames_written = 0;
+        silent_since_ns.reset();
+        stream_running = true;
+        return {};
+    }
+
+    // Stops the stream and empties it; Reset also returns the device position
+    // to zero, so the wake-up needs nothing but Start().
+    status audio_output::state::stop_stream()
+    {
+        stream_running = false;
+        silent_since_ns.reset();
+        HRESULT result = client->Stop();
+        if (FAILED(result))
+        {
+            return std::unexpected(make_hresult_failure("IAudioClient::Stop", result));
+        }
+        result = client->Reset();
+        if (FAILED(result))
+        {
+            return std::unexpected(make_hresult_failure("IAudioClient::Reset", result));
+        }
+        frames_written = 0;
+        return {};
+    }
+
+    // Polling fallback for a failed notification registration: true when the
+    // default render endpoint is not the one of the previous poll.  A failed
+    // query is an identity of its own ("no endpoint"), so it is reported when
+    // it begins and not on every poll.
+    bool audio_output::state::poll_default_endpoint()
+    {
+        std::wstring identity;
+        std::optional<failure> failed;
+        ComPtr<IMMDevice> device;
+        HRESULT result = enumerator->GetDefaultAudioEndpoint(eRender, eConsole, &device);
+        if (FAILED(result))
+        {
+            failed = make_hresult_failure("GetDefaultAudioEndpoint (poll)", result);
+        }
+        else
+        {
+            LPWSTR id = nullptr;
+            result = device->GetId(&id);
+            std::unique_ptr<wchar_t, decltype(&CoTaskMemFree)> const id_owner{id, CoTaskMemFree};
+            if (FAILED(result) || id == nullptr)
+            {
+                failed = make_hresult_failure("IMMDevice::GetId (poll)", FAILED(result) ? result : E_POINTER);
+            }
+            else
+            {
+                identity = id;
+            }
+        }
+        if (failed)
+        {
+            identity = L"?" + std::to_wstring(failed->code); // no endpoint id starts like this
+        }
+        if (identity == observed_endpoint)
+        {
+            return false;
+        }
+        if (failed)
+        {
+            log::warning("audio output: {}", failed->describe());
+        }
+        observed_endpoint = std::move(identity);
+        return true;
+    }
+
+    // What the sources need now.  When none has queued audio, the next
+    // enqueue() is asked to wake the audio thread; both happen under the queue
+    // lock, so no chunk can slip in between this check and the sleep.
+    source_demand audio_output::state::demand_or_arm_wake()
+    {
+        std::scoped_lock lock{mutex};
+        source_demand demand;
+        demand.pending = std::ranges::any_of(timelines, &source_timeline::anchored);
+        demand.live = std::ranges::any_of(live, std::identity{});
+        if (!demand.pending)
+        {
+            wake_on_enqueue = true;
+        }
+        return demand;
+    }
+
+    // Fills one block of the endpoint buffer; true while a source has queued
+    // audio.  Nothing is logged or allocated here: the lock is shared with
+    // enqueue() on the network thread.
+    bool audio_output::state::render_block(UINT32 frame_count, double first_frame_time_ns, float *destination)
     {
         scratch.assign(static_cast<std::size_t>(frame_count) * 2, 0.0F);
         float gain_target = heard_gain;
+        bool source_pending = false;
         {
             std::scoped_lock lock{mutex};
             double const frame_ns = 1e9 / device_format.sample_rate;
@@ -404,7 +782,8 @@ namespace uxplay
             {
                 if (source)
                 {
-                    log::info("audio source: {}", media_source_name(*source));
+                    // "audio source: ..." is written by write_notes()
+                    heard_note.store(1 + static_cast<int>(source_index(*source)), std::memory_order_relaxed);
                 }
                 heard_source = source;
             }
@@ -503,6 +882,7 @@ namespace uxplay
                 }
                 timeline.consume_whole_frames(frame_ns);
             }
+            source_pending = std::ranges::any_of(timelines, &source_timeline::anchored);
         }
 
         // volume ramp (~10 ms) and channel mapping
@@ -525,104 +905,311 @@ namespace uxplay
                 out[channel] = 0.0F;
             }
         }
+        return source_pending;
     }
 
-    void audio_output::state::thread_main(std::promise<status> &ready)
+    // One period of the running stream: the free part of the endpoint buffer
+    // is filled with the audio that is due when it will be heard.  After
+    // idle_stop_ns without queued audio the stream is stopped.
+    status audio_output::state::serve_period(std::int64_t now_ns)
     {
-        HRESULT result = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-        bool const com_initialized = SUCCEEDED(result);
-        system_tuning::mmcss_scope const mmcss{L"Pro Audio"};
-
-        result = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, IID_PPV_ARGS(&enumerator));
+        UINT32 padding = 0;
+        HRESULT result = client->GetCurrentPadding(&padding);
         if (FAILED(result))
         {
-            ready.set_value(std::unexpected(make_hresult_failure("CoCreateInstance MMDeviceEnumerator", result)));
-            if (com_initialized)
-            {
-                CoUninitialize();
-            }
-            return;
+            return std::unexpected(make_hresult_failure("IAudioClient::GetCurrentPadding", result));
         }
-        endpoint_notifier notifier{endpoint_changed, wake_event};
-        enumerator->RegisterEndpointNotificationCallback(&notifier);
-
-        status const opened = open_endpoint();
-        ready.set_value(opened);
-        int consecutive_failures = 0;
-
-        while (!stopping.load())
+        if (padding < buffer_frames)
         {
-            HANDLE const handles[2] = {audio_event, wake_event};
-            WaitForMultipleObjects(2, handles, FALSE, 200);
-            if (stopping.load())
-            {
-                break;
-            }
-            if (endpoint_changed.exchange(false) || !client)
-            {
-                status const reopened = open_endpoint();
-                if (!reopened)
-                {
-                    if (++consecutive_failures <= 3)
-                    {
-                        log::error("audio endpoint reopen: {}", reopened.error().describe());
-                    }
-                    Sleep(500);
-                    continue;
-                }
-                consecutive_failures = 0;
-            }
-
-            UINT32 padding = 0;
-            result = client->GetCurrentPadding(&padding);
-            if (result == AUDCLNT_E_DEVICE_INVALIDATED)
-            {
-                log::warning("audio device invalidated, reopening default endpoint");
-                close_endpoint();
-                continue;
-            }
-            if (FAILED(result))
-            {
-                continue;
-            }
             UINT32 const available = buffer_frames - padding;
-            if (available == 0)
-            {
-                continue;
-            }
 
             // time at which the next written frame will be heard
-            double first_frame_time = static_cast<double>(clock::now_ns());
             UINT64 position = 0;
             UINT64 qpc_position = 0;
-            UINT64 frequency = 0;
-            if (SUCCEEDED(audio_clock->GetFrequency(&frequency)) && frequency > 0 &&
-                SUCCEEDED(audio_clock->GetPosition(&position, &qpc_position)))
+            result = audio_clock->GetPosition(&position, &qpc_position);
+            if (FAILED(result))
             {
-                double const played_frames = static_cast<double>(position) * device_format.sample_rate /
-                                             static_cast<double>(frequency);
-                first_frame_time = static_cast<double>(clock::hundred_ns_to_ns(static_cast<std::int64_t>(qpc_position))) +
-                                   (static_cast<double>(frames_written) - played_frames) * 1e9 / device_format.sample_rate;
+                return std::unexpected(make_hresult_failure("IAudioClock::GetPosition", result));
             }
+            double const played_frames = static_cast<double>(position) * device_format.sample_rate /
+                                         static_cast<double>(clock_frequency);
+            double const first_frame_time =
+                static_cast<double>(clock::hundred_ns_to_ns(static_cast<std::int64_t>(qpc_position))) +
+                (static_cast<double>(frames_written) - played_frames) * 1e9 / device_format.sample_rate;
 
             BYTE *buffer = nullptr;
             result = render_client->GetBuffer(available, &buffer);
             if (FAILED(result))
             {
-                continue;
+                return std::unexpected(make_hresult_failure("IAudioRenderClient::GetBuffer", result));
             }
-            render_block(available, first_frame_time, reinterpret_cast<float *>(buffer));
-            render_client->ReleaseBuffer(available, 0);
+            if (buffer == nullptr)
+            {
+                return std::unexpected(make_hresult_failure("IAudioRenderClient::GetBuffer (no buffer)", E_POINTER));
+            }
+            bool const source_pending = render_block(available, first_frame_time, reinterpret_cast<float *>(buffer));
+            result = render_client->ReleaseBuffer(available, 0);
+            if (FAILED(result))
+            {
+                return std::unexpected(make_hresult_failure("IAudioRenderClient::ReleaseBuffer", result));
+            }
+            if (frames_written == 0)
+            {
+                // first buffer after enqueue() woke the stopped stream: what the idle stop cost the first sound
+                std::int64_t const requested_ns = wake_requested_ns.exchange(0, std::memory_order_relaxed);
+                if (requested_ns != 0)
+                {
+                    restart_note_ns.store(clock::now_ns() - requested_ns, std::memory_order_relaxed);
+                }
+            }
             frames_written += available;
+            if (source_pending)
+            {
+                silent_since_ns.reset();
+            }
+            else if (!silent_since_ns)
+            {
+                silent_since_ns = now_ns;
+            }
+        }
+        if (!silent_since_ns || now_ns - *silent_since_ns < idle_stop_ns)
+        {
+            return {};
+        }
+        if (demand_or_arm_wake().pending)
+        {
+            silent_since_ns.reset(); // a chunk arrived after the last block
+            return {};
+        }
+        status stopped = stop_stream();
+        if (!stopped)
+        {
+            return stopped;
+        }
+        stopped_since_ns = now_ns;
+        failures.flush();
+        write_notes();
+        log::info("audio output: no audio for {} s, stream stopped", idle_stop_ns / clock::ns_per_second);
+        return {};
+    }
+
+    // One pass of the audio thread.  Returns how long it may sleep when
+    // neither event is signalled: a stopped stream has no periodic wake-up,
+    // only the deadline of its next step, if there is one.
+    DWORD audio_output::state::service(std::int64_t now_ns)
+    {
+        bool changed = endpoint_changed.exchange(false);
+        if (!notifications_registered && now_ns >= next_poll_ns)
+        {
+            next_poll_ns = now_ns + endpoint_poll_ns;
+            changed = poll_default_endpoint() || changed;
+        }
+        if (changed)
+        {
+            // The open client belongs to the previous default device.  The
+            // new one is opened at once, also while idle, so format() and the
+            // decoders follow it; its stream starts with the next audio.
+            if (client)
+            {
+                log::info("audio output: default endpoint changed");
+            }
+            close_endpoint();
+            probe_attempts = endpoint_probe_attempts;
+            retry_delay_ns = retry_delay_min_ns;
+            retry_at_ns = now_ns;
+        }
+
+        if (stream_running)
+        {
+            status const served = serve_period(now_ns);
+            if (!served)
+            {
+                endpoint_failed(served.error(), now_ns);
+            }
+            if (stream_running)
+            {
+                return period_watchdog_ms;
+            }
+        }
+
+        // stopped or closed
+        source_demand demand = demand_or_arm_wake();
+        if (!client && (demand.pending || probe_attempts > 0) && now_ns >= retry_at_ns)
+        {
+            probe_attempts = std::max(probe_attempts - 1, 0);
+            status const opened = open_endpoint();
+            if (opened)
+            {
+                probe_attempts = 0;
+                stopped_since_ns = now_ns;
+                demand = demand_or_arm_wake(); // a new format emptied the queues
+            }
+            else
+            {
+                endpoint_failed(opened.error(), now_ns);
+            }
+        }
+        if (client && demand.pending)
+        {
+            status const started = start_stream();
+            if (started)
+            {
+                return 0; // the first buffer is written at once, not at the next period event
+            }
+            endpoint_failed(started.error(), now_ns);
+        }
+        std::int64_t const release_delay_ns = demand.live ? idle_release_live_ns : idle_release_ns;
+        if (client && now_ns - stopped_since_ns >= release_delay_ns)
+        {
+            // no stream, no audio session: UxPlay leaves the volume mixer
+            close_endpoint();
+            log::info("audio output: no audio, endpoint released");
+        }
+        if (!client && !demand.pending && probe_attempts == 0)
+        {
+            failures.flush(); // nothing is tried again before an event: report a waiting count now
+        }
+        return idle_wait_ms(now_ns, demand);
+    }
+
+    DWORD audio_output::state::idle_wait_ms(std::int64_t now_ns, source_demand demand) const
+    {
+        std::optional<std::int64_t> deadline;
+        if (client)
+        {
+            // then the endpoint is released
+            deadline = stopped_since_ns + (demand.live ? idle_release_live_ns : idle_release_ns);
+        }
+        else if (demand.pending || probe_attempts > 0)
+        {
+            deadline = retry_at_ns; // back-off before the next attempt to open
+        }
+        if (!notifications_registered)
+        {
+            deadline = deadline ? std::min(*deadline, next_poll_ns) : next_poll_ns;
+        }
+        if (!deadline)
+        {
+            return INFINITE; // only an event ends this sleep
+        }
+        std::int64_t const remaining_ms = (*deadline - now_ns + clock::ns_per_ms - 1) / clock::ns_per_ms;
+        return static_cast<DWORD>(std::clamp<std::int64_t>(remaining_ms, 0, longest_timed_wait_ms));
+    }
+
+    // A failed step of the endpoint: reported (rate-limited), then the
+    // endpoint is closed and opened again after the back-off.
+    void audio_output::state::endpoint_failed(failure const &failed, std::int64_t now_ns)
+    {
+        failures.add(failed, now_ns);
+        schedule_retry(now_ns);
+    }
+
+    void audio_output::state::schedule_retry(std::int64_t now_ns)
+    {
+        close_endpoint();
+        if (now_ns - last_failure_ns > retry_settled_ns)
+        {
+            retry_delay_ns = retry_delay_min_ns; // the endpoint worked, or was not needed, for a while
+        }
+        last_failure_ns = now_ns;
+        retry_at_ns = now_ns + retry_delay_ns;
+        retry_delay_ns = std::min(retry_delay_ns * 2, retry_delay_max_ns);
+    }
+
+    // Writes what the audio thread left for the log.  Called by enqueue() on
+    // the network thread, and by the audio thread once its stream is stopped.
+    void audio_output::state::write_notes()
+    {
+        if (heard_note.load(std::memory_order_relaxed) != 0)
+        {
+            int const heard = heard_note.exchange(0, std::memory_order_relaxed);
+            if (heard != 0)
+            {
+                log::info("audio source: {}", media_source_name(static_cast<media_source>(heard - 1)));
+            }
+        }
+        if (restart_note_ns.load(std::memory_order_relaxed) >= 0)
+        {
+            std::int64_t const restart_ns = restart_note_ns.exchange(-1, std::memory_order_relaxed);
+            if (restart_ns >= 0)
+            {
+                log::info("audio output: stream restarted, first buffer {:.1f} ms after the audio was queued",
+                          static_cast<double>(restart_ns) / 1e6);
+            }
+        }
+    }
+
+    void audio_output::state::thread_main(std::promise<status> &ready)
+    {
+        com_apartment const com;
+        if (FAILED(com.result()))
+        {
+            ready.set_value(std::unexpected(make_hresult_failure("CoInitializeEx (audio thread)", com.result())));
+            return;
+        }
+        system_tuning::mmcss_scope const mmcss{L"Pro Audio"};
+
+        HRESULT result = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, IID_PPV_ARGS(&enumerator));
+        if (FAILED(result))
+        {
+            ready.set_value(std::unexpected(make_hresult_failure("CoCreateInstance MMDeviceEnumerator", result)));
+            return;
+        }
+        endpoint_notifier notifier{endpoint_changed, wake_event};
+        result = enumerator->RegisterEndpointNotificationCallback(&notifier);
+        notifications_registered = SUCCEEDED(result);
+        if (!notifications_registered)
+        {
+            log::warning("audio output: {}; the default endpoint is polled every {} s instead",
+                         make_hresult_failure("RegisterEndpointNotificationCallback", result).describe(),
+                         endpoint_poll_ns / clock::ns_per_second);
+            static_cast<void>(poll_default_endpoint()); // remembers the endpoint that is opened next
+            next_poll_ns = clock::now_ns() + endpoint_poll_ns;
+        }
+
+        {
+            std::int64_t const now_ns = clock::now_ns();
+            status opened = open_endpoint();
+            if (opened)
+            {
+                stopped_since_ns = now_ns;
+            }
+            else
+            {
+                // reported by create(); tried again a few times, then when
+                // audio is queued or the default endpoint changes
+                probe_attempts = endpoint_probe_attempts;
+                schedule_retry(now_ns);
+            }
+            ready.set_value(std::move(opened));
+        }
+
+        while (!stopping.load())
+        {
+            DWORD const timeout = service(clock::now_ns());
+            // the period event matters only while the stream runs
+            HANDLE const handles[2] = {wake_event, audio_event};
+            if (WaitForMultipleObjects(stream_running ? 2U : 1U, handles, FALSE, timeout) == WAIT_FAILED)
+            {
+                DWORD const wait_error = GetLastError();
+                failures.add(make_win32_failure("WaitForMultipleObjects (audio thread)", wait_error), clock::now_ns());
+                Sleep(std::min<DWORD>(timeout, wait_failure_pause_ms)); // keep serving, without spinning
+            }
         }
 
         close_endpoint();
-        enumerator->UnregisterEndpointNotificationCallback(&notifier);
-        enumerator.Reset();
-        if (com_initialized)
+        failures.flush();
+        write_notes();
+        if (notifications_registered)
         {
-            CoUninitialize();
+            result = enumerator->UnregisterEndpointNotificationCallback(&notifier);
+            if (FAILED(result))
+            {
+                log::warning("audio output: {}",
+                             make_hresult_failure("UnregisterEndpointNotificationCallback", result).describe());
+            }
         }
+        enumerator.Reset();
     }
 
     audio_output::audio_output(std::unique_ptr<state> created_state)
@@ -638,8 +1225,6 @@ namespace uxplay
         {
             impl->thread.join();
         }
-        CloseHandle(impl->audio_event);
-        CloseHandle(impl->wake_event);
     }
 
     outcome<std::unique_ptr<audio_output>> audio_output::create(audio_format_listener listener)
@@ -647,23 +1232,29 @@ namespace uxplay
         auto created = std::make_unique<state>();
         created->listener = std::move(listener);
         created->audio_event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-        created->wake_event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-        if (created->audio_event == nullptr || created->wake_event == nullptr)
+        if (created->audio_event == nullptr)
         {
-            return std::unexpected(make_win32_failure("CreateEventW (audio)", GetLastError()));
+            return std::unexpected(make_win32_failure("CreateEventW (audio period)", GetLastError()));
+        }
+        created->wake_event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+        if (created->wake_event == nullptr)
+        {
+            return std::unexpected(make_win32_failure("CreateEventW (audio wake)", GetLastError()));
         }
         std::promise<status> ready;
         std::future<status> ready_result = ready.get_future();
-        state *const running = created.get();
-        created->thread = std::thread{[running, &ready]
+        auto output = std::unique_ptr<audio_output>{new audio_output{std::move(created)}};
+        state *const running = output->impl.get();
+        running->thread = std::thread{[running, &ready]
         {
             running->thread_main(ready);
         }};
         status const started = ready_result.get();
-        auto output = std::unique_ptr<audio_output>{new audio_output{std::move(created)}};
         if (!started)
         {
-            // keep the thread alive: it retries when the default endpoint changes
+            // The output stays usable: the audio thread opens the endpoint
+            // again when audio is queued or the default endpoint changes (it
+            // has ended only if COM itself could not be set up).
             log::error("audio output start: {}", started.error().describe());
         }
         return output;
@@ -678,55 +1269,86 @@ namespace uxplay
     void audio_output::enqueue(media_source source, std::int64_t media_time_ns, std::span<float const> stereo_samples,
                                int sample_rate, bool timestamped)
     {
-        std::scoped_lock lock{impl->mutex};
-        if (sample_rate != impl->device_format.sample_rate || stereo_samples.empty())
+        bool overflowed = false;
+        bool wake = false;
         {
-            return;
-        }
-        double const frame_ns = 1e9 / sample_rate;
-        source_timeline &timeline = impl->timelines[source_index(source)];
-        auto const chunk_time = static_cast<double>(media_time_ns);
-        std::size_t skip_frames = 0;
-        if (timeline.anchored && !timestamped)
-        {
-            // play on arrival: keep appending; re-anchor only after an underrun
-            if (timeline.read_position + 2.0 >= static_cast<double>(timeline.frames()))
+            std::scoped_lock lock{impl->mutex};
+            if (sample_rate != impl->device_format.sample_rate || stereo_samples.empty())
+            {
+                return;
+            }
+            impl->live[source_index(source)] = true;
+            double const frame_ns = 1e9 / sample_rate;
+            source_timeline &timeline = impl->timelines[source_index(source)];
+            auto const chunk_time = static_cast<double>(media_time_ns);
+            std::size_t skip_frames = 0;
+            std::size_t gap_frames = 0;
+            if (timeline.anchored && !timestamped)
+            {
+                // play on arrival: keep appending; re-anchor only after an underrun
+                if (timeline.read_position + 2.0 >= static_cast<double>(timeline.frames()))
+                {
+                    timeline.clear();
+                }
+            }
+            else if (timeline.anchored)
+            {
+                double const expected = timeline.base_time_ns + static_cast<double>(timeline.frames()) * frame_ns;
+                double const delta = chunk_time - expected;
+                if (delta > contiguous_tolerance_ns && delta < max_gap_fill_ns)
+                {
+                    gap_frames = static_cast<std::size_t>(delta / frame_ns); // silence up to the chunk
+                }
+                else if (delta < -contiguous_tolerance_ns && delta > -100'000'000.0)
+                {
+                    skip_frames = static_cast<std::size_t>(-delta / frame_ns); // overlap: drop duplicated start
+                }
+                else if (std::abs(delta) >= max_gap_fill_ns || delta <= -100'000'000.0)
+                {
+                    timeline.clear(); // timeline jump (seek, new stream): re-anchor
+                }
+            }
+            if (!timeline.anchored)
+            {
+                timeline.anchored = true;
+                timeline.base_time_ns = chunk_time;
+                timeline.read_position = 0.0;
+            }
+            std::size_t const offset = std::min(skip_frames * 2, stereo_samples.size());
+            std::span<float const> const fresh = stereo_samples.subspan(offset);
+            // The queue is one block of memory: the overflow is decided before
+            // the copy, with the size the queue would have after it.
+            if ((timeline.samples.size() + gap_frames * 2 + fresh.size()) / 2 > max_queued_frames)
             {
                 timeline.clear();
+                overflowed = true;
+            }
+            else
+            {
+                timeline.samples.append_silence(gap_frames * 2);
+                timeline.samples.append(fresh);
+            }
+            if (impl->wake_on_enqueue && timeline.anchored)
+            {
+                impl->wake_on_enqueue = false;
+                wake = true;
             }
         }
-        else if (timeline.anchored)
+        // nothing is logged under the lock: the audio thread waits for it
+        if (wake)
         {
-            double const expected = timeline.base_time_ns + static_cast<double>(timeline.frames()) * frame_ns;
-            double const delta = chunk_time - expected;
-            if (delta > contiguous_tolerance_ns && delta < max_gap_fill_ns)
+            // the stream is stopped (idle): the audio thread starts it for this chunk
+            impl->wake_requested_ns.store(clock::now_ns(), std::memory_order_relaxed);
+            if (SetEvent(impl->wake_event) == FALSE)
             {
-                auto const gap = static_cast<std::size_t>(delta / frame_ns);
-                timeline.samples.insert(timeline.samples.end(), gap * 2, 0.0F);
-            }
-            else if (delta < -contiguous_tolerance_ns && delta > -100'000'000.0)
-            {
-                skip_frames = static_cast<std::size_t>(-delta / frame_ns); // overlap: drop duplicated start
-            }
-            else if (std::abs(delta) >= max_gap_fill_ns || delta <= -100'000'000.0)
-            {
-                timeline.clear(); // timeline jump (seek, new stream): re-anchor
+                log::error("audio output: {}", make_win32_failure("SetEvent (audio wake)", GetLastError()).describe());
             }
         }
-        if (!timeline.anchored)
+        if (overflowed)
         {
-            timeline.anchored = true;
-            timeline.base_time_ns = chunk_time;
-            timeline.read_position = 0.0;
-        }
-        std::size_t const offset = std::min(skip_frames * 2, stereo_samples.size());
-        timeline.samples.insert(timeline.samples.end(), stereo_samples.begin() + static_cast<std::ptrdiff_t>(offset),
-                                stereo_samples.end());
-        if (timeline.frames() > max_queued_frames)
-        {
-            timeline.clear();
             log::warning("audio queue overflow for {}: resynchronizing", media_source_name(source));
         }
+        impl->write_notes();
     }
 
     void audio_output::set_delay(media_source source, std::int64_t delay_ns)
@@ -736,8 +1358,16 @@ namespace uxplay
 
     void audio_output::release_source(media_source source)
     {
-        std::scoped_lock lock{impl->mutex};
-        impl->timelines[source_index(source)].clear();
+        {
+            std::scoped_lock lock{impl->mutex};
+            impl->timelines[source_index(source)].clear();
+            impl->live[source_index(source)] = false;
+        }
+        // a stopped stream is released sooner once no source is in use
+        if (SetEvent(impl->wake_event) == FALSE)
+        {
+            log::error("audio output: {}", make_win32_failure("SetEvent (source released)", GetLastError()).describe());
+        }
     }
 
     void audio_output::set_volume(media_source source, float linear_gain)

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 // Native media engine: owns the GPU device, video window, presenter and
 // audio output, and runs one decode pipeline per media source.
 //
@@ -30,6 +30,8 @@ export namespace uxplay
         bool keep_window_on_stop = false;
         gpu_preference gpu = gpu_preference::automatic;
         bool tray_icon = false;
+        performance_mode mode = performance_mode::balanced;
+        crop_mode crop = crop_mode::off; // off or automatic
     };
 
     struct engine_callbacks
@@ -38,6 +40,15 @@ export namespace uxplay
         std::function<void(media_source source)> on_window_closed;
         std::function<void()> on_usb_device_change;
         std::function<void(tray_command command)> on_tray_command;
+        // the program was started again while this instance runs (UI thread)
+        std::function<void()> on_second_launch;
+        // Windows shuts down or the user signs out (UI thread; may block briefly)
+        std::function<void()> on_session_ending;
+        // the monitor configuration changed; presentation is already re-paced
+        std::function<void()> on_display_changed;
+        // the Direct3D device was lost (driver update or crash): no picture can
+        // be shown until the program restarts (statistics thread, once)
+        std::function<void()> on_device_lost;
     };
 
     struct display_summary
@@ -70,6 +81,9 @@ export namespace uxplay
         // Whether the selected GPU decodes HEVC Main in hardware (so H.265 is
         // worth offering to the client; otherwise H.264 gives a better result).
         [[nodiscard]] bool hevc_hardware() const;
+        // Whether the selected GPU decodes H.264 in hardware (without it every
+        // stream is decoded on the CPU, which a lighter stream helps).
+        [[nodiscard]] bool h264_hardware() const;
 
         void video_configure(media_source source, video_codec codec, int width, int height);
         // Annex-B access unit; media_time_ns is on the local clock.
@@ -87,11 +101,25 @@ export namespace uxplay
 
         void set_volume(media_source source, double linear_gain);
 
+        // quality / balanced / performance: timing margins, frame dropping
+        // and scaling follow at once (the stream size is the host's part)
+        void set_performance_mode(performance_mode mode);
+        // off: the whole picture; automatic: black bars around the content are
+        // cut off (uxplay_crop_detector).  The third mode, a part framed by
+        // hand, is entered from the window and lasts until the stream changes
+        // or one of these two is chosen again.
+        void set_crop_mode(crop_mode mode);
+        // a stream is on screen
+        [[nodiscard]] bool showing_video() const;
+
         [[nodiscard]] source_statistics statistics(media_source source) const;
 
         // notification-area integration
         void set_usb_link(std::wstring text, bool offer_data_guard, bool offer_enable_adapter);
         void set_link_preference(bool prefer_usb_link);
+        // menu state owned by the host: "start with Windows", a log file to open
+        void set_autostart(bool enabled);
+        void set_log_available(bool available);
 
         // Whether the current AirPlay client is connected over the iPhone USB
         // link (so the window shows "USB" rather than "Wi-Fi").
@@ -100,6 +128,11 @@ export namespace uxplay
 
         // HWND of the video window (owner for system prompts)
         [[nodiscard]] void *window_handle() const;
+
+        // From now on the window thread calls nothing any more (menu commands,
+        // keys, resizing): the host calls this before it destroys objects its
+        // own callbacks use.  Returns when a callback that was running ended.
+        void stop_window_callbacks();
 
     private:
         struct state;

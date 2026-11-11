@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 module;
 
 #define WIN32_LEAN_AND_MEAN
@@ -158,6 +158,8 @@ namespace uxplay
         gpu_adapter_info info;
         bool tearing = false;
         std::recursive_mutex mutex;
+        // until the presenter says otherwise: a queue of 8 plus 3 beside it
+        std::atomic<unsigned int> presentation_hold{11};
     };
 
     gpu_device::gpu_device(std::unique_ptr<state> created_state)
@@ -303,6 +305,26 @@ namespace uxplay
     std::recursive_mutex &gpu_device::context_mutex()
     {
         return impl->mutex;
+    }
+
+    std::optional<std::string> gpu_device::device_removed_reason() const
+    {
+        HRESULT const reason = impl->device->GetDeviceRemovedReason();
+        if (reason == S_OK)
+        {
+            return std::nullopt;
+        }
+        return make_hresult_failure("D3D11 device (GetDeviceRemovedReason)", reason).describe();
+    }
+
+    void gpu_device::set_presentation_hold(unsigned int pictures)
+    {
+        impl->presentation_hold.store(std::max(pictures, 1U), std::memory_order_relaxed);
+    }
+
+    unsigned int gpu_device::presentation_hold() const
+    {
+        return impl->presentation_hold.load(std::memory_order_relaxed);
     }
 
     outcome<display_mode_info> gpu_device::primary_display_mode()

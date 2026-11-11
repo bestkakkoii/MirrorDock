@@ -1,4 +1,4 @@
-/**
+﻿/**
  *  Copyright (C) 2026  kgbook
  *
  *  This library is free software; you can redistribute it and/or
@@ -56,6 +56,8 @@ struct mdnsd_s {
     mdnsd_service_t raop;
 
     uint32_t ipv4_addr;
+    /* on-link prefix length of ipv4_addr (0 = unknown: no source check) */
+    unsigned int ipv4_prefix_len;
     unsigned char ipv6_addr[16];
     unsigned int ipv6_scope_id;
     int sock_fd4;
@@ -75,6 +77,8 @@ struct mdnsd_s {
 #define MDNS_LINK_CHECK_MS 2000
 /* RFC 6762 section 8.3: repeat an announcement once, one second later */
 #define MDNS_REANNOUNCE_MS 1000
+/* pause before the responder thread retries a select() that failed */
+#define MDNS_SELECT_RETRY_MS 250
 
 static uint64_t mdns_now_ms(void)
 {
@@ -376,14 +380,18 @@ static int mdns_is_link_local(uint32_t addr)
  * metric).  Only real LAN links (Ethernet, Wi-Fi) carry mDNS to the phone:
  * loopback, Hyper-V/WSL switches, VM adapters and tunnels (Tailscale, VPN)
  * are skipped.  With allow_usb_link == 0 ("Wi-Fi only") the USB link is never
- * chosen, so the cable can stay plugged in for charging.  *held_present
- * reports whether `held` (the address in use) is still configured on any
- * adapter.
+ * chosen, so the cable can stay plugged in for charging.  A 172.20.10.x
+ * address on a Wi-Fi adapter is a PC joined to the hotspot over Wi-Fi, not the
+ * cable.  *held_present reports whether `held` (the address in use) is still
+ * configured on any adapter; *prefix_len receives the on-link prefix length of
+ * the returned address.
  */
-static uint32_t mdns_pick_ipv4(uint32_t held, int *held_present, int allow_usb_link)
+static uint32_t mdns_pick_ipv4(uint32_t held, int *held_present, int allow_usb_link,
+                               unsigned int *prefix_len)
 {
     uint32_t addr = 0;
     *held_present = 0;
+    *prefix_len = 0;
     ULONG const flags = GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_SKIP_ANYCAST |
                         GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER;
     ULONG buflen = 15000;
@@ -403,6 +411,8 @@ static uint32_t mdns_pick_ipv4(uint32_t held, int *held_present, int allow_usb_l
     if (dwRetVal == NO_ERROR) {
         uint32_t usb_link = 0;
         uint32_t fallback = 0;
+        unsigned int usb_link_prefix = 0;
+        unsigned int fallback_prefix = 0;
         ULONG fallback_metric = 0xFFFFFFFFu;
         for (PIP_ADAPTER_ADDRESSES pCurr = pAddresses; pCurr != NULL; pCurr = pCurr->Next) {
             if (pCurr->OperStatus != IfOperStatusUp) {
@@ -427,27 +437,52 @@ static uint32_t mdns_pick_ipv4(uint32_t held, int *held_present, int allow_usb_l
                 if (!lan_link || ua->DadState != IpDadStatePreferred) {
                     continue;
                 }
-                if (mdns_is_usb_link(candidate)) {
+                if (mdns_is_usb_link(candidate) && pCurr->IfType != IF_TYPE_IEEE80211) {
                     if (allow_usb_link && usb_link == 0) {
                         usb_link = candidate;
+                        usb_link_prefix = ua->OnLinkPrefixLength;
                     }
                 } else if (pCurr->FirstGatewayAddress != NULL && !mdns_is_link_local(candidate) &&
                            pCurr->Ipv4Metric < fallback_metric) {
                     fallback = candidate;
+                    fallback_prefix = ua->OnLinkPrefixLength;
                     fallback_metric = pCurr->Ipv4Metric;
                 }
             }
         }
         addr = usb_link != 0 ? usb_link : fallback;
+        *prefix_len = usb_link != 0 ? usb_link_prefix : fallback_prefix;
     }
     free(pAddresses);
     return addr;
 }
 
-static uint32_t mdns_get_default_ipv4(int allow_usb_link)
+/*
+ * RFC 6762 section 11: a query is answered only when its source is on the
+ * advertised link's subnet.  The socket is bound to every interface, so
+ * without this a query from another link (the iPhone asking over the USB
+ * cable while "Wi-Fi only" is chosen, or a unicast query to another adapter)
+ * would be answered and teach the phone the service through the wrong link.
+ */
+static int mdns_source_on_advertised_link(mdnsd_t *mdnsd, uint32_t from_addr)
 {
-    int unused = 0;
-    return mdns_pick_ipv4(0, &unused, allow_usb_link);
+    uint32_t advertised;
+    unsigned int prefix_len;
+    uint32_t mask;
+
+    MUTEX_LOCK(mdnsd->mutex);
+    advertised = mdnsd->ipv4_addr;
+    prefix_len = mdnsd->ipv4_prefix_len;
+    MUTEX_UNLOCK(mdnsd->mutex);
+
+    if (advertised == 0) {
+        return 0;
+    }
+    if (prefix_len == 0 || prefix_len > 32) {
+        return 1;
+    }
+    mask = htonl(prefix_len == 32 ? 0xFFFFFFFFu : ~(0xFFFFFFFFu >> prefix_len));
+    return (from_addr & mask) == (advertised & mask);
 }
 
 static int mdns_get_default_ipv6(unsigned char addr[16], unsigned int *scope_id)
@@ -934,7 +969,7 @@ static void mdns_leave_group4_locked(mdnsd_t *mdnsd, uint32_t iface_addr)
  * new link), the multicast group follows so the phone's queries on the new
  * link are answered, then the services are announced there.
  */
-static void mdns_move_ipv4_locked(mdnsd_t *mdnsd, uint32_t new_addr)
+static void mdns_move_ipv4_locked(mdnsd_t *mdnsd, uint32_t new_addr, unsigned int new_prefix_len)
 {
     struct in_addr iface;
     uint32_t const old_addr = mdnsd->ipv4_addr;
@@ -944,6 +979,7 @@ static void mdns_move_ipv4_locked(mdnsd_t *mdnsd, uint32_t new_addr)
         mdns_leave_group4_locked(mdnsd, old_addr);
     }
     mdnsd->ipv4_addr = new_addr;
+    mdnsd->ipv4_prefix_len = new_prefix_len;
     iface.s_addr = new_addr;
     setsockopt(mdnsd->sock_fd4, IPPROTO_IP, IP_MULTICAST_IF, (const char *) &iface, sizeof(iface));
     mdns_join_group4_locked(mdnsd, new_addr);
@@ -964,6 +1000,7 @@ static int mdns_follow_link(mdnsd_t *mdnsd)
 {
     uint32_t held;
     uint32_t preferred;
+    unsigned int preferred_prefix_len = 0;
     int held_present = 0;
     int announced = 0;
     int allow_usb_link;
@@ -976,13 +1013,13 @@ static int mdns_follow_link(mdnsd_t *mdnsd)
     mdnsd->link_choice_changed = 0;
     MUTEX_UNLOCK(mdnsd->mutex);
 
-    preferred = mdns_pick_ipv4(held, &held_present, allow_usb_link);
+    preferred = mdns_pick_ipv4(held, &held_present, allow_usb_link, &preferred_prefix_len);
 
     MUTEX_LOCK(mdnsd->mutex);
     if (mdnsd->sock_fd4 != -1 && mdnsd->ipv4_addr == held) {
         if (preferred != 0 && preferred != held &&
             (user_choice || !(mdnsd->session_active && held_present))) {
-            mdns_move_ipv4_locked(mdnsd, preferred);
+            mdns_move_ipv4_locked(mdnsd, preferred, preferred_prefix_len);
             announced = 1;
         } else if (held_present && mdns_join_group4_locked(mdnsd, held)) {
             mdns_send_response_locked(mdnsd, 1, 1, 1, MDNSD_TTL_SERVICE, MDNS_FAMILY_IPV4, NULL);
@@ -998,6 +1035,8 @@ static THREAD_RETVAL mdns_thread(void *arg)
     mdnsd_t *mdnsd = arg;
     uint64_t next_link_check = mdns_now_ms() + MDNS_LINK_CHECK_MS;
     uint64_t reannounce_at = 0;
+    /* error code of a select() that is currently failing (0: it works) */
+    int select_error = 0;
 
     for (;;) {
         fd_set rfds;
@@ -1035,13 +1074,37 @@ static THREAD_RETVAL mdns_thread(void *arg)
         tv.tv_usec = 250000;
 
         ret = select(max_fd + 1, &rfds, NULL, NULL, &tv);
+        if (ret < 0) {
+            /* mdnsd_stop() closes the sockets to end this thread, so a failure
+             * is an error only while the responder is still running.  It is
+             * reported once (again if the error code changes) and the loop is
+             * slowed down, so that a select that keeps failing cannot spin;
+             * the time-based work below (link check, re-announcement) goes on. */
+            int const sock_err = SOCKET_GET_ERROR();
+
+            MUTEX_LOCK(mdnsd->mutex);
+            running = mdnsd->running;
+            MUTEX_UNLOCK(mdnsd->mutex);
+            if (!running) {
+                break;
+            }
+            if (sock_err != select_error) {
+                select_error = sock_err;
+                fprintf(stderr, "mdnsd: select failed with socket error %d; retrying every %d ms\n",
+                        sock_err, MDNS_SELECT_RETRY_MS);
+            }
+            Sleep(MDNS_SELECT_RETRY_MS);
+        } else if (select_error != 0) {
+            fprintf(stderr, "mdnsd: select works again (it failed with socket error %d)\n", select_error);
+            select_error = 0;
+        }
         if (ret > 0 && fd4 != -1 && FD_ISSET(fd4, &rfds)) {
             unsigned char buffer[MDNS_MAX_PACKET];
             struct sockaddr_in from;
             socklen_t from_len = sizeof(from);
             int received = (int) recvfrom(fd4, (char *) buffer, sizeof(buffer), 0,
                                           (struct sockaddr *) &from, &from_len);
-            if (received > 0) {
+            if (received > 0 && mdns_source_on_advertised_link(mdnsd, from.sin_addr.s_addr)) {
                 mdns_handle_query(mdnsd, buffer, (size_t) received,
                                   MDNS_FAMILY_IPV4, &from, from.sin_port);
             }
@@ -1135,7 +1198,10 @@ int mdnsd_start(mdnsd_t *mdnsd)
     int error4 = 0;
     int error6 = 0;
 
-    mdnsd->ipv4_addr = mdns_get_default_ipv4(mdnsd->usb_link_allowed);
+    {
+        int unused = 0;
+        mdnsd->ipv4_addr = mdns_pick_ipv4(0, &unused, mdnsd->usb_link_allowed, &mdnsd->ipv4_prefix_len);
+    }
     mdns_get_default_ipv6(mdnsd->ipv6_addr, &mdnsd->ipv6_scope_id);
 
     mdnsd->sock_fd4 = mdns_open_socket4(mdnsd->ipv4_addr);

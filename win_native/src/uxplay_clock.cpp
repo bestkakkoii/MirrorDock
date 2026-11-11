@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 module;
 
 #define WIN32_LEAN_AND_MEAN
@@ -42,7 +42,8 @@ namespace uxplay::clock
 
     precise_waiter::precise_waiter()
         : timer_handle{CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
-                                              TIMER_ALL_ACCESS)}
+                                              TIMER_ALL_ACCESS)},
+          precise{timer_handle != nullptr}
     {
         if (timer_handle == nullptr)
         {
@@ -57,6 +58,11 @@ namespace uxplay::clock
         {
             CloseHandle(timer_handle);
         }
+    }
+
+    bool precise_waiter::high_resolution() const
+    {
+        return precise;
     }
 
     void precise_waiter::arm(std::int64_t deadline_ns)
@@ -102,6 +108,43 @@ namespace uxplay::clock
             CancelWaitableTimer(timer_handle);
             return true;
         }
+        if (result == WAIT_FAILED)
+        {
+            // an invalid handle would otherwise turn the caller's wait loop
+            // into a busy loop
+            CancelWaitableTimer(timer_handle);
+            Sleep(1);
+        }
         return false;
+    }
+
+    interval_gate::interval_gate(std::int64_t interval_ns)
+        : interval{interval_ns},
+          passed_at_ns{0},
+          held_back{0},
+          used{false}
+    {
+    }
+
+    std::optional<std::uint64_t> interval_gate::pass(std::int64_t time_ns)
+    {
+        if (used && time_ns - passed_at_ns < interval)
+        {
+            ++held_back;
+            return std::nullopt;
+        }
+        used = true;
+        passed_at_ns = time_ns;
+        return std::exchange(held_back, 0);
+    }
+
+    std::uint64_t interval_gate::take_overdue(std::int64_t time_ns)
+    {
+        if (held_back == 0 || time_ns - passed_at_ns < interval)
+        {
+            return 0;
+        }
+        passed_at_ns = time_ns;
+        return std::exchange(held_back, 0);
     }
 }

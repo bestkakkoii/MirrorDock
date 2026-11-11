@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2019 dsafa22 and 2014 Joakim Plate, modified by Florian Draschbacher,
  * All Rights Reserved.
  *
@@ -269,22 +269,25 @@ ssize_t kernel_timestamp_session_recv(kernel_timestamp_session_t *session, char 
                     }
 
                     if (*recv_time_kernel == 0) {
+                        /* this adapter delivers no kernel timestamp: use the
+                           fallback from now on, and say so once (the adapter
+                           lookup and the notice belong to this case only, not
+                           to every timestamped packet) */
                         session->pWSARecvMsg_ptr = NULL;
-                    }
-
-                    if (interface_index > 0) {
-                        MIB_IF_ROW2 ifRow;
-                        memset(&ifRow, 0, sizeof(ifRow));
-                        ifRow.InterfaceIndex = interface_index;
-                        if (GetIfEntry2(&ifRow) == NO_ERROR) {
-                            WideCharToMultiByte(CP_UTF8, 0, ifRow.Alias, -1, adapter_name, sizeof(adapter_name), NULL, NULL);
+                        if (interface_index > 0) {
+                            MIB_IF_ROW2 ifRow;
+                            memset(&ifRow, 0, sizeof(ifRow));
+                            ifRow.InterfaceIndex = interface_index;
+                            if (GetIfEntry2(&ifRow) == NO_ERROR) {
+                                WideCharToMultiByte(CP_UTF8, 0, ifRow.Alias, -1, adapter_name, sizeof(adapter_name), NULL, NULL);
+                            }
                         }
+                        logger_log(session->raop_ntp->logger, LOGGER_INFO, "*** Windows support for kernel timestamps on NetAdapter \"%s\" is \"Disabled\":\n"
+                                   "To enable it, use the Windows PowerShell (Administrator) command:\n"
+                                    "   Set-NetAdapterAdvancedProperty -Name \"%s\" -DisplayName \"Software Timestamp\" -DisplayValue  \"RxAll\"",
+                                   strlen(adapter_name) ? adapter_name : "(adapter name not found)",
+                                   strlen(adapter_name) ? adapter_name : "(adapter friendly name)");
                     }
-                    logger_log(session->raop_ntp->logger, LOGGER_INFO, "*** Windows support for kernel timestamps on NetAdapter \"%s\" is \"Disabled\":\n"
-                               "To enable it, use the Windows PowerShell (Administrator) command:\n"
-                                "   Set-NetAdapterAdvancedProperty -Name \"%s\" -DisplayName \"Software Timestamp\" -DisplayValue  \"RxAll\"",
-                               strlen(adapter_name) ? adapter_name : "(adapter name not found)",
-                               strlen(adapter_name) ? adapter_name : "(adapter friendly name)");
 
                     if (src_addr && addrlen) {
                         int copy_len = (wsa_msg.namelen < *addrlen) ? wsa_msg.namelen : *addrlen;

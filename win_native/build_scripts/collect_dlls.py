@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+﻿# SPDX-License-Identifier: MIT
 """Copy the non-system DLL closure of an executable next to it.
 
 usage: python -I collect_dlls.py <objdump.exe> <exe> <search_dir> <dest_dir>

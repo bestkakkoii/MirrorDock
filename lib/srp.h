@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Secure Remote Password 6a implementation
  * Copyright (c) 2010 Tom Cocagne. All rights reserved.
  * https://github.com/cocagne/csrp

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2019 dsafa22, All Rights Reserved.
  *
  * This library is free software; you can redistribute it and/or

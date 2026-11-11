@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2019 dsafa22, modified by Florian Draschbacher,
  * All Rights Reserved.
  *

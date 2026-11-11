@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+﻿# SPDX-License-Identifier: MIT
 """Assemble the distributable zip of the Windows-native UxPlay build.
 
 usage: python -I package_zip.py <build_dir> <source_dir> <msys2_clang64_dir> <deps_src_root> <output_zip>

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 // Tests for the iPhone USB link helpers that need no iPhone: local-address
 // classification (window "USB" vs "Wi-Fi" label) and the link monitor's
 // lifecycle (notification registration, first evaluation, prompt shutdown,

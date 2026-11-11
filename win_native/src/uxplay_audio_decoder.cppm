@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 // AirPlay audio decoding to interleaved stereo float32 at the audio device
 // rate.
 //

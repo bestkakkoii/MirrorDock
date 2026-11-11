@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 // Explicit failure outcomes shared by the Windows-native media engine.
 // A failure keeps the stage that failed, the original error code and the
 // original system/library message so diagnostics never lose the root cause.

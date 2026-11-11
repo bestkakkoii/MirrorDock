@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 // User-interface text (tray menu, control bar, window status, notifications)
 // in the Windows display language: Traditional Chinese (zh-TW, zh-HK, zh-MO,
 // zh-Hant), Simplified Chinese (zh-CN, zh-SG, zh-Hans, zh) or English (every
@@ -23,11 +23,10 @@ export namespace uxplay
         // window and tray status
         waiting_for_connection,
         usb_checking,
-        usb_connected_unused,
-        usb_attached_charging_only,
+        usb_charging_only_status,
         usb_not_connected,
         usb_adapter_disabled,
-        usb_connected_at,
+        usb_ready_at,
         usb_turn_on_hotspot,
         // control bar and tray menu
         prefer_usb_link,
@@ -41,19 +40,25 @@ export namespace uxplay
         more,
         mute,
         unmute,
+        always_on_top,
+        mode_quality,
+        mode_balanced,
+        mode_performance,
+        start_with_windows,
         open_log,
+        about,
         exit,
-        // notifications
+        // notifications: USB link
         data_guard_offer_title,
         data_guard_offer_text,
         adapter_disabled_title,
         adapter_disabled_text,
-        usb_connected_title,
-        usb_connected_text,
+        usb_ready_title,
+        usb_ready_text,
+        usb_ready_text_in_session,
         iphone_attached_title,
-        iphone_attached_text,
+        turn_on_hotspot_text,
         adapter_enabled_title,
-        adapter_enabled_text,
         adapter_still_disabled_title,
         admin_declined,
         enable_failed,
@@ -63,9 +68,31 @@ export namespace uxplay
         apply_failed,
         switched_to_usb_first,
         switched_to_wifi_only,
-        choose_uxplay_again,
+        choose_receiver_again, // {}: receiver name
         usb_when_hotspot_on,
         usb_charging_only,
+        // notifications: mode
+        mode_quality_text,
+        mode_balanced_text,
+        mode_performance_text,
+        mode_next_connection,
+        // notifications: program
+        ready_title,
+        already_running_title,
+        select_on_iphone, // {}: receiver name
+        still_running_title,
+        still_running_text,
+        start_failed_title,
+        start_failed_text, // {}: reason, {}: log file path
+        autostart_failed,
+        pairing_pin_title,
+        about_text, // {}: version, {}: UxPlay core version, {}: project page
+        // cropping
+        crop_off,
+        crop_automatic,
+        crop_select,
+        crop_select_hint,
+        cropped, // {}: size of the part shown
         count
     };
 
@@ -87,6 +114,9 @@ export namespace uxplay
 
     // text of the current language (static storage)
     [[nodiscard]] std::wstring_view ui_string(ui_text id);
+
+    // text with its "{}" placeholders filled in, in order
+    [[nodiscard]] std::wstring ui_format(ui_text id, std::span<std::wstring_view const> arguments);
 
     // locale for DirectWrite text formats (selects the matching CJK fallback font)
     [[nodiscard]] std::wstring_view ui_locale_name();

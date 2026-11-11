@@ -1,8 +1,24 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 // Timestamp-scheduled audio output through WASAPI shared mode.
 //
 // * IAudioClient3 minimum engine period (event driven) for the smallest
 //   device buffer the driver allows; falls back to a 10 ms IAudioClient.
+// * The stream runs only while a source has queued audio.  After 3 s without
+//   any it is stopped: no period wake-ups, the audio thread sleeps until
+//   enqueue(), an endpoint change, release_source() or shutdown wakes it.
+//   The stopped endpoint is released 2 s later when no source is in use (or
+//   after 5 minutes of silence from a source that still is), which ends the
+//   audio session: an idle UxPlay is not listed in the volume mixer.  The
+//   first chunk afterwards restarts the stream (Start, or open + Start for a
+//   released endpoint) and the first buffer is written at once.  Chunks are
+//   scheduled by timestamp, so a restart shorter than the presentation delay
+//   costs no sound; a longer one delays the head of that chunk, which the
+//   rate correction or the resynchronization below absorbs.  The default
+//   endpoint is followed in every state (notifications, or a 3 s poll when
+//   they cannot be registered).
+// * A failed endpoint call is logged with its stage and code (repetitions as
+//   a count, at most every 10 s), closes the endpoint and is retried with a
+//   back-off of 0.25 s doubling to 5 s while a source waits for it.
 // * Every source keeps one continuous sample timeline (gaps are filled with
 //   silence on enqueue).  At each device period the frame that will be heard
 //   next is computed from IAudioClock's QPC-correlated position, so a sample
@@ -12,6 +28,9 @@
 //   Hermite interpolation — no clicks, inaudible pitch change.  Errors above
 //   30 ms resynchronize immediately (silence or skip).
 // * Only the highest-priority source with queued audio is heard (USB first).
+// * The queue of a source is one block of memory allocated at creation, and
+//   nothing is logged under the queue lock: enqueue() on the network thread
+//   and the audio thread hold it for copies only.
 module;
 
 #define WIN32_LEAN_AND_MEAN
@@ -34,7 +53,8 @@ export namespace uxplay
         friend bool operator==(audio_device_format const &, audio_device_format const &) = default;
     };
 
-    // Invoked on the audio thread after the endpoint (re)opened with a new format.
+    // Invoked on the audio thread after the endpoint (re)opened with a new
+    // format; this also happens while no stream is running.
     using audio_format_listener = std::function<void(audio_device_format)>;
 
     // What the output actually did with a source since the last query.
@@ -63,13 +83,17 @@ export namespace uxplay
         // Not timestamped: appended back to back (play on arrival), anchored
         // at media_time_ns only when the queue is empty.  Data at a sample
         // rate other than the device rate is rejected (the listener
-        // announces format changes).
+        // announces format changes).  The first chunk for a stopped stream
+        // wakes the audio thread, which starts it.
         void enqueue(media_source source, std::int64_t media_time_ns, std::span<float const> stereo_samples,
                      int sample_rate, bool timestamped);
 
         // Presentation delay applied to the media timeline of a source.
         void set_delay(media_source source, std::int64_t delay_ns);
 
+        // Drops the queued audio of a source and marks it as no longer in
+        // use (until its next chunk): with no source in use the stopped
+        // endpoint is released.
         void release_source(media_source source);
 
         // per-source linear gain (AirPlay volume applies to Wi-Fi audio only)
@@ -78,7 +102,10 @@ export namespace uxplay
         // local mute of the whole output, independent of the senders' volume
         void set_muted(bool muted);
 
-        // Engine period + device stream latency of the open endpoint.
+        // What the output keeps queued in the endpoint (its buffer, never
+        // less than the engine period) + the device stream latency, of the
+        // endpoint as last opened (kept while its stream is stopped or the
+        // endpoint released).
         [[nodiscard]] std::int64_t device_latency_ns() const;
 
         // played frames since the previous call (counter is reset) and gain

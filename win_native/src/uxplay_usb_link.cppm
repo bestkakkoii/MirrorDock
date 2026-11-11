@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 // The iPhone's wired network link: Personal Hotspot over the USB cable
 // ("Apple Mobile Device Ethernet", always 172.20.10.0/28).  AirPlay mirroring
 // rides this link when it is up (USB first, Wi-Fi second); the mirror itself
@@ -50,8 +50,9 @@ export namespace uxplay
         std::function<void(usb_link_action action, bool done, std::string const &detail)> on_admin_result;
     };
 
-    // True when local_address (dotted IPv4, also IPv4-mapped IPv6) is the PC
-    // side of the iPhone USB link rather than a Wi-Fi/LAN address.
+    // True when local_address (dotted IPv4, IPv4-mapped IPv6, or an IPv6
+    // address, link-local ones as "fe80::...%<interface index>") is the PC side
+    // of the iPhone USB link rather than a Wi-Fi/LAN address.
     [[nodiscard]] bool is_usb_link_address(std::string_view local_address);
 
     class usb_link_monitor

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 // C entry points (native_media.h) over the C++ media engine.
 //
 // The C interface replaces UxPlay's process-wide GStreamer renderer
@@ -28,12 +28,28 @@ import uxplay_system_tuning;
 import uxplay_gpu_device;
 import uxplay_video_window;
 import uxplay_ui_text;
+import uxplay_settings;
+import uxplay_crash_report;
 
 namespace
 {
     using uxplay::media_source;
 
     constexpr auto engine_start_wait = std::chrono::seconds{3};
+    // The display query at start decides the codec offer and the stream size
+    // for the whole run from what the GPU can decode: it waits for the engine
+    // much longer than a media call does (a first start can be slow while the
+    // program is scanned or a GPU wakes up).
+    constexpr auto display_query_wait = std::chrono::seconds{20};
+
+    // per-user settings (uxplay_settings)
+    constexpr std::wstring_view setting_prefer_usb_link = L"prefer_usb_link";
+    constexpr std::wstring_view setting_performance_mode = L"performance_mode";
+    constexpr std::wstring_view setting_crop_mode = L"crop_mode"; // 0 off, 1 automatic
+    constexpr std::wstring_view setting_ready_hint_shown = L"ready_hint_shown";
+    constexpr std::wstring_view setting_close_hint_shown = L"close_hint_shown";
+    // how long Windows' shutdown waits for the network goodbye
+    constexpr DWORD session_end_wait_ms = 2000;
 
     // interface text in the language chosen at native_media_start
     std::wstring ui_text_string(uxplay::ui_text id)
@@ -41,10 +57,18 @@ namespace
         return std::wstring{uxplay::ui_string(id)};
     }
 
+    std::wstring ui_text_with(uxplay::ui_text id, std::initializer_list<std::wstring_view> arguments)
+    {
+        return uxplay::ui_format(id, std::span<std::wstring_view const>{arguments.begin(), arguments.size()});
+    }
+
+    std::atomic<bool> ui_language_applied{false};
+
     // native_media_settings::ui_language: 0 follows the Windows display
     // language; 1/2/3 force Traditional Chinese / Simplified Chinese / English
     void apply_ui_language(int requested)
     {
+        ui_language_applied.store(true);
         if (requested >= 1 && requested <= 3)
         {
             uxplay::ui_language const forced = requested == 1   ? uxplay::ui_language::traditional_chinese
@@ -84,10 +108,24 @@ namespace
         bool hotspot_hint_shown = false;
         // AirPlay link preference (persisted in HKCU)
         std::atomic<bool> prefer_usb_link{true};
-        std::optional<uxplay::display_mode_info> display;
+        // uxplay::performance_mode in force
+        std::atomic<int> mode{static_cast<int>(uxplay::performance_mode::balanced)};
+        std::mutex display_mutex;
+        std::optional<uxplay::display_mode_info> display; // guarded by display_mutex
         native_media_event_callback event_callback = nullptr;
         void *event_user_data = nullptr;
         std::wstring log_path;
+        // set once in native_media_start, read-only afterwards
+        std::wstring receiver_name;
+        std::wstring product_version;
+        std::wstring core_version;
+        std::wstring project_url;
+        HANDLE network_stopped_event = nullptr;
+        // why the engine did not start (written before start_finished)
+        std::string failure_text;
+        // warnings raised before native_media_start installed the log sink
+        // (host main thread only); logged by native_media_start
+        std::vector<std::string> early_warnings;
 
         // AirPlay: remote -> local mapping used until NTP sync is available
         std::mutex mapping_mutex;
@@ -101,7 +139,7 @@ namespace
         return instance;
     }
 
-    uxplay::media_engine *engine()
+    uxplay::media_engine *engine(std::chrono::seconds longest_wait = engine_start_wait)
     {
         bridge_state &state = bridge();
         if (uxplay::media_engine *const ready = state.engine.load(std::memory_order_acquire); ready != nullptr)
@@ -113,7 +151,7 @@ namespace
             return nullptr;
         }
         std::unique_lock lock{state.ready_mutex};
-        state.ready_wake.wait_for(lock, engine_start_wait, [&state]
+        state.ready_wake.wait_for(lock, longest_wait, [&state]
         {
             return state.start_finished.load(std::memory_order_acquire);
         });
@@ -144,44 +182,58 @@ namespace
         return static_cast<std::int64_t>(remote_time_ns) + *state.remote_to_local_offset;
     }
 
-    // ---- AirPlay link preference (USB first / Wi-Fi only) --------------------
+    uxplay::performance_mode mode_from_number(int value)
+    {
+        switch (value)
+        {
+        case NATIVE_MEDIA_MODE_QUALITY:
+            return uxplay::performance_mode::quality;
+        case NATIVE_MEDIA_MODE_PERFORMANCE:
+            return uxplay::performance_mode::performance;
+        default:
+            return uxplay::performance_mode::balanced;
+        }
+    }
 
-    constexpr wchar_t settings_key[] = L"Software\\UxPlay";
-    constexpr wchar_t prefer_usb_link_value[] = L"prefer_usb_link";
+    uxplay::ui_text mode_label(uxplay::performance_mode mode)
+    {
+        switch (mode)
+        {
+        case uxplay::performance_mode::quality:
+            return uxplay::ui_text::mode_quality;
+        case uxplay::performance_mode::performance:
+            return uxplay::ui_text::mode_performance;
+        case uxplay::performance_mode::balanced:
+            break;
+        }
+        return uxplay::ui_text::mode_balanced;
+    }
+
+    uxplay::ui_text mode_description(uxplay::performance_mode mode)
+    {
+        switch (mode)
+        {
+        case uxplay::performance_mode::quality:
+            return uxplay::ui_text::mode_quality_text;
+        case uxplay::performance_mode::performance:
+            return uxplay::ui_text::mode_performance_text;
+        case uxplay::performance_mode::balanced:
+            break;
+        }
+        return uxplay::ui_text::mode_balanced_text;
+    }
+
+    // ---- AirPlay link preference (USB first / Wi-Fi only) --------------------
 
     bool load_prefer_usb_link()
     {
-        DWORD value = 1;
-        DWORD size = sizeof(value);
-        LSTATUS const result = RegGetValueW(HKEY_CURRENT_USER, settings_key, prefer_usb_link_value, RRF_RT_REG_DWORD,
-                                            nullptr, &value, &size);
-        if (result == ERROR_FILE_NOT_FOUND)
-        {
-            return true; // default: USB first
-        }
-        if (result != ERROR_SUCCESS)
-        {
-            uxplay::log::warning("settings: {} (using USB first)",
-                                 uxplay::make_win32_failure("RegGetValueW(prefer_usb_link)",
-                                                            static_cast<unsigned long>(result))
-                                     .describe());
-            return true;
-        }
-        return value != 0;
+        // default: USB first
+        return uxplay::settings::stored_number(setting_prefer_usb_link).value_or(1) != 0;
     }
 
     void save_prefer_usb_link(bool prefer_usb_link)
     {
-        DWORD const value = prefer_usb_link ? 1 : 0;
-        LSTATUS const result = RegSetKeyValueW(HKEY_CURRENT_USER, settings_key, prefer_usb_link_value, REG_DWORD,
-                                               &value, sizeof(value));
-        if (result != ERROR_SUCCESS)
-        {
-            uxplay::log::warning("settings: link preference not saved: {}",
-                                 uxplay::make_win32_failure("RegSetKeyValueW(prefer_usb_link)",
-                                                            static_cast<unsigned long>(result))
-                                     .describe());
-        }
+        uxplay::settings::store_number(setting_prefer_usb_link, prefer_usb_link ? 1U : 0U);
     }
 
     // ---- iPhone USB link (AirPlay over the Personal Hotspot cable) ----------
@@ -201,15 +253,9 @@ namespace
     {
         if (!prefer_usb_link)
         {
-            if (link.link_up)
-            {
-                return ui_text_string(uxplay::ui_text::usb_connected_unused);
-            }
-            if (link.iphone_attached)
-            {
-                return ui_text_string(uxplay::ui_text::usb_attached_charging_only);
-            }
-            return ui_text_string(uxplay::ui_text::usb_not_connected);
+            // "Wi-Fi only": whatever is plugged in, the cable only charges
+            return ui_text_string(link.iphone_attached || link.link_up ? uxplay::ui_text::usb_charging_only_status
+                                                                       : uxplay::ui_text::usb_not_connected);
         }
         if (link.link_adapter_disabled)
         {
@@ -217,7 +263,7 @@ namespace
         }
         if (link.link_up)
         {
-            return std::format(L"{} {}", uxplay::ui_string(uxplay::ui_text::usb_connected_at),
+            return std::format(L"{} {}", uxplay::ui_string(uxplay::ui_text::usb_ready_at),
                                uxplay::utf8_to_utf16(link.local_address));
         }
         if (link.iphone_attached)
@@ -275,10 +321,6 @@ namespace
         state.last_usb_link = next;
         bool const offer = offer_data_guard(next);
         uxplay::log::info("USB link: {}", describe_usb_link(next));
-        if (!next.iphone_attached)
-        {
-            state.hotspot_hint_shown = false;
-        }
         uxplay::media_engine *const ready = state.engine.load(std::memory_order_acquire);
         if (ready == nullptr)
         {
@@ -299,14 +341,17 @@ namespace
         }
         else if (prefer && next.link_up && !previous.link_up)
         {
-            ready->notify(ui_text_string(uxplay::ui_text::usb_connected_title),
-                          ui_text_string(uxplay::ui_text::usb_connected_text));
+            // a session that is running stays on its link until the phone reconnects
+            ready->notify(ui_text_string(uxplay::ui_text::usb_ready_title),
+                          ui_text_string(ready->showing_video() ? uxplay::ui_text::usb_ready_text_in_session
+                                                                : uxplay::ui_text::usb_ready_text));
         }
         else if (prefer && next.link_missing && !previous.link_missing && !state.hotspot_hint_shown)
         {
+            // once per run: people who only charge are not reminded at every plug-in
             state.hotspot_hint_shown = true;
             ready->notify(ui_text_string(uxplay::ui_text::iphone_attached_title),
-                          ui_text_string(uxplay::ui_text::iphone_attached_text));
+                          ui_text_string(uxplay::ui_text::turn_on_hotspot_text));
         }
     }
 
@@ -323,7 +368,7 @@ namespace
             if (done)
             {
                 ready->notify(ui_text_string(uxplay::ui_text::adapter_enabled_title),
-                              ui_text_string(uxplay::ui_text::adapter_enabled_text));
+                              ui_text_string(uxplay::ui_text::turn_on_hotspot_text));
             }
             else
             {
@@ -380,6 +425,82 @@ namespace
         emit(NATIVE_MEDIA_EVENT_LINK_PREFERENCE_CHANGED);
     }
 
+    // The user picked a mode in the menu (UI thread).  The engine applies its
+    // part at once; the host recomputes the stream size it advertises and then
+    // calls native_media_performance_mode_applied().
+    void apply_mode(uxplay::performance_mode mode)
+    {
+        bridge_state &state = bridge();
+        int const before = state.mode.exchange(static_cast<int>(mode));
+        if (uxplay::media_engine *const ready = state.engine.load(std::memory_order_acquire); ready != nullptr)
+        {
+            ready->set_performance_mode(mode);
+        }
+        if (before == static_cast<int>(mode))
+        {
+            return;
+        }
+        uxplay::settings::store_number(setting_performance_mode, static_cast<std::uint32_t>(mode));
+        emit(NATIVE_MEDIA_EVENT_PERFORMANCE_MODE_CHANGED);
+    }
+
+    // The user picked "no cropping" or "crop black bars automatically" (UI
+    // thread).  A part framed by hand is the window's and the engine's affair
+    // and is not stored: it belongs to the stream it was drawn on.
+    void apply_crop_mode(uxplay::crop_mode mode)
+    {
+        if (uxplay::media_engine *const ready = bridge().engine.load(std::memory_order_acquire); ready != nullptr)
+        {
+            ready->set_crop_mode(mode);
+        }
+        uxplay::settings::store_number(setting_crop_mode, static_cast<std::uint32_t>(mode));
+    }
+
+    // "Start with Windows" (UI thread)
+    void toggle_autostart()
+    {
+        uxplay::media_engine *const ready = bridge().engine.load(std::memory_order_acquire);
+        auto const report_failure = [ready](uxplay::failure const &cause)
+        {
+            uxplay::log::warning("start with Windows: {}", cause.describe());
+            if (ready != nullptr)
+            {
+                ready->notify(ui_text_string(uxplay::ui_text::start_with_windows),
+                              ui_text_string(uxplay::ui_text::autostart_failed));
+            }
+        };
+        auto registered = uxplay::settings::autostart_command();
+        if (!registered)
+        {
+            // the present state is unknown: nothing is changed
+            report_failure(registered.error());
+            return;
+        }
+        bool const enable = !registered->has_value();
+        if (auto changed = uxplay::settings::set_autostart(enable); !changed)
+        {
+            report_failure(changed.error());
+            return;
+        }
+        uxplay::log::info("start with Windows: {}", enable ? "on" : "off");
+        if (ready != nullptr)
+        {
+            ready->set_autostart(enable);
+        }
+    }
+
+    void show_about()
+    {
+        bridge_state &state = bridge();
+        uxplay::media_engine *const ready = state.engine.load(std::memory_order_acquire);
+        std::wstring const text = ui_text_with(uxplay::ui_text::about_text,
+                                               {state.product_version, state.core_version, state.project_url});
+        HWND const owner = ready != nullptr && ready->showing_video() ? static_cast<HWND>(ready->window_handle())
+                                                                      : nullptr;
+        MessageBoxW(owner, text.c_str(), L"UxPlay",
+                    MB_OK | MB_ICONINFORMATION | (owner == nullptr ? MB_SETFOREGROUND | MB_TOPMOST : 0U));
+    }
+
     uxplay::audio_codec audio_codec_for(unsigned char compression_type)
     {
         switch (compression_type)
@@ -403,6 +524,59 @@ namespace
         callbacks.on_window_closed = [](media_source)
         {
             emit(NATIVE_MEDIA_EVENT_WINDOW_CLOSED);
+            // once ever: closing the window does not end the program
+            if (!uxplay::settings::stored_number(setting_close_hint_shown))
+            {
+                uxplay::settings::store_number(setting_close_hint_shown, 1);
+                if (uxplay::media_engine *const ready = bridge().engine.load(); ready != nullptr)
+                {
+                    ready->notify(ui_text_string(uxplay::ui_text::still_running_title),
+                                  ui_text_string(uxplay::ui_text::still_running_text));
+                }
+            }
+        };
+        callbacks.on_second_launch = []
+        {
+            bridge_state &current = bridge();
+            if (uxplay::media_engine *const ready = current.engine.load(); ready != nullptr)
+            {
+                ready->notify(ui_text_string(uxplay::ui_text::already_running_title),
+                              ui_text_with(uxplay::ui_text::select_on_iphone, {current.receiver_name}));
+            }
+        };
+        callbacks.on_session_ending = []
+        {
+            // Windows ends the process when this returns: let the host say
+            // goodbye on the network first (bounded)
+            bridge_state &current = bridge();
+            if (current.network_stopped_event == nullptr)
+            {
+                return;
+            }
+            ResetEvent(current.network_stopped_event);
+            emit(NATIVE_MEDIA_EVENT_SESSION_ENDING);
+            if (WaitForSingleObject(current.network_stopped_event, session_end_wait_ms) != WAIT_OBJECT_0)
+            {
+                uxplay::log::warning("shutdown: the network services did not stop within {} ms", session_end_wait_ms);
+            }
+        };
+        callbacks.on_display_changed = []
+        {
+            bridge_state &current = bridge();
+            if (auto display = uxplay::gpu_device::primary_display_mode(); display)
+            {
+                std::scoped_lock lock{current.display_mutex};
+                current.display = std::move(*display);
+            }
+            else
+            {
+                uxplay::log::warning("display query after a display change: {}", display.error().describe());
+            }
+            emit(NATIVE_MEDIA_EVENT_DISPLAY_CHANGED);
+        };
+        callbacks.on_device_lost = []
+        {
+            emit(NATIVE_MEDIA_EVENT_DEVICE_LOST);
         };
         callbacks.on_usb_device_change = []
         {
@@ -439,26 +613,82 @@ namespace
             case uxplay::tray_command::open_log:
                 if (!current.log_path.empty())
                 {
-                    ShellExecuteW(nullptr, L"open", current.log_path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+                    // ShellExecute reports success with a value above 32
+                    auto const opened = reinterpret_cast<std::intptr_t>(
+                        ShellExecuteW(nullptr, L"open", current.log_path.c_str(), nullptr, nullptr, SW_SHOWNORMAL));
+                    if (opened <= 32)
+                    {
+                        uxplay::log::warning("open log file: ShellExecute failed with code {} for {}", opened,
+                                             uxplay::utf16_to_utf8(current.log_path));
+                    }
                 }
                 break;
             case uxplay::tray_command::exit:
                 emit(NATIVE_MEDIA_EVENT_EXIT_REQUESTED);
                 break;
+            case uxplay::tray_command::mode_quality:
+                apply_mode(uxplay::performance_mode::quality);
+                break;
+            case uxplay::tray_command::mode_balanced:
+                apply_mode(uxplay::performance_mode::balanced);
+                break;
+            case uxplay::tray_command::mode_performance:
+                apply_mode(uxplay::performance_mode::performance);
+                break;
+            case uxplay::tray_command::crop_off:
+                apply_crop_mode(uxplay::crop_mode::off);
+                break;
+            case uxplay::tray_command::crop_automatic:
+                apply_crop_mode(uxplay::crop_mode::automatic);
+                break;
+            case uxplay::tray_command::toggle_autostart:
+                toggle_autostart();
+                break;
+            case uxplay::tray_command::about:
+                show_about();
+                break;
             case uxplay::tray_command::toggle_fullscreen:
+            case uxplay::tray_command::toggle_always_on_top:
             case uxplay::tray_command::toggle_mute:
+            case uxplay::tray_command::crop_select:
                 break; // handled by the window / the engine
             }
         };
         auto created = uxplay::media_engine::create(std::move(engine_settings), std::move(callbacks));
+        bool failed = false;
         if (!created)
         {
-            uxplay::log::error("media engine start: {}", created.error().describe());
+            // without the engine there is no window and no tray icon: the host
+            // tells the user and exits (NATIVE_MEDIA_EVENT_START_FAILED)
+            state.failure_text = created.error().describe();
+            uxplay::log::error("media engine start: {}", state.failure_text);
+            failed = true;
         }
         else
         {
             state.engine_owner = std::move(*created);
             state.engine.store(state.engine_owner.get(), std::memory_order_release);
+            state.engine_owner->set_log_available(!state.log_path.empty());
+            if (auto registered = uxplay::settings::autostart_command(); !registered)
+            {
+                uxplay::log::warning("start with Windows: {}", registered.error().describe());
+            }
+            else if (registered->has_value())
+            {
+                state.engine_owner->set_autostart(true);
+                // keep the registration pointing at this copy of the program
+                if (auto refreshed = uxplay::settings::set_autostart(true); !refreshed)
+                {
+                    uxplay::log::warning("start with Windows: {}", refreshed.error().describe());
+                }
+            }
+            // first run: the program has no window until a phone connects
+            if (!uxplay::settings::stored_number(setting_ready_hint_shown))
+            {
+                uxplay::settings::store_number(setting_ready_hint_shown, 1);
+                state.engine_owner->notify(ui_text_string(uxplay::ui_text::ready_title),
+                                           ui_text_with(uxplay::ui_text::select_on_iphone, {state.receiver_name}));
+            }
 
             // AirPlay over the USB cable: status, hints and the cellular-data guard
             uxplay::usb_link_events link_events;
@@ -489,6 +719,10 @@ namespace
             state.start_finished.store(true, std::memory_order_release);
         }
         state.ready_wake.notify_all();
+        if (failed)
+        {
+            emit(NATIVE_MEDIA_EVENT_START_FAILED);
+        }
     }
 }
 
@@ -501,23 +735,53 @@ extern "C" int native_media_start(const native_media_settings *settings)
         return 0;
     }
     uxplay::log::install_sink(settings->log_callback, static_cast<uxplay::log::level>(settings->log_level));
+    for (std::string const &warning : state.early_warnings)
+    {
+        uxplay::log::warning("{}", warning);
+    }
+    state.early_warnings.clear();
     // before the engine thread creates the window, tray menu and control bar
     apply_ui_language(settings->ui_language);
     state.event_callback = settings->event_callback;
     state.event_user_data = settings->event_user_data;
     state.log_path = settings->log_path != nullptr ? uxplay::utf8_to_utf16(settings->log_path) : std::wstring{};
-    // synchronous: uxplay.cpp reads it before the mDNS advertisement starts
+    // synchronous: uxplay.cpp reads these before the mDNS advertisement starts
     state.prefer_usb_link.store(load_prefer_usb_link());
+    int const requested_mode = settings->performance_mode;
+    uxplay::performance_mode const mode =
+        requested_mode >= NATIVE_MEDIA_MODE_QUALITY && requested_mode <= NATIVE_MEDIA_MODE_PERFORMANCE
+            ? mode_from_number(requested_mode)
+            : mode_from_number(static_cast<int>(uxplay::settings::stored_number(setting_performance_mode)
+                                                    .value_or(NATIVE_MEDIA_MODE_BALANCED)));
+    state.mode.store(static_cast<int>(mode));
+    auto const text_or_empty = [](const char *text)
+    {
+        return text != nullptr ? uxplay::utf8_to_utf16(text) : std::wstring{};
+    };
+    state.receiver_name = text_or_empty(settings->window_title);
+    state.product_version = text_or_empty(settings->product_version);
+    state.core_version = text_or_empty(settings->core_version);
+    state.project_url = text_or_empty(settings->project_url);
+    if (state.network_stopped_event == nullptr)
+    {
+        state.network_stopped_event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        if (state.network_stopped_event == nullptr)
+        {
+            uxplay::log::warning("shutdown wait unavailable: {}",
+                                 uxplay::make_win32_failure("CreateEventW", GetLastError()).describe());
+        }
+    }
 
     uxplay::system_tuning::process_tuning_report const tuning = uxplay::system_tuning::apply_process_tuning();
-    uxplay::log::info("host tuning: power throttling off {}, timer resolution kept {}, priority above normal {}, "
-                      "per-monitor DPI {}",
-                      tuning.power_throttling_disabled, tuning.timer_resolution_ignored_opt_out, tuning.priority_raised,
-                      tuning.dpi_awareness_set);
+    // process priority and power throttling are set per mirroring session
+    // (system_tuning::set_session_active), not for the idle program
+    uxplay::log::info("host tuning: timer resolution kept {}, per-monitor DPI {}",
+                      tuning.timer_resolution_ignored_opt_out, tuning.dpi_awareness_set);
 
     // cheap and synchronous: needed now for the AirPlay display advertisement
     if (auto display = uxplay::gpu_device::primary_display_mode(); display)
     {
+        std::scoped_lock display_lock{state.display_mutex};
         state.display = std::move(*display);
     }
     else
@@ -532,6 +796,13 @@ extern "C" int native_media_start(const native_media_settings *settings)
     engine_settings.timestamp_sync = settings->timestamp_sync;
     engine_settings.keep_window_on_stop = settings->keep_window_on_stop;
     engine_settings.tray_icon = settings->tray_icon;
+    engine_settings.mode = mode;
+    int const requested_crop = settings->crop_mode;
+    bool const automatic_crop =
+        requested_crop == 0 || requested_crop == 1
+            ? requested_crop == 1
+            : uxplay::settings::stored_number(setting_crop_mode).value_or(0) == 1;
+    engine_settings.crop = automatic_crop ? uxplay::crop_mode::automatic : uxplay::crop_mode::off;
     engine_settings.gpu = settings->gpu_preference == 1   ? uxplay::gpu_preference::integrated
                           : settings->gpu_preference == 2 ? uxplay::gpu_preference::discrete
                           : settings->gpu_preference == 3 ? uxplay::gpu_preference::software
@@ -553,6 +824,12 @@ extern "C" void native_media_stop(void)
     {
         state.start_thread.join();
     }
+    // the window thread first: its menu commands use the link monitor and
+    // the engine, which go next
+    if (state.engine_owner)
+    {
+        state.engine_owner->stop_window_callbacks();
+    }
     state.usb_link.store(nullptr);
     state.usb_link_owner.reset();
     state.engine.store(nullptr);
@@ -562,16 +839,153 @@ extern "C" void native_media_stop(void)
 extern "C" bool native_media_query_display(native_media_display_info *info)
 {
     bridge_state &state = bridge();
-    if (!state.display || info == nullptr || state.display->width <= 0 || state.display->height <= 0)
+    if (info == nullptr)
     {
         return false;
     }
-    info->width = state.display->width;
-    info->height = state.display->height;
-    info->refresh_hz = static_cast<int>(std::lround(state.display->refresh_hz()));
-    uxplay::media_engine *const ready = engine();
+    {
+        std::scoped_lock lock{state.display_mutex};
+        if (!state.display || state.display->width <= 0 || state.display->height <= 0)
+        {
+            return false;
+        }
+        info->width = state.display->width;
+        info->height = state.display->height;
+        info->refresh_hz = static_cast<int>(std::lround(state.display->refresh_hz()));
+    }
+    uxplay::media_engine *const ready = engine(display_query_wait);
+    if (ready == nullptr && !state.start_finished.load(std::memory_order_acquire))
+    {
+        // the codec offer below is decided without the GPU's answer
+        uxplay::log::warning("display query: the engine was not ready within {} s; assuming no hardware decoder",
+                             display_query_wait.count());
+    }
     info->hevc_hardware = (ready != nullptr && ready->hevc_hardware()) ? 1 : 0;
+    info->h264_hardware = (ready != nullptr && ready->h264_hardware()) ? 1 : 0;
     return true;
+}
+
+extern "C" const char *native_media_failure_text(void)
+{
+    bridge_state &state = bridge();
+    return state.start_finished.load(std::memory_order_acquire) ? state.failure_text.c_str() : "";
+}
+
+extern "C" int native_media_performance_mode(void)
+{
+    return bridge().mode.load();
+}
+
+extern "C" void native_media_performance_mode_applied(bool applies_next_connection)
+{
+    bridge_state &state = bridge();
+    uxplay::media_engine *const ready = state.engine.load(std::memory_order_acquire);
+    if (ready == nullptr)
+    {
+        return;
+    }
+    uxplay::performance_mode const mode = mode_from_number(state.mode.load());
+    std::wstring text = ui_text_string(mode_description(mode));
+    if (applies_next_connection)
+    {
+        text += L'\n';
+        text += uxplay::ui_string(uxplay::ui_text::mode_next_connection);
+    }
+    ready->notify(ui_text_string(mode_label(mode)), std::move(text));
+}
+
+extern "C" int native_media_activate_running_instance(const char *receiver_name)
+{
+    if (receiver_name == nullptr)
+    {
+        return 0;
+    }
+    struct search
+    {
+        UINT message = 0;
+        WPARAM tag = 0;
+        int notified = 0;
+    };
+    search found;
+    found.message = RegisterWindowMessageW(uxplay::second_launch_message_name);
+    found.tag = uxplay::second_launch_tag(uxplay::utf8_to_utf16(receiver_name));
+    if (found.message == 0)
+    {
+        uxplay::log::warning("single instance: {}",
+                             uxplay::make_win32_failure("RegisterWindowMessageW", GetLastError()).describe());
+        return 0;
+    }
+    EnumWindows(
+        [](HWND window, LPARAM parameter) -> BOOL
+        {
+            auto *const current = reinterpret_cast<search *>(parameter);
+            wchar_t class_name[64]{};
+            // sent with a time limit, and counted only when the window
+            // answers for this receiver name: a hung instance, or one with
+            // another name, is not "notified"
+            DWORD_PTR answer = 0;
+            if (GetClassNameW(window, class_name, 64) > 0 &&
+                std::wstring_view{class_name} == uxplay::video_window_class_name &&
+                SendMessageTimeoutW(window, current->message, current->tag, 0, SMTO_ABORTIFHUNG | SMTO_NORMAL, 1000,
+                                    &answer) != 0 &&
+                answer == 1)
+            {
+                ++current->notified;
+            }
+            return TRUE;
+        },
+        reinterpret_cast<LPARAM>(&found));
+    return found.notified;
+}
+
+extern "C" void native_media_network_stopped(void)
+{
+    if (HANDLE const stopped = bridge().network_stopped_event; stopped != nullptr)
+    {
+        SetEvent(stopped);
+    }
+}
+
+extern "C" void native_media_show_start_failure(const char *reason, const char *log_path)
+{
+    if (!ui_language_applied.load())
+    {
+        apply_ui_language(0); // a failure before native_media_start: still the user's language
+    }
+    std::wstring const text =
+        ui_text_with(uxplay::ui_text::start_failed_text,
+                     {uxplay::utf8_to_utf16(reason != nullptr ? reason : ""),
+                      uxplay::utf8_to_utf16(log_path != nullptr ? log_path : "")});
+    std::wstring const title = std::format(L"UxPlay · {}", uxplay::ui_string(uxplay::ui_text::start_failed_title));
+    MessageBoxW(nullptr, text.c_str(), title.c_str(), MB_OK | MB_ICONERROR | MB_SETFOREGROUND | MB_TOPMOST);
+}
+
+extern "C" void native_media_install_crash_report(const char *directory)
+{
+    if (directory == nullptr)
+    {
+        return;
+    }
+    // called first thing in main, before the log sink exists: the outcome is
+    // kept and logged by native_media_start
+    bridge_state &state = bridge();
+    std::wstring const folder = uxplay::utf8_to_utf16(directory);
+    if (std::optional<std::wstring> const previous = uxplay::crash_report::take_previous_record(folder); previous)
+    {
+        state.early_warnings.push_back(
+            std::format("a previous run ended with a crash; its record is {} (its minidump, when one was "
+                        "written, is {} in the same folder)",
+                        uxplay::utf16_to_utf8(*previous),
+                        uxplay::utf16_to_utf8(uxplay::crash_report::kept_dump_file_name)));
+    }
+    if (auto installed = uxplay::crash_report::install(folder); !installed)
+    {
+        state.early_warnings.push_back(std::format("crash report unavailable: {}", installed.error().describe()));
+    }
+    else if (!installed->empty())
+    {
+        state.early_warnings.push_back(*installed);
+    }
 }
 
 extern "C" void native_media_airplay_video_configure(int codec, int width, int height)
@@ -687,6 +1101,11 @@ extern "C" int native_media_set_airplay_local_address(const char *local_address)
     return over_usb ? 1 : 0;
 }
 
+extern "C" bool native_media_is_usb_link_address(const char *local_address)
+{
+    return local_address != nullptr && uxplay::is_usb_link_address(local_address);
+}
+
 extern "C" bool native_media_prefer_usb_link(void)
 {
     return bridge().prefer_usb_link.load();
@@ -705,12 +1124,13 @@ extern "C" void native_media_link_preference_applied(bool session_ended)
     {
         return;
     }
-    bool const prefer = bridge().prefer_usb_link.load();
+    bridge_state &state = bridge();
+    bool const prefer = state.prefer_usb_link.load();
     uxplay::ui_text const title = prefer ? uxplay::ui_text::switched_to_usb_first : uxplay::ui_text::switched_to_wifi_only;
-    uxplay::ui_text const text = session_ended ? uxplay::ui_text::choose_uxplay_again
-                                 : prefer      ? uxplay::ui_text::usb_when_hotspot_on
-                                               : uxplay::ui_text::usb_charging_only;
-    ready->notify(ui_text_string(title), ui_text_string(text));
+    std::wstring text = session_ended ? ui_text_with(uxplay::ui_text::choose_receiver_again, {state.receiver_name})
+                                      : ui_text_string(prefer ? uxplay::ui_text::usb_when_hotspot_on
+                                                              : uxplay::ui_text::usb_charging_only);
+    ready->notify(ui_text_string(title), std::move(text));
 }
 
 extern "C" void native_media_notify(const char *title, const char *text)
@@ -718,5 +1138,13 @@ extern "C" void native_media_notify(const char *title, const char *text)
     if (uxplay::media_engine *const ready = engine(); ready != nullptr && title != nullptr && text != nullptr)
     {
         ready->notify(uxplay::utf8_to_utf16(title), uxplay::utf8_to_utf16(text));
+    }
+}
+
+extern "C" void native_media_notify_pin(const char *pin)
+{
+    if (uxplay::media_engine *const ready = engine(); ready != nullptr && pin != nullptr)
+    {
+        ready->notify(ui_text_string(uxplay::ui_text::pairing_pin_title), uxplay::utf8_to_utf16(pin));
     }
 }

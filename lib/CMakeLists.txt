@@ -1,4 +1,4 @@
-include_directories( playfair llhttp )
+﻿include_directories( playfair llhttp )
 
 # Optimization and the portable CPU baseline (x86-64-v2) come from the build
 # script's CMAKE_C_FLAGS and the build type; no -march=native here.

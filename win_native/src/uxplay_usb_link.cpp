@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 module;
 
 #define WIN32_LEAN_AND_MEAN
@@ -27,7 +27,12 @@ namespace uxplay
         constexpr std::uint32_t usb_link_mask = 0xFFFFFF00U;
         // interface metric that keeps any other link preferred
         constexpr ULONG guarded_metric = 9999;
-        constexpr auto poll_interval = std::chrono::seconds{5};
+        // Address/interface notifications and WM_DEVICECHANGE drive the
+        // monitor.  Only the end of the grace period after an attach arrives
+        // without any notification, so the state is polled while that is
+        // awaited; otherwise the poll is a rarely needed safety net.
+        constexpr auto waiting_poll_interval = std::chrono::seconds{5};
+        constexpr auto idle_poll_interval = std::chrono::seconds{60};
         constexpr auto settle_delay = std::chrono::milliseconds{300};
         constexpr DWORD guard_process_timeout_ms = 60'000;
         // the link needs a few seconds after attach (enumeration + DHCP)
@@ -383,32 +388,92 @@ namespace uxplay
 
     bool is_usb_link_address(std::string_view local_address)
     {
-        std::optional<std::uint32_t> const parsed = parse_ipv4(local_address);
-        if (!parsed || !in_usb_subnet(*parsed))
+        if (std::optional<std::uint32_t> const parsed = parse_ipv4(local_address); parsed)
+        {
+            if (!in_usb_subnet(*parsed))
+            {
+                return false;
+            }
+            // A PC joined to the iPhone hotspot over Wi-Fi also gets
+            // 172.20.10.x: that is Wi-Fi, not the cable.
+            auto adapters = adapter_list(AF_INET);
+            if (!adapters)
+            {
+                return true;
+            }
+            std::uint32_t const wanted = htonl(*parsed);
+            for (IP_ADAPTER_ADDRESSES const *adapter = first_adapter(*adapters); adapter != nullptr;
+                 adapter = adapter->Next)
+            {
+                for (IP_ADAPTER_UNICAST_ADDRESS_LH const *unicast = adapter->FirstUnicastAddress; unicast != nullptr;
+                     unicast = unicast->Next)
+                {
+                    if (ipv4_of(*unicast) == wanted)
+                    {
+                        return adapter->IfType != IF_TYPE_IEEE80211;
+                    }
+                }
+            }
+            return true;
+        }
+        // IPv6 (the link also carries link-local and carrier addresses): the
+        // address is on the USB link when its adapter holds the 172.20.10.x
+        // address and is not a Wi-Fi adapter.  "fe80::...%<zone>" names the
+        // adapter by its IPv6 interface index.
+        std::string text{local_address};
+        std::optional<unsigned long> zone;
+        if (std::size_t const percent = text.find('%'); percent != std::string::npos)
+        {
+            unsigned long parsed_zone = 0;
+            char const *const first = text.data() + percent + 1;
+            char const *const last = text.data() + text.size();
+            if (auto const [end, error] = std::from_chars(first, last, parsed_zone);
+                error != std::errc{} || end != last || parsed_zone == 0)
+            {
+                return false;
+            }
+            zone = parsed_zone;
+            text.resize(percent);
+        }
+        in6_addr wanted{};
+        if (inet_pton(AF_INET6, text.c_str(), &wanted) != 1)
         {
             return false;
         }
-        // A PC joined to the iPhone hotspot over Wi-Fi also gets 172.20.10.x:
-        // that is Wi-Fi, not the cable.
-        auto adapters = adapter_list(AF_INET);
+        auto adapters = adapter_list(AF_UNSPEC);
         if (!adapters)
         {
-            return true;
+            // cannot tell: not claiming USB keeps "Wi-Fi only" from refusing a LAN client
+            log::warning("USB link: adapter list unavailable while classifying {}: {}", local_address,
+                         adapters.error().describe());
+            return false;
         }
-        std::uint32_t const wanted = htonl(*parsed);
         for (IP_ADAPTER_ADDRESSES const *adapter = first_adapter(*adapters); adapter != nullptr;
              adapter = adapter->Next)
         {
+            bool owns_address = false;
+            bool holds_usb_subnet = false;
             for (IP_ADAPTER_UNICAST_ADDRESS_LH const *unicast = adapter->FirstUnicastAddress; unicast != nullptr;
                  unicast = unicast->Next)
             {
-                if (ipv4_of(*unicast) == wanted)
+                if (std::optional<std::uint32_t> const ipv4 = ipv4_of(*unicast); ipv4)
                 {
-                    return adapter->IfType != IF_TYPE_IEEE80211;
+                    holds_usb_subnet = holds_usb_subnet || in_usb_subnet(ntohl(*ipv4));
+                }
+                else if (unicast->Address.lpSockaddr != nullptr &&
+                         unicast->Address.lpSockaddr->sa_family == AF_INET6)
+                {
+                    sockaddr_in6 ipv6{};
+                    std::memcpy(&ipv6, unicast->Address.lpSockaddr, sizeof(ipv6));
+                    owns_address = owns_address || std::memcmp(&ipv6.sin6_addr, &wanted, sizeof(wanted)) == 0;
                 }
             }
+            if (owns_address && (!zone || adapter->Ipv6IfIndex == *zone))
+            {
+                return holds_usb_subnet && adapter->IfType != IF_TYPE_IEEE80211;
+            }
         }
-        return true;
+        return false;
     }
 
     struct usb_link_monitor::state
@@ -708,13 +773,14 @@ namespace uxplay
 
     void usb_link_monitor::state::worker_loop()
     {
+        bool awaiting_link = true; // first evaluation follows at once (dirty)
         for (;;)
         {
             bool guard_now = false;
             bool enable_now = false;
             {
                 std::unique_lock lock{mutex};
-                wake.wait_for(lock, poll_interval, [this]
+                wake.wait_for(lock, awaiting_link ? waiting_poll_interval : idle_poll_interval, [this]
                 {
                     return stopping || dirty || guard_requested || enable_requested;
                 });
@@ -738,7 +804,9 @@ namespace uxplay
                 guard_now = std::exchange(guard_requested, false);
                 enable_now = std::exchange(enable_requested, false);
             }
-            publish(evaluate());
+            usb_link_state const evaluated = evaluate();
+            awaiting_link = waiting_for_link_since.has_value() && !evaluated.link_missing;
+            publish(evaluated);
             if (enable_now)
             {
                 run_enable_adapter();

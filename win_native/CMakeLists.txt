@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+﻿# SPDX-License-Identifier: MIT
 # Windows-native media engine for UxPlay (C++26 named modules).
 #
 # Inputs (pinned main-branch builds, see README_AI.md): FFmpeg (libavcodec,
@@ -51,6 +51,9 @@ target_sources( uxplay_native
       src/uxplay_media_types.cppm
       src/uxplay_gpu_device.cppm
       src/uxplay_ui_text.cppm
+      src/uxplay_settings.cppm
+      src/uxplay_crash_report.cppm
+      src/uxplay_crop_detector.cppm
       src/uxplay_video_frame.cppm
       src/uxplay_video_decoder.cppm
       src/uxplay_video_overlay.cppm
@@ -67,6 +70,9 @@ target_sources( uxplay_native
     src/uxplay_system_tuning.cpp
     src/uxplay_gpu_device.cpp
     src/uxplay_ui_text.cpp
+    src/uxplay_settings.cpp
+    src/uxplay_crash_report.cpp
+    src/uxplay_crop_detector.cpp
     src/uxplay_video_frame.cpp
     src/uxplay_video_decoder.cpp
     src/uxplay_video_overlay.cpp

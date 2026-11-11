@@ -1,4 +1,4 @@
-/**
+﻿/**
  * RPiPlay - An open-source AirPlay mirroring server for Raspberry Pi
  * Copyright (C) 2019 Florian Draschbacher
  * Modified extensively to become 
@@ -56,7 +56,10 @@
 #include "win_native/include/native_media.h"
 
 
-#define VERSION "1.74"
+#include "win_native/include/uxplay_version.h"
+
+/* version of the UxPlay protocol core this program derives from */
+#define VERSION UXPLAY_CORE_VERSION
 
 #define SECOND_IN_USECS 1000000
 #define DEFAULT_NAME "UxPlay"
@@ -74,7 +77,9 @@ static bool audio_sync = false;
 static bool video_sync = true;
 static int64_t audio_delay_alac = 0;
 static int64_t audio_delay_aac = 0;
-static bool relaunch_video = false;
+/* session-cycle flags: written by RAOP threads and by main-loop tasks, read
+   by main() between cycles */
+static std::atomic<bool> relaunch_video{false};
 /* changed by RAOP connection threads, read by the main loop */
 static std::atomic<unsigned int> open_connections{0};
 /* Windows: the current AirPlay client is on the iPhone USB link (written by
@@ -84,8 +89,12 @@ static bool use_video = true;
 static int  audiodelay = -1;
 static bool use_audio = true;
 static bool new_window_closing_behavior = true;
-static bool close_window;
-static bool full_video_reset = true;
+static std::atomic<bool> close_window{false};
+static std::atomic<bool> full_video_reset{true};
+/* a new client connection replaced the old one inside the AirPlay core
+   ("nohold", or the hand-over of a client that connects again): the relaunch
+   that follows must keep that new connection */
+static std::atomic<bool> connection_handed_over{false};
 static bool show_client_FPS_data = false;
 static FILE *video_dumpfile = NULL;
 static std::string video_dumpfile_name = "videodump";
@@ -139,41 +148,291 @@ static bool h265_user_requested = false;  /* explicit "-h265": offer H.265 even 
 static unsigned int missed_feedback_limit = MISSED_FEEDBACK_LIMIT;
 /* written by the RAOP feedback handler, read by the main loop's 1 s timer */
 static std::atomic<unsigned int> missed_feedback{0};
-static bool reset_httpd = false;
+static std::atomic<bool> reset_httpd{false};
+/* exit was requested (menu, Ctrl+C, shutdown): never cleared, so a reset
+   that arrives at the same time cannot turn the exit into a relaunch */
+static std::atomic<bool> exit_requested{false};
+/* the Direct3D device was lost: start the program again after the shutdown */
+static std::atomic<bool> restart_after_exit{false};
 static bool force_h264_only = false;    /* "-h264": do not offer H.265 to the client */
 static int gpu_preference = 0;          /* "-gpu auto|intel|nvidia" */
 static int ui_language_choice = 0;      /* "-ui": 0 auto, 1 zh-TW, 2 zh-CN, 3 en (native_media_settings) */
+static int mode_choice = -1;            /* "-mode": native_media_mode, -1 = the choice saved by the menu */
+static int crop_choice = -1;            /* "-crop": 0 off, 1 auto, -1 = the choice saved by the menu */
+static bool user_set_display = false;   /* "-s": the stream size is the user's, not the mode's */
+static bool user_set_fps = false;       /* "-fps" */
+static HANDLE instance_mutex = NULL;    /* one receiver per name */
+static bool instance_claimed = false;   /* this process is the instance of its name: uxplay.log is its own */
 static HANDLE shutdown_complete_event = NULL;
 
 
 /* logging */
 
-static void log(int level, const char* format, ...) {
-    va_list vargs;
-    if (level > log_level) return;
-    switch (level) {
-    case 0:
-    case 1:
-    case 2:
-    case 3:
-        printf("*** ERROR: ");
-        break;
-    case 4:
-        printf("*** WARNING: ");
-        break;
-    default:
-        break;
+/* The native build is a GUI-subsystem program (a console window costs ~1.2 s
+ * to appear on Windows 11).  Started from a terminal, or with its output
+ * redirected, the log goes there.  Otherwise it goes to
+ * %LOCALAPPDATA%\UxPlay\uxplay.log ("Open log file" in the menu): the log of
+ * the previous run is kept as uxplay.previous.log, and the file starts over
+ * when it reaches LOG_FILE_LIMIT.  Until open_log_file() is called (options
+ * parsed, single-instance check passed) the lines are held in memory, so a
+ * second start never touches the log of the instance that is running.
+ * Every line carries the local time; all sources (this file, lib/, the media
+ * engine) pass through log() and its one lock. */
+#define LOG_FILE_LIMIT (8u * 1024u * 1024u)
+#define PENDING_LOG_LIMIT (1024u * 1024u)
+
+static std::string native_log_directory;  /* %LOCALAPPDATA%\UxPlay ("" when unavailable) */
+static std::string native_log_path;       /* the log file, once it is open */
+static std::mutex log_mutex;
+static bool log_to_file = false;          /* no terminal, no redirection: the log file is used */
+static bool log_file_open = false;
+static std::string pending_log_lines;     /* written when the log file opens */
+static size_t log_file_bytes = 0;
+static std::string last_error_line;       /* last ERROR-level message (start-up failure dialog) */
+/* The log is <directory>\<log_base_name>.log.  When that file is being
+ * written by another running instance, this one changes to
+ * log_alternate_name (set by main() from the receiver name). */
+static std::string log_base_name = "uxplay";
+static std::string log_alternate_name;
+
+/* opens (or starts over) the log file; log_mutex held */
+static bool reopen_log_file_locked(void) {
+    if (native_log_directory.empty()) {
+        return false;
     }
+    if (log_file_open) {
+        /* release the file so it can be renamed */
+        FILE *stream = NULL;
+        freopen_s(&stream, "NUL", "w", stdout);
+        freopen_s(&stream, "NUL", "w", stderr);
+        log_file_open = false;
+    }
+    std::string in_use;
+    for (int choice = 0; choice < 2; choice++) {
+        std::string path = native_log_directory + "\\" + log_base_name + ".log";
+        std::string previous = native_log_directory + "\\" + log_base_name + ".previous.log";
+        /* The file may still be open in an instance that was ended a moment
+           ago (this start took its place): wait up to a second for it rather
+           than truncate a log that could not be kept. */
+        DWORD keep_error = ERROR_SUCCESS;
+        for (int attempt = 0; attempt < 10; attempt++) {
+            keep_error = MoveFileExA(path.c_str(), previous.c_str(), MOVEFILE_REPLACE_EXISTING) ? ERROR_SUCCESS
+                                                                                                : GetLastError();
+            if (keep_error != ERROR_SHARING_VIOLATION) {
+                break;
+            }
+            Sleep(100);
+        }
+        if (keep_error == ERROR_SHARING_VIOLATION && choice == 0 && !log_alternate_name.empty() &&
+            log_alternate_name != log_base_name) {
+            /* Another instance is writing this file - a receiver with another
+               name, or an older version that takes no part in the
+               single-instance check.  Its log is left alone: this instance
+               uses a file of its own, also for later rotations. */
+            in_use = path;
+            log_base_name = log_alternate_name;
+            continue;
+        }
+        /* plain freopen opens the file shared (freopen_s denies other readers),
+         * so "Open log file" can show it while the program runs */
+        if (freopen(path.c_str(), "w", stdout) == NULL) {
+            return false;
+        }
+        setvbuf(stdout, NULL, _IONBF, 0);
+        _dup2(_fileno(stdout), _fileno(stderr));
+        native_log_path = path;
+        log_file_open = true;
+        log_file_bytes = 0;
+        if (!in_use.empty()) {
+            fprintf(stdout, "*** WARNING: %s is in use by another running instance; this instance logs here\n",
+                    in_use.c_str());
+        }
+        if (keep_error != ERROR_SUCCESS && keep_error != ERROR_FILE_NOT_FOUND) {
+            fprintf(stdout, "*** WARNING: the previous log could not be kept as %s (Windows error %lu)\n",
+                    previous.c_str(), (unsigned long) keep_error);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* writes one finished line; log_mutex held */
+static void write_log_line_locked(const std::string &line) {
+    if (log_to_file && !log_file_open) {
+        if (pending_log_lines.size() + line.size() <= PENDING_LOG_LIMIT) {
+            pending_log_lines += line;
+        }
+        return;
+    }
+    fputs(line.c_str(), stdout);
+    if (log_file_open) {
+        log_file_bytes += line.size();
+        if (log_file_bytes > LOG_FILE_LIMIT && reopen_log_file_locked()) {
+            fputs("the log reached its size limit and starts over; the earlier part is uxplay.previous.log\n",
+                  stdout);
+        }
+    }
+}
+
+static void log(int level, const char* format, ...) {
+    if (level > log_level) return;
+    char text[4352];
+    va_list vargs;
     va_start(vargs, format);
-    vprintf(format, vargs);
-    printf("\n");
+    int length = vsnprintf(text, sizeof(text), format, vargs);
     va_end(vargs);
+    if (length < 0) {
+        snprintf(text, sizeof(text), "(a log message could not be formatted: \"%.200s\")", format);
+    }
+    SYSTEMTIME now;
+    GetLocalTime(&now);
+    char prefix[64];
+    snprintf(prefix, sizeof(prefix), "%02u-%02u %02u:%02u:%02u.%03u %s", now.wMonth, now.wDay, now.wHour,
+             now.wMinute, now.wSecond, now.wMilliseconds,
+             level <= LOGGER_ERR ? "*** ERROR: " : (level == LOGGER_WARNING ? "*** WARNING: " : ""));
+    std::string line(prefix);
+    line += text;
+    line += '\n';
+    std::lock_guard<std::mutex> lock(log_mutex);
+    if (level <= LOGGER_ERR) {
+        last_error_line = text;
+    }
+    write_log_line_locked(line);
+}
+
+/* Decides where the log goes (see above).  The log directory is prepared in
+ * every case: the crash record is written there too. */
+static void native_setup_output(void) {
+    const char *local_app_data = getenv("LOCALAPPDATA");
+    if (local_app_data) {
+        native_log_directory = std::string(local_app_data) + "\\UxPlay";
+        if (!CreateDirectoryA(native_log_directory.c_str(), NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
+            native_log_directory.erase();
+        }
+    }
+    /* output redirected by the parent (uxplay.exe > file, pipes): keep it */
+    HANDLE inherited = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (inherited != NULL && inherited != INVALID_HANDLE_VALUE && _fileno(stdout) >= 0) {
+        DWORD type = GetFileType(inherited);
+        if (type == FILE_TYPE_DISK || type == FILE_TYPE_PIPE) {
+            setvbuf(stdout, NULL, _IONBF, 0);
+            setvbuf(stderr, NULL, _IONBF, 0);
+            return;
+        }
+    }
+    if (AttachConsole(ATTACH_PARENT_PROCESS)) {
+        FILE *stream = NULL;
+        freopen_s(&stream, "CONOUT$", "w", stdout);
+        freopen_s(&stream, "CONOUT$", "w", stderr);
+        setvbuf(stdout, NULL, _IONBF, 0);
+        setvbuf(stderr, NULL, _IONBF, 0);
+        return;
+    }
+    log_to_file = true;
+}
+
+/* The lines of a start that failed before it became the instance of its
+ * name, in a file of their own; returns its path ("" when it cannot be
+ * written). */
+static std::string write_start_failure_log(void) {
+    std::lock_guard<std::mutex> lock(log_mutex);
+    if (native_log_directory.empty()) {
+        return "";
+    }
+    std::string path = native_log_directory + "\\uxplay.start-failure.log";
+    FILE *file = fopen(path.c_str(), "w");
+    if (file == NULL) {
+        return "";
+    }
+    fputs(pending_log_lines.c_str(), file);
+    fclose(file);
+    return path;
+}
+
+/* Lets go of the log file at exit, before the single-instance mutex is
+ * released: the next start can then keep it as uxplay.previous.log instead of
+ * truncating a file that is still open. */
+static void close_log_file(void) {
+    std::lock_guard<std::mutex> lock(log_mutex);
+    if (!log_file_open) {
+        return;
+    }
+    FILE *stream = NULL;
+    freopen_s(&stream, "NUL", "w", stdout);
+    freopen_s(&stream, "NUL", "w", stderr);
+    log_file_open = false;
+}
+
+/* Starts writing the log file (no-op with a terminal or redirected output). */
+static void open_log_file(void) {
+    std::lock_guard<std::mutex> lock(log_mutex);
+    if (!log_to_file || log_file_open) {
+        return;
+    }
+    if (!reopen_log_file_locked()) {
+        /* nowhere to write: drop what was held instead of growing */
+        pending_log_lines.clear();
+        return;
+    }
+    fputs(pending_log_lines.c_str(), stdout);
+    log_file_bytes += pending_log_lines.size();
+    pending_log_lines.clear();
 }
 
 #define LOGD(...) log(LOGGER_DEBUG, __VA_ARGS__)
 #define LOGI(...) log(LOGGER_INFO, __VA_ARGS__)
 #define LOGW(...) log(LOGGER_WARNING, __VA_ARGS__)
 #define LOGE(...) log(LOGGER_ERR, __VA_ARGS__)
+
+/* A failure that ends the start: without a terminal nobody would see it (the
+ * program has no console and, at this point, no window), so the reason is
+ * also shown in a dialog that names the log file. */
+static std::string startup_error_text;
+
+static void startup_message(const char *format, ...) {
+    char text[2048];
+    va_list vargs;
+    va_start(vargs, format);
+    int length = vsnprintf(text, sizeof(text), format, vargs);
+    va_end(vargs);
+    if (length < 0) {
+        snprintf(text, sizeof(text), "start-up error (message format \"%.200s\")", format);
+    }
+    size_t used = strlen(text);
+    while (used > 0 && (text[used - 1] == '\n' || text[used - 1] == '\r')) {
+        text[--used] = '\0';
+    }
+    startup_error_text = text;
+    LOGE("%s", text);
+}
+
+static void report_startup_failure(void) {
+    std::string reason;
+    {
+        std::lock_guard<std::mutex> lock(log_mutex);
+        reason = startup_error_text.empty() ? last_error_line : startup_error_text;
+    }
+    if (!log_to_file) {
+        return; /* the terminal (or the redirected log) already shows it */
+    }
+    std::string shown_log;
+    if (instance_claimed) {
+        open_log_file();
+        shown_log = native_log_path;
+    } else {
+        /* uxplay.log may belong to an instance that is running: this start
+           (it failed before it became the instance) writes its own file */
+        shown_log = write_start_failure_log();
+    }
+    native_media_show_start_failure(reason.c_str(), shown_log.c_str());
+}
+
+[[noreturn]] static void startup_exit(int exit_code) {
+    if (exit_code != 0) {
+        report_startup_failure();
+    }
+    exit(exit_code);
+}
 
 
 
@@ -270,7 +529,7 @@ static const unsigned char empty_image[] = {
 static size_t write_coverart(const char *filename, const void *image, size_t len) {
     FILE *fp = fopen(filename, "wb");
     if (!fp) {
-        printf("Failed to open file %s\n", filename);
+        LOGE("Failed to open file %s", filename);
         return 0;
     }
     size_t count = fwrite(image, 1, len, fp);
@@ -281,7 +540,7 @@ static size_t write_coverart(const char *filename, const void *image, size_t len
 static size_t write_metadata(const char *filename, const char *text) {
     FILE *fp = fopen(filename, "wb");
     if (!fp) {
-        printf("Failed to open file %s\n", filename);
+        LOGE("Failed to open file %s", filename);
         return 0;
     }
     size_t count = fwrite(text, sizeof(char), strlen(text) + 1, fp);
@@ -452,19 +711,27 @@ public:
     }
 
     /* from a RAOP thread: end the run after reset_grace, which lets the
-       requesting handler finish before main() tears connections down;
-       a request made while no run is active is dropped (the next run starts
-       a new session cycle) */
+       requesting handler finish before main() tears connections down.  A
+       request made while no run is active is kept and ends the next run:
+       main() acknowledges the requests it is about to handle
+       (acknowledge_resets), so one that arrives later is never lost */
     void request_reset() {
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            if (!running_ || reset_pending_) {
+            if (reset_pending_) {
                 return;
             }
             reset_pending_ = true;
             reset_at_ = std::chrono::steady_clock::now() + reset_grace;
         }
         wake_.notify_one();
+    }
+
+    /* main thread, between two runs: the caller handles every reset that was
+       requested so far */
+    void acknowledge_resets() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        reset_pending_ = false;
     }
 
     bool running() {
@@ -477,11 +744,15 @@ public:
         std::unique_lock<std::mutex> lock(mutex_);
         running_ = true;
         quit_ = false;
-        reset_pending_ = false;
         clock::time_point next_tick = clock::now() + std::chrono::seconds(1);
         while (!quit_) {
-            clock::time_point wake_at = reset_pending_ ? std::min(next_tick, reset_at_) : next_tick;
-            wake_.wait_until(lock, wake_at, [this] { return quit_ || !tasks_.empty(); });
+            /* a reset requested during the wait must shorten it: the wait is
+               left when the request arrives and re-armed with its deadline */
+            bool const reset_armed = reset_pending_;
+            clock::time_point wake_at = reset_armed ? std::min(next_tick, reset_at_) : next_tick;
+            wake_.wait_until(lock, wake_at, [this, reset_armed] {
+                return quit_ || !tasks_.empty() || reset_pending_ != reset_armed;
+            });
             std::deque<std::function<void()>> ready;
             ready.swap(tasks_);
             lock.unlock();
@@ -515,7 +786,41 @@ private:
 
 static main_event_loop event_loop;
 
+static void exit_after_failure(void);
+
+#define SERVER_RESTART_LIMIT 5
+
+/* main loop thread: false once the RTSP server was started again
+   SERVER_RESTART_LIMIT times within a minute (it will not stay up) */
+static bool note_server_restart(void) {
+    static std::deque<std::chrono::steady_clock::time_point> restarts;
+    std::chrono::steady_clock::time_point const now = std::chrono::steady_clock::now();
+    while (!restarts.empty() && now - restarts.front() > std::chrono::minutes(1)) {
+        restarts.pop_front();
+    }
+    restarts.push_back(now);
+    return restarts.size() <= SERVER_RESTART_LIMIT;
+}
+
 static void check_client_feedback() {
+    /* The RTSP server thread ended by itself (repeated socket failures) and
+       took its connections with it: without it the receiver is advertised but
+       unreachable.  The session cycle ends here, so the relaunch block stops
+       audio and video (no frozen last picture) and starts the server again. */
+    if (raop && !raop_is_running(raop)) {
+        if (!note_server_restart()) {
+            startup_message("the AirPlay (RTSP) server stopped by itself %d times within a minute; giving up",
+                            SERVER_RESTART_LIMIT + 1);
+            exit_after_failure();
+            return;
+        }
+        LOGW("the RTSP server stopped by itself: starting it again");
+        reset_httpd = true;
+        relaunch_video = true;
+        full_video_reset = true;
+        event_loop.quit();
+        return;
+    }
     if (open_connections) {
         if (missed_feedback_limit && missed_feedback > missed_feedback_limit) {
             LOGI("***ERROR lost connection with client (network problem?)");
@@ -546,8 +851,8 @@ static void cleanup(int exit_code);
 
 /* Ctrl+C, console close, "Exit" in the notification-area menu */
 static void request_exit() {
+    exit_requested = true;
     event_loop.post([] {
-        relaunch_video = false;
         event_loop.quit();
     });
 }
@@ -557,18 +862,16 @@ static BOOL WINAPI CtrlHandler(DWORD signal) {
     case CTRL_C_EVENT:
     case CTRL_CLOSE_EVENT:
     case CTRL_SHUTDOWN_EVENT:
-        if (event_loop.running()) {
-            request_exit();
-            /* Windows terminates the process as soon as this handler returns
-             * for CTRL_CLOSE_EVENT/CTRL_SHUTDOWN_EVENT: wait (bounded) for the
-             * main thread's orderly shutdown so clients and mDNS are told. */
-            if (signal != CTRL_C_EVENT && shutdown_complete_event) {
-                WaitForSingleObject(shutdown_complete_event, 4000);
-            }
-            return TRUE;
-        } else {
-            cleanup(0);
-	}
+        /* The shutdown always runs on the main thread: the exit task is
+         * kept until its loop runs (start-up, or between two session cycles).
+         * Windows terminates the process as soon as this handler returns for
+         * CTRL_CLOSE_EVENT/CTRL_SHUTDOWN_EVENT: wait (bounded) for the orderly
+         * shutdown so clients and mDNS are told. */
+        request_exit();
+        if (signal != CTRL_C_EVENT && shutdown_complete_event) {
+            WaitForSingleObject(shutdown_complete_event, 4000);
+        }
+        return TRUE;
     default:
         return FALSE;
     }
@@ -577,8 +880,9 @@ static BOOL WINAPI CtrlHandler(DWORD signal) {
 /* one session cycle: returns when the session must be relaunched or the
    program exits (relaunch_video == false) */
 static void main_loop()  {
-    relaunch_video = use_video;
-    reset_httpd = false;
+    /* the session flags (relaunch_video, reset_httpd, close_window,
+       connection_handed_over) are taken by main() after each run, so a
+       request that arrives between two runs is still there for the next */
     missed_feedback = 0;
     event_loop.run(check_client_feedback);
 }
@@ -705,6 +1009,12 @@ static void print_info (char *name) {
     printf("-h264     Offer only H.264 (default: H.265 too if the GPU decodes it)\n");
     printf("-gpu g    GPU for decode/present: auto (display owner), integrated|intel,\n");
     printf("          discrete|nvidia (any vendor, AMD included), software|warp\n");
+    printf("-mode m   quality (sharpest picture, a little more buffering), balanced\n");
+    printf("          (adapts to monitor, GPU and network; the default) or\n");
+    printf("          performance (lighter stream, lowest delay); also in the menu\n");
+    printf("-crop c   auto: cut the black bars around the content off, so the window\n");
+    printf("          hugs it (key C); off: show the whole picture; also in the menu,\n");
+    printf("          where a part can be framed by hand too (key X)\n");
     printf("-ui l     Interface language: auto (Windows display language, the\n");
     printf("          default), zh-TW (Traditional Chinese), zh-CN (Simplified), en\n");
     printf("-pin[xxxx]Use a 4-digit pin code to control client access (default: no)\n");
@@ -956,9 +1266,9 @@ static void parse_arguments (int argc, char *argv[]) {
     // Parse arguments
     for (int i = 1; i < argc; i++) {
         if (!is_utf8(argv[i], NULL)) {
-            fprintf(stderr,"Error: detected a non-ascii or non-UTF-8 string \"%s\""
+            startup_message("Error: detected a non-ascii or non-UTF-8 string \"%s\""
                     "while parsing input arguments", argv[i]);
-            exit(0);
+            startup_exit(1);
         }
     }
     for (int i = 1; i < argc; i++) {
@@ -966,11 +1276,11 @@ static void parse_arguments (int argc, char *argv[]) {
         if (arg == "-rc") {
             i++;  //specifies startup file: has already been processed
         } else if (arg == "-allow") {
-            if (!option_has_value(i, argc, arg, argv[i+1])) exit(1);
+            if (!option_has_value(i, argc, arg, argv[i+1])) startup_exit(1);
             i++;
             allowed_clients.push_back(argv[i]);
         } else if (arg == "-block") {
-            if (!option_has_value(i, argc, arg, argv[i+1])) exit(1);
+            if (!option_has_value(i, argc, arg, argv[i+1])) startup_exit(1);
             i++;
             blocked_clients.push_back(argv[i]);    
         } else if (arg == "-restrict") {
@@ -983,18 +1293,18 @@ static void parse_arguments (int argc, char *argv[]) {
 	    } 
             restrict_clients = true;
         } else if (arg == "-n") {
-            if (!option_has_value(i, argc, arg, argv[i+1])) exit(1);
+            if (!option_has_value(i, argc, arg, argv[i+1])) startup_exit(1);
             bool ascii;
             server_name.erase();
             bool utf8 = is_utf8(argv[++i], &ascii);
             if (!utf8) {
-                fprintf(stderr, "invalid (non-UTF-8/ascii) server name in \"-n %s\"", argv[i]);
-                exit(1);
+                startup_message("invalid (non-UTF-8/ascii) server name in \"-n %s\"", argv[i]);
+                startup_exit(1);
             }
             server_name = std::string(argv[i]);
             if (!ascii) {
-                printf("WARNING: a non-ascii (UTF-8) server-name \"%s\" was specified:"
-                       " ensure correct locale settings to display it\n",server_name.c_str()); 
+                LOGW("a non-ascii (UTF-8) server-name \"%s\" was specified:"
+                     " ensure correct locale settings to display it", server_name.c_str());
             }
         } else if (arg == "-nh") {
             do_append_hostname = false;
@@ -1013,8 +1323,8 @@ static void parse_arguments (int argc, char *argv[]) {
                     if (n > -SECOND_IN_USECS && n < SECOND_IN_USECS) {
                         audio_delay_alac = n * 1000; /* units are nsecs */
                     } else {
-                        fprintf(stderr, "invalid -async %s: requested delays must be smaller than +/- 1000 millisecs\n", argv[i] );
-                        exit (1);
+                        startup_message("invalid -async %s: requested delays must be smaller than +/- 1000 millisecs\n", argv[i] );
+                        startup_exit(1);
                     }
                 }
             }
@@ -1033,27 +1343,29 @@ static void parse_arguments (int argc, char *argv[]) {
                     if (n > -SECOND_IN_USECS && n < SECOND_IN_USECS) {
                         audio_delay_aac = n * 1000;     /* units are nsecs */
                     } else {
-                        fprintf(stderr, "invalid -vsync %s: requested delays must be smaller than +/- 1000 millisecs\n", argv[i]);
-                        exit (1);
+                        startup_message("invalid -vsync %s: requested delays must be smaller than +/- 1000 millisecs\n", argv[i]);
+                        startup_exit(1);
                     }
                 }
             }
         } else if (arg == "-s") {
-            if (!option_has_value(i, argc, argv[i], argv[i+1])) exit(1);
+            if (!option_has_value(i, argc, argv[i], argv[i+1])) startup_exit(1);
             std::string value(argv[++i]);
+            user_set_display = true;
             if (!get_display_settings(value, &display[0], &display[1], &display[2])) {
-                fprintf(stderr, "invalid \"-s %s\"; -s wxh : max w,h=9999; -s wxh@r : max r=255\n",
+                startup_message("invalid \"-s %s\"; -s wxh : max w,h=9999; -s wxh@r : max r=255\n",
                         argv[i]);
-                exit(1);
+                startup_exit(1);
             }
         } else if (arg == "-fps") {
-            if (!option_has_value(i, argc, arg, argv[i+1])) exit(1);
+            if (!option_has_value(i, argc, arg, argv[i+1])) startup_exit(1);
             unsigned int n = 255;
             if (!get_value(argv[++i], &n)) {
-                fprintf(stderr, "invalid \"-fps %s\"; -fps n : max n=255, default n=30\n", argv[i]);
-                exit(1);
+                startup_message("invalid \"-fps %s\"; -fps n : max n=255, default n=30\n", argv[i]);
+                startup_exit(1);
             }
             display[3] = (unsigned short) n;
+            user_set_fps = true;
         } else if (arg == "-o") {
             display[4] = 1;
         } else if (arg == "-p") {
@@ -1065,18 +1377,18 @@ static void parse_arguments (int argc, char *argv[]) {
             std::string value(argv[++i]);
             if (value == "tcp" || value == "udp") {
                 if (i == argc - 1 || argv[i + 1][0] == '-') {
-                    fprintf(stderr,"invalid \"-p %s\": missing second argument (ports must be specified after \"%s\") \n",
+                    startup_message("invalid \"-p %s\": missing second argument (ports must be specified after \"%s\") \n",
                             argv[i], argv[i]);
-                    exit (1);
+                    startup_exit(1);
                 }
                 arg.append(" " + value);
                 unsigned short *ports = (value == "udp") ? udp : tcp;
                 if (!get_ports(3, arg, argv[++i], ports)) {
-                    exit(1);
+                    startup_exit(1);
                 }
             } else {
                 if (!get_ports(3, arg, argv[i], tcp)) {
-                    exit(1);
+                    startup_exit(1);
                 }
                 for (int j = 0; j < 3; j++) {
                     udp[j] = tcp[j];
@@ -1089,9 +1401,9 @@ static void parse_arguments (int argc, char *argv[]) {
                     mac_address = argv[i];
                     use_random_hw_addr = false;
                 } else {
-                    fprintf(stderr,"invalid mac address \"%s\": address must have form"
+                    startup_message("invalid mac address \"%s\": address must have form"
                             " \"xx:xx:xx:xx:xx:xx\", x = 0-9, A-F or a-f\n", argv[i]);
-                    exit(1);
+                    startup_exit(1);
                 }
             } else {
                 use_random_hw_addr  = true;
@@ -1102,8 +1414,8 @@ static void parse_arguments (int argc, char *argv[]) {
             if (i < argc - 1 && *argv[i+1] != '-') {
                 unsigned int n = 1;
                 if (!get_value(argv[++i], &n)) {
-                    fprintf(stderr, "invalid \"-d %s\"; -d n : max n=1 (suppress packet data in debug output)\n", argv[i]);
-                    exit(1);
+                    startup_message("invalid \"-d %s\"; -d n : max n=1 (suppress packet data in debug output)\n", argv[i]);
+                    startup_exit(1);
                 }
                 debug_log = true;
                 suppress_packet_debug_data = true;
@@ -1120,7 +1432,7 @@ static void parse_arguments (int argc, char *argv[]) {
         } else if (arg == "-vs" || arg == "-as") {
             /* GStreamer sink choices are ignored; "0" still means "no video
                window" (-vs 0) or "no audio" (-as 0) */
-            if (!option_has_value(i, argc, arg, argv[i+1])) exit(1);
+            if (!option_has_value(i, argc, arg, argv[i+1])) startup_exit(1);
             std::string sink(argv[++i]);
             if (sink == "0") {
                 if (arg == "-vs") {
@@ -1147,13 +1459,14 @@ static void parse_arguments (int argc, char *argv[]) {
         } else if (arg == "-FPSdata") {
             show_client_FPS_data = true;
         } else if (arg == "-reset") {
-            if (!option_has_value(i, argc, arg, argv[i+1])) exit(1);
+            if (!option_has_value(i, argc, arg, argv[i+1])) startup_exit(1);
             /* now using feedback  (every 1 sec ) instead of ntp timeouts (every 3 secs) to detect offline client and reset connections */
-            fprintf(stderr,"*** NOTE CHANGE: -reset n now means reset n seconds (not 3n seconds) after client goes offline\n");	  
+            /* a note, not a failure: it must not become the reason shown for a later one */
+            LOGI("*** NOTE CHANGE: -reset n now means reset n seconds (not 3n seconds) after client goes offline");
             missed_feedback_limit = 0;
             if (!get_value(argv[++i], &missed_feedback_limit)) {
-                fprintf(stderr, "invalid \"-reset %s\"; -reset n must have n >= 0,  default n = %d seconds\n", argv[i], MISSED_FEEDBACK_LIMIT);
-                exit(1);
+                startup_message("invalid \"-reset %s\"; -reset n must have n >= 0,  default n = %d seconds\n", argv[i], MISSED_FEEDBACK_LIMIT);
+                startup_exit(1);
             }
         } else if (arg == "-vdmp") {
             dump_video = true;
@@ -1161,8 +1474,8 @@ static void parse_arguments (int argc, char *argv[]) {
                 unsigned int n = 0;
                 if (get_value (argv[++i], &n)) {
                     if (n == 0) {
-                        fprintf(stderr, "invalid \"-vdmp 0 %s\"; -vdmp n  needs a non-zero value of n\n", argv[i]);
-                        exit(1);
+                        startup_message("invalid \"-vdmp 0 %s\"; -vdmp n  needs a non-zero value of n\n", argv[i]);
+                        startup_exit(1);
                     }
                     video_dump_limit = n;
                     if (option_has_value(i, argc, arg, argv[i+1])) {
@@ -1175,8 +1488,8 @@ static void parse_arguments (int argc, char *argv[]) {
                 }
                 const char *fn = video_dumpfile_name.c_str();
                 if (!file_has_write_access(fn)) {
-                    fprintf(stderr, "%s cannot be written to:\noption \"-vdmp <fn>\" must be to a file with write access\n", fn);
-                    exit(1);
+                    startup_message("%s cannot be written to:\noption \"-vdmp <fn>\" must be to a file with write access\n", fn);
+                    startup_exit(1);
                 }   		
             }
         } else if (arg == "-admp") {
@@ -1185,8 +1498,8 @@ static void parse_arguments (int argc, char *argv[]) {
                 unsigned int n = 0;
                 if (get_value (argv[++i], &n)) {
                     if (n == 0) {
-                        fprintf(stderr, "invalid \"-admp 0 %s\"; -admp n  needs a non-zero value of n\n", argv[i]);
-                        exit(1);
+                        startup_message("invalid \"-admp 0 %s\"; -admp n  needs a non-zero value of n\n", argv[i]);
+                        startup_exit(1);
                     }
                     audio_dump_limit = n;
                     if (option_has_value(i, argc, arg, argv[i+1])) {
@@ -1199,8 +1512,8 @@ static void parse_arguments (int argc, char *argv[]) {
                 }
                 const char *fn = audio_dumpfile_name.c_str();
                 if (!file_has_write_access(fn)) {
-                    fprintf(stderr, "%s cannot be written to:\noption \"-admp <fn>\" must be to a file with write access\n", fn);
-                    exit(1);
+                    startup_message("%s cannot be written to:\noption \"-admp <fn>\" must be to a file with write access\n", fn);
+                    startup_exit(1);
                 }
             }
         } else if (arg  == "-ca" ) {
@@ -1209,8 +1522,8 @@ static void parse_arguments (int argc, char *argv[]) {
                 coverart_filename.append(argv[++i]);
                 const char *fn = coverart_filename.c_str();
                 if (!file_has_write_access(fn)) {
-                    fprintf(stderr, "%s cannot be written to:\noption \"-ca <fn>\" must be to a file with write access\n", fn);
-                    exit(1);
+                    startup_message("%s cannot be written to:\noption \"-ca <fn>\" must be to a file with write access\n", fn);
+                    startup_exit(1);
                 }
             } else {
                 LOGW("option \"-ca\" without a file name (on-screen cover art) is not supported: ignored");
@@ -1221,12 +1534,12 @@ static void parse_arguments (int argc, char *argv[]) {
                 metadata_filename.append(argv[++i]);
                 const char *fn = metadata_filename.c_str();
                 if (!file_has_write_access(fn)) {
-                    fprintf(stderr, "%s cannot be written to:\noption \"-md <fn>\" must be to a file with write access\n", fn);
-                    exit(1);
+                    startup_message("%s cannot be written to:\noption \"-md <fn>\" must be to a file with write access\n", fn);
+                    startup_exit(1);
                 }   
             } else {
-                fprintf(stderr,"option -md must be followed by a filename for metadata text output\n");
-                exit(1);
+                startup_message("option -md must be followed by a filename for metadata text output\n");
+                startup_exit(1);
             }
         } else if (arg == "-nohold") {
             nohold = 1;
@@ -1240,17 +1553,17 @@ static void parse_arguments (int argc, char *argv[]) {
                     continue;
                 }
             }
-            fprintf(stderr, "invalid -al %s: value must be a decimal time offset in seconds, range [0,10]\n"
+            startup_message("invalid -al %s: value must be a decimal time offset in seconds, range [0,10]\n"
                     "(like 5 or 4.8, which will be converted to a whole number of microseconds)\n", argv[i]);
-            exit(1);
+            startup_exit(1);
         } else if (arg == "-pin") {
             setup_legacy_pairing = true;
             pin_pw = 1;
             if (i < argc - 1 && *argv[i+1] != '-') {
                 unsigned int n = 9999;
                 if (!get_value(argv[++i], &n)) {
-                    fprintf(stderr, "invalid \"-pin %s\"; -pin nnnn : nnnn range [0001:9999], (4 digits)\n", argv[i]);
-                    exit(1);
+                    startup_message("invalid \"-pin %s\"; -pin nnnn : nnnn range [0001:9999], (4 digits)\n", argv[i]);
+                    startup_exit(1);
                 }
                 pin = n + 10000;
             }
@@ -1261,8 +1574,8 @@ static void parse_arguments (int argc, char *argv[]) {
                 pairing_register.append(argv[++i]);
                 const char * fn = pairing_register.c_str();
                 if (!file_has_write_access(fn)) {
-                    fprintf(stderr, "%s cannot be written to:\noption \"-reg <fn>\" must be to a file with write access\n", fn);
-                    exit(1);
+                    startup_message("%s cannot be written to:\noption \"-reg <fn>\" must be to a file with write access\n", fn);
+                    startup_exit(1);
       }   
             }
         } else if (arg == "-key") {
@@ -1271,12 +1584,12 @@ static void parse_arguments (int argc, char *argv[]) {
                 keyfile.append(argv[++i]);
                 const char * fn = keyfile.c_str();
                 if (!file_has_write_access(fn)) {
-                    fprintf(stderr, "%s cannot be written to:\noption \"-key <fn>\" must be to a file with write access\n", fn);
-                    exit(1);
+                    startup_message("%s cannot be written to:\noption \"-key <fn>\" must be to a file with write access\n", fn);
+                    startup_exit(1);
                 }   
             } else {
-	        //                fprintf(stderr, "option \"-key <fn>\" requires a path <fn> to a file for persistent key storage\n");
-	        // exit(1);
+	        //                startup_message("option \"-key <fn>\" requires a path <fn> to a file for persistent key storage\n");
+	        // startup_exit(1);
                 keyfile.erase();
                 keyfile.append("0");
             }
@@ -1287,8 +1600,8 @@ static void parse_arguments (int argc, char *argv[]) {
                 password.append(argv[++i]);
                 pin_pw = 2;
                 if (password.size() < min_password_length) {
-                    fprintf(stderr, "invalid client-access password \"%s\": length must be at least %u characters\n", password.c_str(), min_password_length);
-                    exit(1);
+                    startup_message("invalid client-access password \"%s\": length must be at least %u characters\n", password.c_str(), min_password_length);
+                    startup_exit(1);
                 }
             } else {
                 pin_pw = 3;  //a random password (pin) will be displayed at each connection
@@ -1299,15 +1612,15 @@ static void parse_arguments (int argc, char *argv[]) {
                 dacpfile.append(argv[++i]);
                 const char *fn = dacpfile.c_str();
                 if (!file_has_write_access(fn)) {
-                    fprintf(stderr, "%s cannot be written to:\noption \"-dacp <fn>\" must be to a file with write access\n", fn);
-                    exit(1);
+                    startup_message("%s cannot be written to:\noption \"-dacp <fn>\" must be to a file with write access\n", fn);
+                    startup_exit(1);
                 }   
             } else {
                 const char *homedir = get_homedir();
                 if (!homedir) {
-                    fprintf(stderr, "option \"-dacp\": no home directory (HOME, USERPROFILE) for ~/.uxplay.dacp;"
+                    startup_message("option \"-dacp\": no home directory (HOME, USERPROFILE) for ~/.uxplay.dacp;"
                             " use \"-dacp <fn>\"\n");
-                    exit(1);
+                    startup_exit(1);
                 }
                 dacpfile.append(homedir);
                 dacpfile.append("/.uxplay.dacp");
@@ -1319,14 +1632,14 @@ static void parse_arguments (int argc, char *argv[]) {
             double db1, db2;
             const char *text = "db value must be \"low\" or \"low:high\", low < 0 and high > low are decibel gains";
             if (i == argc - 1) {
-                fprintf(stderr,"invalid \"-db\": this option requires a value: %s\n", text) ;
-                exit(1);
+                startup_message("invalid \"-db\": this option requires a value: %s\n", text) ;
+                startup_exit(1);
             }
             char *end1, *end2;
             db1 = strtod(argv[i+1], &end1);
             if (end1 == argv[i+1] && argv[i+1][0] == '-') {
-                fprintf(stderr,"invalid \"-db\": this option requires a value: %s\n", text) ;
-            exit(1);
+                startup_message("invalid \"-db\": this option requires a value: %s\n", text) ;
+            startup_exit(1);
             }
             if (db1 < 0.0 && *end1 == ':') {
                 db2 = strtod(++end1, &end2);
@@ -1338,16 +1651,16 @@ static void parse_arguments (int argc, char *argv[]) {
                 db2 = 0.0;
             }
             if (db_bad) {
-                fprintf(stderr, "invalid \"-db %s\": %s\n", argv[i+1], text);
-                exit(1);
+                startup_message("invalid \"-db %s\": %s\n", argv[i+1], text);
+                startup_exit(1);
             }
             i++;
             db_low = db1;
             db_high = db2;
-            printf("db range %f:%f\n", db_low, db_high);
+            LOGI("db range %f:%f", db_low, db_high);
         } else if (arg ==  "-vol") {
             if (!option_has_value(i, argc, arg, argv[i+1])) {
-                exit(1);
+                startup_exit(1);
             }
             bool vol_bad = true;
             if (i < argc - 1) {
@@ -1366,13 +1679,13 @@ static void parse_arguments (int argc, char *argv[]) {
                         //db = (db > db_flat) ? db : db_flat;
                         initial_volume = db_flat;
                     }
-                    printf("initial_volume attenuation %f db\n", initial_volume);
+                    LOGI("initial_volume attenuation %f db", initial_volume);
                     vol_bad = false;
                 }
             }
             if (vol_bad) {
-                fprintf(stderr, "invalid \"-vol %s\", value must be between 0.0 (mute) and 1.0 (full volume)\n", argv[i+1]);  
-                exit(1);
+                startup_message("invalid \"-vol %s\", value must be between 0.0 (mute) and 1.0 (full volume)\n", argv[i+1]);  
+                startup_exit(1);
             }
             i++;
         } else if (arg == "-h265") {
@@ -1383,7 +1696,7 @@ static void parse_arguments (int argc, char *argv[]) {
             force_h264_only = true;
             h265_support = false;
         } else if (arg == "-gpu") {
-            if (!option_has_value(i, argc, arg, argv[i+1])) exit(1);
+            if (!option_has_value(i, argc, arg, argv[i+1])) startup_exit(1);
             std::string choice(argv[++i]);
             if (choice == "auto") {
                 gpu_preference = 0;
@@ -1394,12 +1707,12 @@ static void parse_arguments (int argc, char *argv[]) {
             } else if (choice == "software" || choice == "warp") {
                 gpu_preference = 3;
             } else {
-                fprintf(stderr, "invalid \"-gpu %s\": choices are auto, integrated (intel), discrete (nvidia), "
+                startup_message("invalid \"-gpu %s\": choices are auto, integrated (intel), discrete (nvidia), "
                         "software (warp)\n", choice.c_str());
-                exit(1);
+                startup_exit(1);
             }
         } else if (arg == "-ui") {
-            if (!option_has_value(i, argc, arg, argv[i+1])) exit(1);
+            if (!option_has_value(i, argc, arg, argv[i+1])) startup_exit(1);
             std::string choice(argv[++i]);
             std::transform(choice.begin(), choice.end(), choice.begin(),
                            [](unsigned char c) { return (char) std::tolower(c); });
@@ -1412,16 +1725,44 @@ static void parse_arguments (int argc, char *argv[]) {
             } else if (choice == "en") {
                 ui_language_choice = 3;
             } else {
-                fprintf(stderr, "invalid \"-ui %s\": choices are auto, zh-TW, zh-CN, en\n", argv[i]);
-                exit(1);
+                startup_message("invalid \"-ui %s\": choices are auto, zh-TW, zh-CN, en\n", argv[i]);
+                startup_exit(1);
+            }
+        } else if (arg == "-mode") {
+            if (!option_has_value(i, argc, arg, argv[i+1])) startup_exit(1);
+            std::string choice(argv[++i]);
+            std::transform(choice.begin(), choice.end(), choice.begin(),
+                           [](unsigned char c) { return (char) std::tolower(c); });
+            if (choice == "quality") {
+                mode_choice = NATIVE_MEDIA_MODE_QUALITY;
+            } else if (choice == "balanced") {
+                mode_choice = NATIVE_MEDIA_MODE_BALANCED;
+            } else if (choice == "performance") {
+                mode_choice = NATIVE_MEDIA_MODE_PERFORMANCE;
+            } else {
+                startup_message("invalid \"-mode %s\": choices are quality, balanced, performance\n", argv[i]);
+                startup_exit(1);
+            }
+        } else if (arg == "-crop") {
+            if (!option_has_value(i, argc, arg, argv[i+1])) startup_exit(1);
+            std::string choice(argv[++i]);
+            std::transform(choice.begin(), choice.end(), choice.begin(),
+                           [](unsigned char c) { return (char) std::tolower(c); });
+            if (choice == "auto") {
+                crop_choice = 1;
+            } else if (choice == "off") {
+                crop_choice = 0;
+            } else {
+                startup_message("invalid \"-crop %s\": choices are auto, off\n", argv[i]);
+                startup_exit(1);
             }
         } else if (arg == "-nofreeze") {
             nofreeze = true;
         } else if (skip_unsupported_option(arg, i, argc, argv)) {
             continue;
         } else {
-            fprintf(stderr, "unknown option %s, stopping (for help use option \"-h\")\n",argv[i]);
-            exit(1);
+            startup_message("unknown option %s, stopping (for help use option \"-h\")\n",argv[i]);
+            startup_exit(1);
         }
     }
 }
@@ -1431,9 +1772,7 @@ static void process_metadata(int count, const char *dmap_tag, const unsigned cha
     /* DMAP metadata items can be strings (dmap_type = 9); other types are byte, short, int, long, date, and list.  *
      * The DMAP item begins with a 4-character (4-letter) "dmap_tag" string that identifies the type.               */
 
-    if (debug_log) {
-        printf("%d: dmap_tag [%s], %d\n", count, dmap_tag, datalen);
-    }
+    LOGD("%d: dmap_tag [%s], %d", count, dmap_tag, datalen);
 
     /* UTF-8 String-type DMAP tags seen in Apple Music Radio are processed here.   *
      * (DMAP tags "asal", "asar", "ascp", "asgn", "minm" ). TODO expand this */  
@@ -1529,8 +1868,9 @@ static void process_metadata(int count, const char *dmap_tag, const unsigned cha
     if (dmap_type == 9) {
         char *str = (char *) calloc(datalen + 1, sizeof(char));
         if (!str) {
-            printf("Memeory allocation failure (str)\n");
-            exit(1);
+            /* a client's metadata must never end the program */
+            LOGE("metadata item [%s]: no memory for %d bytes; item ignored", dmap_tag, datalen);
+            return;
         }
         memcpy(str, metadata, datalen);
         metadata_text->append(str);
@@ -1774,6 +2114,14 @@ extern "C" void video_reset(void *cls, reset_type_t type) {
             native_media_airplay_video_stop();
             close_window = false;  // we already closed the window
         }
+        /* the old client's sound ends here, not in the relaunch block, which
+           may run after the new client has configured its own */
+        if (use_audio) {
+            native_media_airplay_audio_stop();
+        }
+        /* the silence of the old connection is not the new one's */
+        missed_feedback = 0;
+        connection_handed_over = true;
         relaunch_video = true;
         break;
     case RESET_TYPE_RTP_SHUTDOWN:
@@ -1810,7 +2158,7 @@ extern "C" void display_pin(void *cls, char *pin) {
         free (image);
     }
     /* no console window in the native build: show the PIN as a notification */
-    native_media_notify("AirPlay PIN", pin);
+    native_media_notify_pin(pin);
 }
 
 extern "C" const char *passwd(void *cls, int *len){
@@ -1846,6 +2194,20 @@ extern "C" void conn_init (void *cls) {
     }
 }
 
+/* "Wi-Fi only" is a hard rule: an AirPlay connection that arrives over the
+ * iPhone USB link is refused, whatever address the phone resolved or cached
+ * (RAOP connection thread).  The phone then connects over Wi-Fi, where the
+ * service is advertised. */
+extern "C" bool conn_admit (void *cls, const char *local_address, const char *remote_address) {
+    (void) cls;
+    if (!native_media_prefer_usb_link() && native_media_is_usb_link_address(local_address)) {
+        LOGI("refused an AirPlay connection from %s on the iPhone USB link (%s): the link preference is "
+             "\"Wi-Fi only\"", remote_address, local_address);
+        return false;
+    }
+    return true;
+}
+
 extern "C" void conn_transport (void *cls, const char *local_address) {
     (void) cls;
     /* label the window "USB" or "Wi-Fi" by the link the AirPlay client used */
@@ -1878,7 +2240,10 @@ extern "C" void conn_reset (void *cls, int reason) {
     switch (reason) {
     case 1:
         LOGI("*** ERROR lost connection with client (network problem?)");
-	break;
+        break;
+    case 2:
+        LOGI("*** ERROR the client's mirror stream was invalid or could not be read: resetting the connection");
+        break;
     default:
         LOGI("*** ERROR connection reset requested (reason %d)", reason);
         break;
@@ -2052,7 +2417,7 @@ extern "C" void audio_set_metadata(void *cls, const void *buffer, int buflen) {
     int datalen;
     int count = 0;
 
-    printf("====================Audio Metadata==================\n");
+    LOGI("====================Audio Metadata==================");
 
     if (buflen < 8) {
         LOGE("received invalid metadata, length %d < 8", buflen);
@@ -2078,6 +2443,12 @@ extern "C" void audio_set_metadata(void *cls, const void *buffer, int buflen) {
         }
         metadata += 8;
         buflen -= 8;
+        if (datalen < 0 || datalen > buflen) {
+            /* the length comes from the client: never read past what was received */
+            LOGE("received metadata whose item [%s] claims %d bytes while %d remain: ignored", dmap_tag, datalen,
+                 buflen);
+            return;
+        }
         process_metadata(count, (const char *) dmap_tag, metadata, datalen, &metadata_text);
         metadata += datalen;
         buflen -= datalen;
@@ -2146,44 +2517,6 @@ extern "C" void log_callback (void *cls, int level, const char *msg) {
     }
 }
 
-static std::string native_log_path;
-
-/* The native build is a GUI-subsystem program (a console window costs ~1.2 s
- * to appear on Windows 11).  When started from a terminal the log goes to that
- * terminal; otherwise to %LOCALAPPDATA%\UxPlay\uxplay.log ("Open log" in the
- * notification-area menu). */
-static void native_setup_output(void) {
-    /* output redirected by the parent (uxplay.exe > file, pipes): keep it */
-    HANDLE inherited = GetStdHandle(STD_OUTPUT_HANDLE);
-    if (inherited != NULL && inherited != INVALID_HANDLE_VALUE && _fileno(stdout) >= 0) {
-        DWORD type = GetFileType(inherited);
-        if (type == FILE_TYPE_DISK || type == FILE_TYPE_PIPE) {
-            setvbuf(stdout, NULL, _IONBF, 0);
-            setvbuf(stderr, NULL, _IONBF, 0);
-            return;
-        }
-    }
-    if (AttachConsole(ATTACH_PARENT_PROCESS)) {
-        FILE *stream = NULL;
-        freopen_s(&stream, "CONOUT$", "w", stdout);
-        freopen_s(&stream, "CONOUT$", "w", stderr);
-        return;
-    }
-    const char *local_app_data = getenv("LOCALAPPDATA");
-    if (!local_app_data) {
-        return;
-    }
-    std::string directory = std::string(local_app_data) + "\\UxPlay";
-    CreateDirectoryA(directory.c_str(), NULL);
-    native_log_path = directory + "\\uxplay.log";
-    /* plain freopen opens the file shared (freopen_s denies other readers),
-     * so "Open log" can show it while UxPlay runs */
-    if (freopen(native_log_path.c_str(), "w", stdout) != NULL) {
-        setvbuf(stdout, NULL, _IONBF, 0);
-        _dup2(_fileno(stdout), _fileno(stderr));
-    }
-}
-
 static void native_log_callback(int level, const char *message) {
     log(level, "%s", message);
 }
@@ -2221,7 +2554,98 @@ static void on_link_preference_changed() {
     }
 }
 
-/* engine threads (window, notification area): handled on the main loop */
+static void stop_raop_server () {
+    if (raop) {
+        raop_destroy(raop);
+        raop = NULL;
+    }
+}
+
+static int exit_code_requested = 0;   /* main thread: exit code of an exit that follows a failure */
+
+/* ends the program from the main loop after a failure that was reported
+   with startup_message()/LOGE (shown in a dialog when there is no terminal) */
+static void exit_after_failure(void) {
+    exit_code_requested = 1;
+    exit_requested = true;
+    event_loop.quit();
+}
+
+/* The picture size and rate asked from the client, by mode:
+ *   quality, balanced: the monitor's resolution and refresh rate;
+ *   performance:       at most 1920x1080, which the phone encodes and this PC
+ *                      decodes with far less work (lowest delay and memory);
+ *   balanced without any hardware video decoder uses that smaller box too.
+ * "-s" and "-fps" given by the user are left alone.  The client reads these
+ * values when it connects, so a change applies to the next connection. */
+static void choose_stream_geometry(void) {
+    native_media_display_info info;
+    if (!native_media_query_display(&info)) {
+        return;
+    }
+    int const mode = native_media_performance_mode();
+    bool const software_decode = !info.h264_hardware && !(h265_support && info.hevc_hardware);
+    bool const light_stream = mode == NATIVE_MEDIA_MODE_PERFORMANCE ||
+                              (mode == NATIVE_MEDIA_MODE_BALANCED && software_decode);
+    if (!user_set_display) {
+        unsigned width = (unsigned) info.width;
+        unsigned height = (unsigned) info.height;
+        if (light_stream) {
+            unsigned const long_limit = 1920;
+            unsigned const short_limit = 1080;
+            if (width >= height) {
+                width = std::min(width, long_limit);
+                height = std::min(height, short_limit);
+            } else {
+                width = std::min(width, short_limit);
+                height = std::min(height, long_limit);
+            }
+        }
+        display[0] = (unsigned short) std::min(width, 9999u);
+        display[1] = (unsigned short) std::min(height, 9999u);
+        display[2] = (unsigned short) std::min(info.refresh_hz, 255);
+    }
+    if (!user_set_fps) {
+        display[3] = (unsigned short) std::min(info.refresh_hz, 60);
+    }
+    if (raop) {
+        if (display[0]) raop_set_plist(raop, "width", (int) display[0]);
+        if (display[1]) raop_set_plist(raop, "height", (int) display[1]);
+        if (display[2]) raop_set_plist(raop, "refreshRate", (int) display[2]);
+        if (display[3]) raop_set_plist(raop, "maxFPS", (int) display[3]);
+    }
+    LOGI("advertising display %ux%u @ %u Hz, max %u fps, codecs %s (mode %s%s%s)", display[0], display[1],
+         display[2], display[3], h265_support ? "H.265 + H.264" : "H.264",
+         mode == NATIVE_MEDIA_MODE_QUALITY ? "quality" : (mode == NATIVE_MEDIA_MODE_PERFORMANCE ? "performance"
+                                                                                                : "balanced"),
+         software_decode ? ", no hardware video decoder" : "", user_set_display ? ", size set with -s" : "");
+}
+
+/* a mode was picked in the menu (main loop thread) */
+static void on_performance_mode_changed() {
+    choose_stream_geometry();
+    native_media_performance_mode_applied(open_connections > 0 && !user_set_display);
+}
+
+/* the engine could not start: there is no window and no tray icon, so the
+   program must not stay behind as an invisible, advertised receiver */
+static void on_engine_start_failed() {
+    startup_message("the media engine could not start: %s", native_media_failure_text());
+    exit_after_failure();
+}
+
+/* Windows shuts down or the user signs out: the engine's window thread waits
+   (bounded) for the goodbye on the network before the process is ended */
+static void on_session_ending() {
+    LOGI("Windows session is ending: stopping the AirPlay server");
+    stop_raop_server();
+    stop_dnssd();
+    native_media_network_stopped();
+    exit_requested = true;
+    event_loop.quit();
+}
+
+/* engine threads (window, notification area, statistics): handled on the main loop */
 static void native_event_callback(native_media_event event, void *user_data) {
     (void) user_data;
     switch (event) {
@@ -2235,17 +2659,41 @@ static void native_event_callback(native_media_event event, void *user_data) {
     case NATIVE_MEDIA_EVENT_LINK_PREFERENCE_CHANGED:
         event_loop.post(on_link_preference_changed);
         break;
+    case NATIVE_MEDIA_EVENT_PERFORMANCE_MODE_CHANGED:
+        event_loop.post(on_performance_mode_changed);
+        break;
+    case NATIVE_MEDIA_EVENT_DISPLAY_CHANGED:
+        event_loop.post(choose_stream_geometry);
+        break;
+    case NATIVE_MEDIA_EVENT_START_FAILED:
+        event_loop.post(on_engine_start_failed);
+        break;
+    case NATIVE_MEDIA_EVENT_DEVICE_LOST:
+        /* the device cannot be re-created in place: start afresh (0.5 s),
+           the phone then mirrors again when the user picks the receiver */
+        LOGE("the graphics device was lost (driver update or reset): restarting the program");
+        restart_after_exit = true;
+        request_exit();
+        break;
+    case NATIVE_MEDIA_EVENT_SESSION_ENDING:
+        event_loop.post(on_session_ending);
+        break;
     default:
         break;
     }
 }
 
+/* Creates the AirPlay protocol core and starts its RTSP server.  On failure
+ * the reason has been reported (startup_message) and the caller stops what
+ * was created with stop_raop_server(). */
 static int start_raop_server (unsigned short display[5], unsigned short tcp[3], unsigned short udp[3], bool debug_log) {
+    (void) debug_log;
     raop_callbacks_t raop_cbs;
     memset(&raop_cbs, 0, sizeof(raop_cbs));
     raop_cbs.conn_init = conn_init;
     raop_cbs.conn_destroy = conn_destroy;
     raop_cbs.conn_transport = conn_transport;
+    raop_cbs.conn_admit = conn_admit;
     raop_cbs.conn_reset = conn_reset;
     raop_cbs.conn_feedback = conn_feedback;
     raop_cbs.audio_process = audio_process;
@@ -2269,15 +2717,17 @@ static int start_raop_server (unsigned short display[5], unsigned short tcp[3], 
 
     raop = raop_init(&raop_cbs);
     if (raop == NULL) {
-        LOGE("Error initializing raop!");
+        startup_message("the AirPlay protocol core could not be created (raop_init)");
         return -1;
     }
     raop_set_log_callback(raop, log_callback, NULL);
     raop_set_log_level(raop, log_level);
     /* set nohold = 1 to allow  capture by new client */
     if (raop_init2(raop, nohold, mac_address.c_str(), keyfile.c_str())){
-        LOGE("Error initializing raop (2)!");
+        startup_message("the AirPlay protocol core could not be initialized (raop_init2, key file \"%s\")",
+                        keyfile.c_str());
         free (raop);
+        raop = NULL;
         return -1;
     }
 
@@ -2298,28 +2748,26 @@ static int start_raop_server (unsigned short display[5], unsigned short tcp[3], 
     raop_set_tcp_ports(raop, tcp);
     raop_set_udp_ports(raop, udp);
 
+    /* before the first request can be served: the handlers read it */
+    if (!dnssd) {
+        startup_message("the AirPlay server has no mDNS service to advertise with");
+        return -2;
+    }
+    raop_set_dnssd(raop, dnssd);
+
     raop_port = raop_get_port(raop);
-    raop_start_httpd(raop, &raop_port);
+    int const listening = raop_start_httpd(raop, &raop_port);
+    if (listening < 0) {
+        startup_message("the AirPlay (RTSP) server could not listen on TCP port %u (httpd error %d); "
+                        "another program may be using the port, or the firewall refused it",
+                        raop_port, listening);
+        return -3;
+    }
     raop_set_port(raop, raop_port);
 
     /* use raop_port for airplay_port (instead of tcp[2]) */
     airplay_port = raop_port;
-
-    if (dnssd) {
-        raop_set_dnssd(raop, dnssd);
-    } else {
-        LOGE("raop_set failed to set dnssd");
-        return -2;
-    }
     return 0;
-}
-
-static void stop_raop_server () {
-    if (raop) {
-        raop_destroy(raop);
-        raop = NULL;
-    }
-    return;
 }
 
 static void read_config_file(const char * filename, const char * uxplay_name) {
@@ -2329,7 +2777,7 @@ static void read_config_file(const char * filename, const char * uxplay_name) {
     options.push_back(uxplay_name);
     std::ifstream file(config_file);
     if (file.is_open()) {
-        fprintf(stdout,"UxPlay: reading configuration from  %s\n", config_file.c_str());
+        LOGI("reading configuration from %s", config_file.c_str());
         std::string line;
         while (std::getline(file, line)) {
             if (line[0] == '#') continue;
@@ -2388,15 +2836,16 @@ static void read_config_file(const char * filename, const char * uxplay_name) {
 	}
         file.close();
     } else {
-        fprintf(stderr,"UxPlay: failed to open configuration file at %s\n", config_file.c_str());
+        /* not a reason to stop: the start goes on without the file */
+        LOGW("failed to open configuration file at %s", config_file.c_str());
     }
     if (options.size() > 1) {
 
         int argc = options.size();
         char **argv = (char **) malloc(sizeof(char*) * (argc + 1));
         if (argv == NULL) {
-            printf("Memory allocation failure (argV)\n");
-            exit(1);
+            startup_message("memory allocation failure while reading the configuration file");
+            startup_exit(1);
         }
         for (int i = 0; i < argc; i++) {
             argv[i] = (char *) options[i].c_str();
@@ -2409,6 +2858,116 @@ static void read_config_file(const char * filename, const char * uxplay_name) {
     }
 }
 
+/* 64-bit FNV-1a of the receiver name: names the single-instance mutex */
+static std::string receiver_name_tag(const std::string &name) {
+    unsigned long long hash = 14695981039346656037ull;
+    for (unsigned char c : name) {
+        hash ^= c;
+        hash *= 1099511628211ull;
+    }
+    char text[17];
+    snprintf(text, sizeof(text), "%016llx", hash);
+    return text;
+}
+
+/* One receiver per name and Windows session.  Returns true when this start
+ * is (now) the only instance and owns the mutex until it exits; false when a
+ * running instance was asked to show itself and this start must end.
+ *
+ * Another instance has the name: it is asked to show itself, then the mutex
+ * is awaited for a moment.  An instance that is just ending (exit, or the
+ * restart after a lost graphics device) releases it and this start takes
+ * over; one that stays keeps it. */
+static bool claim_single_instance(void) {
+    std::string const name = "Local\\uxplay_native_" + receiver_name_tag(server_name);
+    instance_mutex = CreateMutexA(NULL, TRUE, name.c_str());
+    DWORD const error = GetLastError();
+    if (instance_mutex == NULL) {
+        /* cannot tell: a second receiver with the same name is at least visible on the phone */
+        LOGW("single-instance check unavailable (CreateMutex: Windows error %lu); starting anyway",
+             (unsigned long) error);
+        instance_claimed = true;
+        return true;
+    }
+    if (error != ERROR_ALREADY_EXISTS) {
+        instance_claimed = true;
+        return true;
+    }
+    /* An instance that is still starting has no window yet (the first start
+       of a new download can take seconds while it is scanned): it is asked
+       again for about 6 s.  Once it answered, the mutex is awaited 1.5 s in
+       case it is just ending. */
+    int notified = 0;
+    for (int attempt = 0; attempt < 20; attempt++) {
+        if (notified == 0) {
+            notified = native_media_activate_running_instance(server_name.c_str());
+        }
+        DWORD const waited = WaitForSingleObject(instance_mutex, notified > 0 ? 1500 : 300);
+        if (waited == WAIT_OBJECT_0 || waited == WAIT_ABANDONED) {
+            instance_claimed = true;
+            return true;
+        }
+        if (notified > 0) {
+            break;
+        }
+    }
+    CloseHandle(instance_mutex);
+    instance_mutex = NULL;
+    if (notified == 0) {
+        startup_message("\"%s\" is already running but did not answer. End uxplay.exe in Task Manager, "
+                        "then start it again.", server_name.c_str());
+        startup_exit(1);
+    }
+    LOGI("\"%s\" is already running: it was asked to show itself", server_name.c_str());
+    return false;
+}
+
+/* Starts this program again with the same command line (the Direct3D device
+ * was lost).  A second loss within a minute of such a restart is not followed
+ * by another one: the cause is then not transient.  On failure the reason has
+ * been reported with startup_message(). */
+static bool restart_program(void) {
+    static const char restarted_at[] = "UXPLAY_RESTARTED_AT";
+    ULONGLONG const now = GetTickCount64();
+    char previous[32];
+    DWORD const length = GetEnvironmentVariableA(restarted_at, previous, sizeof(previous));
+    if (length > 0 && length < sizeof(previous)) {
+        ULONGLONG const then = strtoull(previous, NULL, 10);
+        if (now >= then && now - then < 60000) {
+            startup_message("the graphics device was lost again within a minute of the automatic restart, so "
+                            "the program was not started again; check the display driver");
+            return false;
+        }
+    }
+    char stamp[32];
+    snprintf(stamp, sizeof(stamp), "%llu", (unsigned long long) now);
+    if (!SetEnvironmentVariableA(restarted_at, stamp)) {
+        LOGW("restart: the restart time could not be recorded (Windows error %lu)", (unsigned long) GetLastError());
+    }
+    std::vector<wchar_t> path(32768);
+    DWORD const used = GetModuleFileNameW(NULL, path.data(), (DWORD) path.size());
+    if (used == 0 || used >= path.size()) {
+        startup_message("restart: the program path is unavailable (Windows error %lu)", (unsigned long) GetLastError());
+        return false;
+    }
+    std::wstring command_line = GetCommandLineW();
+    STARTUPINFOW startup;
+    memset(&startup, 0, sizeof(startup));
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION process;
+    memset(&process, 0, sizeof(process));
+    if (!CreateProcessW(path.data(), command_line.data(), NULL, NULL, FALSE, 0, NULL, NULL, &startup, &process)) {
+        startup_message("restart: the program could not be started again (Windows error %lu)",
+                        (unsigned long) GetLastError());
+        return false;
+    }
+    LOGI("restart: started process %lu (it writes %%LOCALAPPDATA%%\\UxPlay\\uxplay.log unless it can attach to "
+         "this run's terminal; redirected output is not passed on)", (unsigned long) process.dwProcessId);
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
+    return true;
+}
+
 int main (int argc, char *argv[]) {
     std::vector<char> server_hw_addr;
     std::string config_file = "";
@@ -2416,10 +2975,26 @@ int main (int argc, char *argv[]) {
     /* initialise Windows kernel qpc frequency for recv timestamping */
     ntp_global_init();
     native_setup_output();
+    /* from here on a crash leaves a record next to the log */
+    if (!native_log_directory.empty()) {
+        native_media_install_crash_report(native_log_directory.c_str());
+    }
+    shutdown_complete_event = CreateEventW(NULL, TRUE, FALSE, NULL);
+
+    /* Winsock stays initialized for the whole run.  raop_destroy() ends with
+       WSACleanup: without this reference that would close every socket of
+       the process, the mDNS responder's too, before its goodbye is sent. */
+    WSADATA winsock_data;
+    int const winsock_error = WSAStartup(MAKEWORD(2, 2), &winsock_data);
+    if (winsock_error != 0) {
+        startup_message("Windows Sockets could not be started (WSAStartup error %d)", winsock_error);
+        startup_exit(1);
+    }
 
     if (!SetConsoleCtrlHandler(CtrlHandler, TRUE)) {
-        LOGE("Could not set control handler");
-        exit(1);
+        startup_message("could not set the console control handler (Windows error %lu)",
+                        (unsigned long) GetLastError());
+        startup_exit(1);
     }
 
     char *rcfile = NULL;
@@ -2429,13 +3004,13 @@ int main (int argc, char *argv[]) {
         if (arg == "-rc") {
             struct stat sb;
             if (i+1 == argc) {
-                LOGE ("option -rc requires a filename  (-rc <filename>)");
-                exit(1);
+                startup_message("option -rc requires a filename  (-rc <filename>)");
+                startup_exit(1);
             }
             rcfile = argv[i+1];
             if (stat(rcfile, &sb) == -1) {
-                LOGE("startup file %s specified by option -rc was not found", rcfile);
-                exit(0);
+                startup_message("startup file %s specified by option -rc was not found", rcfile);
+                startup_exit(1);
             }
             break;
         }
@@ -2456,11 +3031,22 @@ int main (int argc, char *argv[]) {
     }
 
     SetConsoleOutputCP(CP_UTF8);
-    if (!debug_log) {
-        setbuf(stdout, NULL);
-    }
 
-    LOGI("UxPlay %s: An Open-Source AirPlay mirroring and audio-streaming server.", VERSION);
+    /* the receiver name is final here: it identifies the running instance */
+    if (do_append_hostname) {
+        append_hostname(server_name);
+    }
+    /* the log file to fall back to when uxplay.log belongs to another
+       running instance (a receiver with another name, an older version) */
+    log_alternate_name = "uxplay." + receiver_name_tag(server_name).substr(0, 8);
+    if (!claim_single_instance()) {
+        /* the log file belongs to the instance that is running: not opened */
+        exit(0);
+    }
+    open_log_file();
+
+    LOGI("UxPlay for Windows %s (AirPlay protocol core: UxPlay %s), receiver name \"%s\"", UXPLAY_VERSION_TEXT,
+         VERSION, server_name.c_str());
 
     if (dump_video) {
         if (video_dump_limit > 0) {
@@ -2480,6 +3066,7 @@ int main (int argc, char *argv[]) {
     if (!use_video) {
         LOGI("video_disabled");
         display[3] = 1; /* set fps to 1 frame per sec when no video will be shown */
+        user_set_fps = true;
     }
     if (!use_audio) {
         LOGI("audio_disabled");
@@ -2497,20 +3084,28 @@ int main (int argc, char *argv[]) {
 
     /* read in public keys that were previously registered with pair-setup-pin */
     if (pin_pw == 1 && registration_list && strlen(pairing_register.c_str())) {
-        std::string  key;
         int clients = 0;
+        int malformed = 0;
         std::ifstream file(pairing_register);
         if (file.is_open()) {
             std::string line;
             while (std::getline(file, line)) {
-                /*32 bytes pk -> base64 -> strlen(pk64) = 44 chars = line[0:43]; add '\0' at line[44] */
-                line[44] = '\0';
-                std::string pk = line.c_str();
-                registered_keys.push_back(key.assign(pk));
+                /* 32 bytes pk -> base64 -> 44 characters at the start of the line */
+                if (line.size() < 44) {
+                    if (!line.empty()) {
+                        malformed++;
+                    }
+                    continue;
+                }
+                registered_keys.push_back(line.substr(0, 44));
                 clients ++;
             }
             if (clients) {
                 LOGI("Register %s lists %d pin-registered clients", pairing_register.c_str(), clients);
+            }
+            if (malformed) {
+                LOGW("Register %s: %d line(s) shorter than a public key were ignored", pairing_register.c_str(),
+                     malformed);
             }
             file.close();
         }
@@ -2523,7 +3118,7 @@ int main (int argc, char *argv[]) {
             keyfile = homedir;
             keyfile.append("/.uxplay.pem");
         } else {
-	    LOGE("could not determine $HOME: public key wiil not be saved, and so will not be persistent");
+            LOGE("could not determine $HOME: public key wiil not be saved, and so will not be persistent");
         }
     }
 
@@ -2531,16 +3126,11 @@ int main (int argc, char *argv[]) {
         LOGI("public key storage (for persistence) is in %s", keyfile.c_str());
     }
 
-    if (do_append_hostname) {
-        append_hostname(server_name);
-    }
-
     /* fallback if the GPU query below fails; refined from real GPU HEVC
        capability once the engine has started */
     if (!force_h264_only) {
         h265_support = true;
     }
-    shutdown_complete_event = CreateEventW(NULL, TRUE, FALSE, NULL);
 
     native_media_settings native_settings;
     memset(&native_settings, 0, sizeof(native_settings));
@@ -2552,28 +3142,29 @@ int main (int argc, char *argv[]) {
     native_settings.log_level = log_level;
     native_settings.gpu_preference = gpu_preference;
     native_settings.ui_language = ui_language_choice;
+    native_settings.performance_mode = mode_choice;
+    native_settings.crop_mode = crop_choice;
     native_settings.tray_icon = true;
+    native_settings.product_version = UXPLAY_VERSION_TEXT;
+    native_settings.core_version = VERSION;
+    native_settings.project_url = UXPLAY_PROJECT_URL;
     native_settings.log_path = native_log_path.empty() ? NULL : native_log_path.c_str();
     native_settings.log_callback = native_log_callback;
     native_settings.event_callback = native_event_callback;
     if (native_media_start(&native_settings) != 0) {
-        LOGE("the Windows-native media engine could not start (see messages above)");
-        exit(1);
+        startup_message("the Windows-native media engine could not be started");
+        cleanup(1);
     }
-    LOGI("Windows-native engine ready: fullscreen toggle = double-click / F / F11 / Alt+Enter, Esc leaves fullscreen");
+    LOGI("Windows-native engine: fullscreen toggle = double-click / F / F11 / Alt+Enter, Esc leaves fullscreen");
+    /* waits (bounded) for the engine, whose GPU decides the codec offer */
     native_media_display_info native_display;
-    if (native_media_query_display(&native_display)) {
-        /* ask the iPhone for exactly this monitor's geometry and refresh rate */
-        if (!display[0] && !display[1]) {
-            display[0] = (unsigned short) native_display.width;
-            display[1] = (unsigned short) native_display.height;
-            if (!display[2]) {
-                display[2] = (unsigned short) std::min(native_display.refresh_hz, 255);
-            }
-        }
-        if (!display[3]) {
-            display[3] = (unsigned short) std::min(native_display.refresh_hz, 60);
-        }
+    bool const display_known = native_media_query_display(&native_display);
+    if (native_media_failure_text()[0] != '\0') {
+        /* no window and no tray icon: never advertise such a receiver */
+        startup_message("the media engine could not start: %s", native_media_failure_text());
+        cleanup(1);
+    }
+    if (display_known) {
         /* adapt the offered codec to whatever GPU drives this machine's display:
            offer H.265 only if that GPU decodes HEVC in hardware (unless the user
            forced it with -h265, or disabled it with -h264) */
@@ -2585,9 +3176,9 @@ int main (int argc, char *argv[]) {
         if (h265_support && !native_display.hevc_hardware) {
             LOGW("H.265 enabled but this GPU has no HEVC hardware decoder; HEVC will use the software fallback");
         }
-        LOGI("advertising display %ux%u @ %u Hz, max %u fps, codecs %s", display[0], display[1], display[2],
-             display[3], h265_support ? "H.265 + H.264" : "H.264");
     }
+    /* ask the iPhone for this monitor's geometry and refresh rate, per mode */
+    choose_stream_geometry();
 
     if (udp[0]) {
         LOGI("using network ports UDP %d %d %d TCP %d %d %d", udp[0], udp[1], udp[2], tcp[0], tcp[1], tcp[2]);
@@ -2631,10 +3222,16 @@ int main (int argc, char *argv[]) {
     /* starting volume is the user-selected initial volume */
     current_volume = initial_volume;
 
+    /* the session flags, before a server thread can set one */
+    relaunch_video = use_video;
+    reset_httpd = false;
+    close_window = new_window_closing_behavior;
+
     if (start_dnssd(server_hw_addr, server_name)) {
         cleanup(1);
     }
     if (start_raop_server(display, tcp, udp, debug_log)) {
+        stop_raop_server();
         stop_dnssd();
         cleanup(1);
     }
@@ -2659,36 +3256,63 @@ int main (int argc, char *argv[]) {
     }
 
     /* session cycles: each ends with a client reset or teardown (relaunch) or
-       with an exit request */
-    for (;;) {
-        close_window = new_window_closing_behavior;
+       with an exit request; an exit requested at any time (also during the
+       start, or between two cycles) is never turned into a relaunch */
+    while (!exit_requested) {
         main_loop();
-        if (!relaunch_video) {
+        /* What this cycle's requests asked for is taken here: first the
+           requests are acknowledged, then each flag is taken in one step.  A
+           request made from here on belongs to the next cycle and ends it:
+           request_reset keeps it and its flags stay set. */
+        event_loop.acknowledge_resets();
+        bool const relaunch = relaunch_video.exchange(use_video);
+        if (exit_requested || !relaunch) {
             break;
         }
-        if (reset_httpd) {
+        bool const restart_server = reset_httpd.exchange(false);
+        bool const handed_over = connection_handed_over.exchange(false);
+        bool const close_now = close_window.exchange(new_window_closing_behavior);
+        if (restart_server) {
             raop_stop_httpd(raop);
         }
-        if (use_audio) {
+        /* After a hand-over the AirPlay core already removed the old
+           connections and video_reset stopped the old client's picture and
+           sound: stopping the sound or removing "known" connections here
+           would hit the new client that was just accepted. */
+        if (use_audio && !handed_over) {
             native_media_airplay_audio_stop();
         }
-        if (use_video && (close_window || full_video_reset)) {
+        if (use_video && !handed_over && (close_now || full_video_reset)) {
             native_media_airplay_video_stop();
             raop_remove_known_connections(raop);
             full_video_reset = false;
+        } else if (use_video && !handed_over) {
+            /* the last picture stays on screen (connection lost), but the
+               stream is over: paused, it does not keep the display awake;
+               the next stream's configuration ends the pause */
+            native_media_airplay_video_pause();
         }
-        if (reset_httpd) {
+        if (restart_server) {
             unsigned short port = raop_get_port(raop);
-            raop_start_httpd(raop, &port);
+            int const listening = raop_start_httpd(raop, &port);
+            if (listening < 0) {
+                startup_message("after a client reset the AirPlay (RTSP) server could not listen again on TCP "
+                                "port %u (httpd error %d)", port, listening);
+                exit_code_requested = 1;
+                break;
+            }
             raop_set_port(raop, port);
         }
     }
     LOGI("Stopping RAOP Server...");
     stop_raop_server();
     stop_dnssd();
-    cleanup(0);
+    cleanup(exit_code_requested);
 }
 
+/* Main thread only.  Ends the program: a non-zero exit code is a failure
+ * whose reason was reported with startup_message()/LOGE and is shown in a
+ * dialog when there is no terminal. */
 static void cleanup(int exit_code) {
     if (use_audio) {
         native_media_airplay_audio_stop();
@@ -2710,8 +3334,24 @@ static void cleanup(int exit_code) {
         remove (metadata_filename.c_str());
     }
     native_media_stop();
+    /* the window and the tray icon are gone.  A restart is started first: it
+       waits (claim_single_instance) until this process lets go below. */
+    if (exit_code == 0 && restart_after_exit && !restart_program()) {
+        exit_code = 1;
+    }
     if (shutdown_complete_event) {
         SetEvent(shutdown_complete_event);
+    }
+    if (exit_code != 0) {
+        report_startup_failure();
+    }
+    /* the log first, then the mutex: the next instance (which may be waiting
+       for the mutex right now) keeps this run's log as uxplay.previous.log */
+    close_log_file();
+    if (instance_mutex) {
+        ReleaseMutex(instance_mutex);
+        CloseHandle(instance_mutex);
+        instance_mutex = NULL;
     }
     exit(exit_code);
 }

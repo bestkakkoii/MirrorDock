@@ -1,0 +1,31 @@
+﻿// SPDX-License-Identifier: MIT
+// Per-user settings kept between runs (HKCU\Software\UxPlay): small numbers
+// such as the link preference, the performance mode and the window size, and
+// the "start with Windows" entry (HKCU\...\CurrentVersion\Run).
+// Every access reports its outcome; a value that was never stored is not an
+// error.
+export module uxplay_settings;
+
+import std;
+import uxplay_status;
+
+export namespace uxplay::settings
+{
+    // the number stored under `name`, or std::nullopt when none is stored
+    [[nodiscard]] outcome<std::optional<std::uint32_t>> read_number(std::wstring_view name);
+
+    [[nodiscard]] outcome<void> write_number(std::wstring_view name, std::uint32_t value);
+
+    // Convenience for callers whose only reaction to a failed access is the
+    // default value: the failure is logged as a warning with its Win32 code.
+    [[nodiscard]] std::optional<std::uint32_t> stored_number(std::wstring_view name);
+    void store_number(std::wstring_view name, std::uint32_t value);
+
+    // "Start with Windows": the program path registered for the current user
+    // (std::nullopt when it is not registered).
+    [[nodiscard]] outcome<std::optional<std::wstring>> autostart_command();
+
+    // Registers this executable (quoted path) to start with Windows, or
+    // removes the registration.
+    [[nodiscard]] outcome<void> set_autostart(bool enabled);
+}

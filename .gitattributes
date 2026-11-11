@@ -1,4 +1,29 @@
-# shell scripts run in MSYS2 bash: LF on every checkout (CRLF breaks bash)
-*.sh text eol=lf
-# Windows batch files
-*.cmd text eol=crlf
+# Owned source code is UTF-8 with BOM and CRLF line endings (README_AI.md,
+# "Source encoding").  Git stores LF and checks these files out with CRLF on
+# every platform; the BOM is part of the content.
+*.c     text eol=crlf
+*.h     text eol=crlf
+*.cpp   text eol=crlf
+*.cppm  text eol=crlf
+*.rc    text eol=crlf
+*.py    text eol=crlf
+*.hlsl  text eol=crlf
+*.cmd   text eol=crlf
+*.manifest text eol=crlf
+CMakeLists.txt text eol=crlf
+
+# recorded exception: bash reads CR as part of a word (a backslash line
+# continuation then ends the command) and a BOM breaks "#!"
+*.sh    text eol=lf
+
+# vendored third-party code: stored and checked out exactly as published
+lib/llhttp/**   -text
+lib/playfair/** -text
+
+# documentation
+*.md    text
+*.txt   text
+win_native/package/*.txt text eol=crlf
+
+*.ico   binary
+*.zip   binary

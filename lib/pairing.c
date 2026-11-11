@@ -1,4 +1,4 @@
-/**
+﻿/**
  *  Copyright (C) 2018  Juho Vähä-Herttua
  *  Copyright (C) 2020  Jaslo Ziska
  *

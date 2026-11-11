@@ -1,4 +1,4 @@
-/**
+﻿/**
  *  Copyright (C) 2012-2015  Juho Vähä-Herttua
  *
  *  This library is free software; you can redistribute it and/or
@@ -62,6 +62,10 @@ struct raop_callbacks_s {
     /* Optional: reports the server-side local address the client connected to,
        so the host can tell which link (iPhone USB cable or Wi-Fi) carries it. */
     void  (*conn_transport)(void *cls, const char *local_address);
+    /* Optional: asked before a new connection is set up, with the server-side
+       local address it arrived on and the client's address.  Returning false
+       closes the connection at once (nothing else is called for it). */
+    bool  (*conn_admit)(void *cls, const char *local_address, const char *remote_address);
     void  (*audio_flush)(void *cls);
     void  (*video_flush)(void *cls);
     double (*audio_set_client_volume)(void *cls);

@@ -5,6 +5,14 @@
 // same shaders serve D3D11VA decoder texture arrays (slice selected through
 // the view's FirstArraySlice) and uploaded/copied textures.
 //
+// The viewport shows one rectangle of the picture: all of it, or a crop.
+// visible_origin/visible_scale map the viewport onto that rectangle, and
+// every texture fetch of every filter is clamped to the centres of the
+// rectangle's outermost texels (luma_bounds, chroma_bounds).  The filters
+// therefore behave as if the rectangle's edge texels were repeated outwards:
+// neither cut-off black bars nor the padding of a decoder surface reach the
+// edge pixels.
+//
 // Luma filtering: Catmull-Rom bicubic evaluated with 9 bilinear fetches
 // (weights combined per axis) for upscaling; 4-tap supersampling over the
 // output pixel footprint for downscaling; plain bilinear near 1:1.
@@ -15,9 +23,12 @@ cbuffer present_constants : register(b0)
     float4 color_row1;
     float4 color_row2;
     float2 luma_size;       // luma texture size in texels (including alignment padding)
-    float2 visible_scale;   // visible picture size / texture size
+    float2 visible_scale;   // shown rectangle size / texture size
+    float2 visible_origin;  // top-left corner of the shown rectangle / texture size
     float filter_mode;      // 0 bilinear, 1 catmull-rom, 2 supersample
-    float3 padding;
+    float padding;
+    float4 luma_bounds;     // xy smallest, zw largest texture coordinate of a luma fetch
+    float4 chroma_bounds;   // the same for the chroma plane(s)
 };
 
 Texture2DArray<float> luma_plane : register(t0);
@@ -42,9 +53,11 @@ vs_output vs_fullscreen(uint vertex_id : SV_VertexID)
     return output;
 }
 
+// One bilinear luma fetch that never leaves the shown rectangle.
 float sample_luma_bilinear(float2 uv)
 {
-    return luma_plane.SampleLevel(linear_clamp, float3(uv, 0.0), 0.0);
+    float2 inside = clamp(uv, luma_bounds.xy, luma_bounds.zw);
+    return luma_plane.SampleLevel(linear_clamp, float3(inside, 0.0), 0.0);
 }
 
 float sample_luma_catmull_rom(float2 uv)
@@ -67,15 +80,15 @@ float sample_luma_catmull_rom(float2 uv)
     float2 position12 = (texel_center + offset12) / luma_size;
 
     float result = 0.0;
-    result += luma_plane.SampleLevel(linear_clamp, float3(position0.x, position0.y, 0.0), 0.0) * w0.x * w0.y;
-    result += luma_plane.SampleLevel(linear_clamp, float3(position12.x, position0.y, 0.0), 0.0) * w12.x * w0.y;
-    result += luma_plane.SampleLevel(linear_clamp, float3(position3.x, position0.y, 0.0), 0.0) * w3.x * w0.y;
-    result += luma_plane.SampleLevel(linear_clamp, float3(position0.x, position12.y, 0.0), 0.0) * w0.x * w12.y;
-    result += luma_plane.SampleLevel(linear_clamp, float3(position12.x, position12.y, 0.0), 0.0) * w12.x * w12.y;
-    result += luma_plane.SampleLevel(linear_clamp, float3(position3.x, position12.y, 0.0), 0.0) * w3.x * w12.y;
-    result += luma_plane.SampleLevel(linear_clamp, float3(position0.x, position3.y, 0.0), 0.0) * w0.x * w3.y;
-    result += luma_plane.SampleLevel(linear_clamp, float3(position12.x, position3.y, 0.0), 0.0) * w12.x * w3.y;
-    result += luma_plane.SampleLevel(linear_clamp, float3(position3.x, position3.y, 0.0), 0.0) * w3.x * w3.y;
+    result += sample_luma_bilinear(float2(position0.x, position0.y)) * w0.x * w0.y;
+    result += sample_luma_bilinear(float2(position12.x, position0.y)) * w12.x * w0.y;
+    result += sample_luma_bilinear(float2(position3.x, position0.y)) * w3.x * w0.y;
+    result += sample_luma_bilinear(float2(position0.x, position12.y)) * w0.x * w12.y;
+    result += sample_luma_bilinear(float2(position12.x, position12.y)) * w12.x * w12.y;
+    result += sample_luma_bilinear(float2(position3.x, position12.y)) * w3.x * w12.y;
+    result += sample_luma_bilinear(float2(position0.x, position3.y)) * w0.x * w3.y;
+    result += sample_luma_bilinear(float2(position12.x, position3.y)) * w12.x * w3.y;
+    result += sample_luma_bilinear(float2(position3.x, position3.y)) * w3.x * w3.y;
     return result;
 }
 
@@ -119,19 +132,27 @@ float4 to_rgb(float3 ycbcr)
     return float4(saturate(rgb), 1.0);
 }
 
+// Texture coordinate of this output pixel inside the shown rectangle.
+float2 picture_uv(vs_output input)
+{
+    return visible_origin + input.uv * visible_scale;
+}
+
 float4 ps_nv12(vs_output input) : SV_Target
 {
-    float2 uv = input.uv * visible_scale;
+    float2 uv = picture_uv(input);
     float luma = sample_luma(uv);
-    float2 chroma = chroma_plane.SampleLevel(linear_clamp, float3(uv, 0.0), 0.0);
+    float2 chroma_uv = clamp(uv, chroma_bounds.xy, chroma_bounds.zw);
+    float2 chroma = chroma_plane.SampleLevel(linear_clamp, float3(chroma_uv, 0.0), 0.0);
     return to_rgb(float3(luma, chroma));
 }
 
 float4 ps_i420(vs_output input) : SV_Target
 {
-    float2 uv = input.uv * visible_scale;
+    float2 uv = picture_uv(input);
     float luma = sample_luma(uv);
-    float cb = cb_plane.SampleLevel(linear_clamp, float3(uv, 0.0), 0.0);
-    float cr = cr_plane.SampleLevel(linear_clamp, float3(uv, 0.0), 0.0);
+    float2 chroma_uv = clamp(uv, chroma_bounds.xy, chroma_bounds.zw);
+    float cb = cb_plane.SampleLevel(linear_clamp, float3(chroma_uv, 0.0), 0.0);
+    float cr = cr_plane.SampleLevel(linear_clamp, float3(chroma_uv, 0.0), 0.0);
     return to_rgb(float3(luma, cb, cr));
 }

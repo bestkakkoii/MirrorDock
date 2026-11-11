@@ -1,4 +1,4 @@
-/**
+﻿/**
  *  Copyright (C) 2011-2012  Juho Vähä-Herttua
  *
  *  This library is free software; you can redistribute it and/or
@@ -59,16 +59,26 @@ static void dnssd_sanitize_label(char *label)
     }
 }
 
+/*
+ * The SRV target is a host name that only this responder answers.  It must
+ * not be the computer's own name: Windows' built-in mDNS responder answers
+ * "<computer>.local" on every network adapter with that adapter's addresses
+ * (IPv4 and IPv6), so an iPhone on the USB cable resolved the receiver on the
+ * USB link and used that wired path even while the service was advertised on
+ * Wi-Fi only.  With an own name the address the phone gets is exactly the one
+ * mdns_pick_ipv4() chose.
+ */
 static void dnssd_make_host_name(char *dst, size_t dst_len)
 {
     char host[128];
 
     if (gethostname(host, sizeof(host)) || !host[0]) {
-        snprintf(host, sizeof(host), "UxPlay");
+        snprintf(host, sizeof(host), "receiver");
     }
     host[sizeof(host) - 1] = '\0';
     dnssd_sanitize_label(host);
-    snprintf(dst, dst_len, "%s.local", host);
+    /* a DNS label holds at most 63 bytes */
+    snprintf(dst, dst_len, "%.55s-mirror.local", host);
 }
 
 static int dnssd_prepare_names(dnssd_private_t *dnssd, dnssd_t *dnssd_public)

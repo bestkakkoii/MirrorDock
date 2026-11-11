@@ -1,4 +1,4 @@
-/**
+﻿/**
  *  Copyright (C) 2011-2012  Juho Vähä-Herttua
  *
  *  This library is free software; you can redistribute it and/or
@@ -44,10 +44,15 @@ int httpd_get_connection_socket (httpd_t *httpd, void *user_data);
 int httpd_get_connection_socket_by_type (httpd_t *httpd, connection_type_t type, int instance);
 const char *httpd_get_connection_typename (connection_type_t type);
 void *httpd_get_connection_by_type (httpd_t *httpd, connection_type_t type, int instance);
+/* seconds since data was last received on the connection of user_data, -1 if it has none */
+int httpd_get_connection_idle_time (httpd_t *httpd, void *user_data);
 httpd_t *httpd_init(logger_t *logger, httpd_callbacks_t *callbacks, int  nohold);
 
+/* 0 when the server thread is not serving: not started, stopped, or ended by
+ * itself after an error (then httpd_stop() followed by httpd_start() restarts it) */
 int httpd_is_running(httpd_t *httpd);
 
+/* 1: started; 0: already running; < 0: failed (the socket error is logged) */
 int httpd_start(httpd_t *httpd, unsigned short *port);
 void httpd_stop(httpd_t *httpd);
 

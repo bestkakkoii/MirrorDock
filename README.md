@@ -18,11 +18,29 @@ install. It ships as a single `uxplay.exe`.
   link carries AirPlay locally; UxPlay advertises itself on that link while
   the cable is connected and moves back to Wi-Fi when it is unplugged. A
   one-click option keeps the PC's internet traffic off the phone's mobile
-  data. "USB first / Wi-Fi only" switches without touching the USB device,
-  so the cable keeps charging.
-* **Player-style window:** a control bar that appears with the mouse and
-  hides after 3 s, fullscreen on double-click / F / F11 / Alt+Enter,
-  notification-area menu, display hot-plug and refresh changes followed live.
+  data. "Prefer USB / Wi-Fi only" switches without touching the USB device,
+  so the cable keeps charging; "Wi-Fi only" is enforced (no answer on the
+  USB link, and a connection that still arrives over it is refused).
+* **Three modes:** *Quality* (full resolution, a little more buffering, no
+  frame skipped), *Balanced* (the default: adapts to monitor, GPU and
+  network) and *Performance* (lighter stream, minimal buffering, lowest
+  delay and memory) — in the menu or with `-mode`.
+* **Player-style window:** opens at a sensible size (a portrait phone at
+  about 90 % of the screen height, a landscape one at about half the screen
+  width), keeps the picture's aspect ratio while you resize it and remembers
+  size and position per orientation; a control bar that appears with the
+  mouse and hides after 3 s; fullscreen on double-click / F / F11 /
+  Alt+Enter; always on top (T); display hot-plug and refresh changes
+  followed live.
+* **Crops black bars:** a 16:9 film on a 19.5:9 phone is mirrored with black
+  bars. *Crop black bars automatically* (key C, or `-crop auto`) cuts them
+  off so the window hugs the content, and shows the whole picture again the
+  moment something appears in a bar; *Select the area to show* (key X) lets
+  you frame any part with the mouse.
+* **Behaves like a desktop program:** one instance per receiver name, a
+  notification-area menu, optional start with Windows, a dialog that names
+  the reason when it cannot start, a timestamped log and a crash record in
+  `%LOCALAPPDATA%\UxPlay`.
 * **Your language:** the interface (control bar, tray menu, notifications)
   follows the Windows display language — Traditional Chinese, Simplified
   Chinese, or English for every other language; `-ui` picks one.
@@ -52,6 +70,8 @@ options; common ones:
 |---|---|
 | `-n name` | name shown on the iPhone |
 | `-fs` | start in full screen |
+| `-mode quality\|balanced\|performance` | what to optimize for (default: the choice saved by the menu, else balanced) |
+| `-crop auto\|off` | cut black bars around the content off / show the whole picture (default: the choice saved by the menu, else off) |
 | `-gpu auto\|integrated\|discrete\|software` | GPU used for decoding and display |
 | `-h264` / `-h265` | offer only H.264 / always offer H.265 |
 | `-ui auto\|zh-TW\|zh-CN\|en` | interface language (default: the Windows display language) |

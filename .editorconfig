@@ -1,0 +1,33 @@
+# Source encoding of this tree (README_AI.md, "Source encoding").
+root = true
+
+[*]
+insert_final_newline = true
+
+# owned source code: UTF-8 with BOM, CRLF
+[*.{c,h,cpp,cppm,rc,py}]
+charset = utf-8-bom
+end_of_line = crlf
+
+[CMakeLists.txt]
+charset = utf-8-bom
+end_of_line = crlf
+
+# recorded exceptions (the consuming tool rejects a BOM and/or CRLF)
+[*.sh]
+charset = utf-8
+end_of_line = lf
+
+[*.{cmd,hlsl}]
+charset = utf-8
+end_of_line = crlf
+
+# vendored third-party code, kept byte-identical to its upstream
+[lib/{llhttp,playfair}/**]
+charset = unset
+end_of_line = unset
+insert_final_newline = unset
+
+[win_native/package/*.txt]
+charset = utf-8-bom
+end_of_line = crlf

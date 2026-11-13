@@ -33,11 +33,12 @@ Il repose sur le cœur du protocole AirPlay d’[UxPlay](https://github.com/FDH2
 | 🔊 **Un son synchronisé** | Sortie WASAPI à faible latence, sur la même ligne de temps que l’image : les lèvres et la voix concordent. |
 | 🎛️ **Trois modes** | *Qualité*, *Équilibré* (par défaut) et *Performances* : à vous de choisir entre l’image la plus nette et la latence la plus faible. |
 | ✂️ **Rognage des bandes noires** | Supprime automatiquement les bandes noires autour d’un film, ou vous laisse cadrer à la souris n’importe quelle partie de l’image. |
-| 🖱️ **Contrôle de l’iPhone** | Cliquez, faites glisser, faites défiler et tapez au clavier sur l’image : le téléphone fait de même. Tout est intégré : ni programme auxiliaire ni jailbreak (iOS 27, câble USB, mode Développeur). |
+| 🖱️ **Contrôle de l’iPhone** | Cliquez, faites glisser, faites défiler et tapez au clavier sur l’image : le téléphone fait de même ; pendant ce temps, l’image n’attend plus ses horodatages et suit votre main plus vite. Tout est intégré : ni programme auxiliaire ni jailbreak (iOS 27, câble USB, mode Développeur). |
 | 🪟 **Une vraie fenêtre** | S’ouvre à une taille raisonnable, conserve les proportions quand vous la redimensionnez, mémorise sa taille et sa position, passe en plein écran d’une seule touche et peut rester toujours au premier plan. |
+| 📸 **Captures d’écran** | **F9** enregistre l’image recopiée à la pleine résolution du téléphone dans un fichier PNG et la copie dans le presse-papiers. |
 | 🌐 **Onze langues** | L’interface suit la langue d’affichage de Windows. |
-| 🩺 **Connaît votre PC** | La fenêtre « À propos » vérifie ce qui compte pour la recopie de l’écran (GPU, pilotes, réseau, pare-feu, prise en charge USB d’Apple), l’évalue et vous dit quoi corriger. |
-| 🔄 **Recherche de mises à jour** | Vous prévient quand une nouvelle version sort : une question à GitHub par jour, désactivable d’un clic. |
+| 🩺 **Connaît votre PC** | La fenêtre « À propos » vérifie ce qui compte pour la recopie de l’écran (GPU, pilotes, réseau, pare-feu, prise en charge USB d’Apple), l’évalue, vous dit quoi corriger et corrige ce qu’elle peut d’une simple pression sur un bouton. |
+| 🔄 **Mise à jour en un clic** | Vous prévient quand une nouvelle version sort et l’installe quand vous le demandez. Chaque version est signée, et vérifiée avant d’être installée. |
 | 🧳 **Un seul fichier** | Un exécutable unique d’environ 12 Mo, qui n’a besoin que de Windows. |
 
 ## 🚀 Démarrage rapide
@@ -100,7 +101,9 @@ Ce qu’il faut :
 > [!NOTE]
 > AirPlay ne sait pas transmettre les actions de la souris et du clavier ; le contrôle emprunte donc une autre voie : les services pour développeurs d’iOS, ceux dont Xcode se sert pour piloter un appareil réel. Pour les installer, MirrorDock télécharge l’image d’Apple depuis le dépôt [DeveloperDiskImage](https://github.com/doronz88/DeveloperDiskImage) et demande au service de signature d’Apple (`gs.apple.com`) de la signer pour votre téléphone, ce qui communique à Apple les numéros d’identification de sa puce, exactement comme le fait Xcode. Ensuite, le contrôle ne contacte plus personne.
 
-Tant que le contrôle est actif, les commandes propres à la fenêtre passent en premier : **F8**, **F11**, **Alt+Enter**, **Alt+F4**, **Esc** en plein écran et le double-clic restent réservés à la fenêtre. Lors d’un double-clic, le premier clic a déjà atteint le téléphone sous forme de toucher quand le second arrive : double-cliquez donc sur une bande noire s’il y en a une, ou appuyez sur **F11**. La barre de contrôle ne s’affiche pas, car elle masquerait le bas de l’écran du téléphone.
+Tant que le contrôle est actif, les commandes propres à la fenêtre passent en premier : **F8**, **F9**, **F11**, **Alt+Enter**, **Alt+F4**, **Esc** en plein écran et le double-clic restent réservés à la fenêtre. Lors d’un double-clic, le premier clic a déjà atteint le téléphone sous forme de toucher quand le second arrive : double-cliquez donc sur une bande noire s’il y en a une, ou appuyez sur **F11**. La barre de contrôle ne s’affiche pas, car elle masquerait le bas de l’écran du téléphone.
+
+**Moins de retard pendant le contrôle.** L’iPhone horodate ses images et son audio un peu après le moment où ils arrivent (d’environ 85 ms pour les images en Wi-Fi), et MirrorDock attend normalement ces instants. Quand le contrôle est actif, il restitue les deux dès qu’ils arrivent à temps, toujours synchronisés entre eux : l’effet d’un toucher apparaît donc plus tôt. Le passage se fait en douceur, en quelques secondes, sans saut dans le son.
 
 ## ⌨️ Clavier et souris
 
@@ -111,19 +114,21 @@ Tant que le contrôle est actif, les commandes propres à la fenêtre passent en
 | Encadrer la zone à afficher | **X** |
 | Toujours au premier plan | **T** |
 | Couper le son (côté PC uniquement) | **M** |
+| Capture d’écran (fichier PNG et presse-papiers) | **F9** |
 | Activer / désactiver le contrôle de l’iPhone | **F8** |
 | Barre de contrôle | Déplacez la souris sur l’image |
 | Menu | Faites un clic droit n’importe où sur l’image |
 
-Pendant le contrôle de l’iPhone, les touches de lettres écrivent sur le téléphone ; **F8** les rend à la fenêtre.
+Pendant le contrôle de l’iPhone, les touches de lettres écrivent sur le téléphone ; **F8** les rend à la fenêtre. Les captures sont enregistrées dans le dossier *MirrorDock* de votre dossier *Images*, avec la date et l’heure pour nom, à la taille qu’envoie le téléphone et non à celle de la fenêtre.
 
 ## 🔄 Mises à jour
 
-**Rechercher des mises à jour…** dans le menu demande à GitHub quelle est la dernière version et affiche la réponse dans la fenêtre « À propos ». S’il en existe une plus récente, **Télécharger** ouvre son zip dans votre navigateur et **Nouveautés** ouvre ses notes de version. MirrorDock n’installe rien de lui-même.
+**Rechercher des mises à jour…** dans le menu demande à GitHub quelle est la dernière version et affiche la réponse dans la fenêtre « À propos ». S’il en existe une plus récente, **Mettre à jour maintenant** la télécharge, la vérifie et la met à la place du programme en cours d’exécution, qui redémarre ensuite de lui-même ; si une recopie de l’écran est en cours, ce redémarrage attend qu’elle se termine, ou que vous choisissiez **Redémarrer maintenant**. **Télécharger** ouvre toujours le zip dans votre navigateur si vous préférez le décompresser vous-même, et **Nouveautés** ouvre les notes de version. Rien n’est installé sans que vous le demandiez.
 
 - **Recherche automatique.** Une fois par jour, avec une notification quand une nouvelle version sort. Un interrupteur dans la fenêtre « À propos » la désactive.
 - **Ce qui est envoyé.** Une seule requête à `api.github.com`. GitHub voit votre adresse IP et le nom de client `MirrorDock/<version>`, et rien à votre sujet ni au sujet de votre PC.
 - **Pas sur vos données mobiles.** Aucune recherche automatique n’a lieu sur une connexion que Windows signale comme limitée, ni tant que l’accès à Internet du PC passe par l’iPhone.
+- **Uniquement des versions authentiques.** Chaque version est signée avec une clé qui n’est pas conservée sur Internet, et MirrorDock en contient la moitié publique. Un paquet dont la signature ne correspond pas n’est pas installé, d’où qu’il vienne.
 
 ## 🩺 « À propos » et Ce PC
 
@@ -135,7 +140,7 @@ Pendant le contrôle de l’iPhone, les touches de lettres écrivent sur le tél
 | **Ce PC** | Ce qui compte pour MirrorDock sur votre PC, ligne par ligne : Windows, écran, alimentation, réseau, pare-feu, processeur, mémoire, GPU et son décodage vidéo, son, pilote graphique, prise en charge USB d’Apple, iPhone relié par le câble |
 | **Composants** | Chaque bibliothèque et chaque outil avec lesquels MirrorDock est construit, avec version, date et licence, ainsi que la date de publication de chaque version de MirrorDock |
 
-Chaque ligne de *Ce PC* est notée « bon », « à surveiller » ou « problème », et une ligne qui n’est pas bonne indique quoi faire. Le score est la part des lignes notées qui sont en ordre, pondérée selon l’importance de chacune pour la recopie de l’écran (le décodage vidéo matériel compte le plus). Il indique à quel point le PC est bien préparé ; ce n’est pas un test de performances. **Copier le rapport** place la page dans le presse-papiers sous forme de texte brut, pour un rapport de bogue. Rien de cette page ne quitte votre PC, et aucun numéro de série ni nom d’appareil n’est affiché ou conservé.
+Chaque ligne de *Ce PC* est notée « bon », « à surveiller » ou « problème ». Une ligne qui n’est pas bonne indique quoi faire, et comporte un bouton quand MirrorDock peut le faire pour vous : autoriser le programme dans le Pare-feu Windows, démarrer le service d’Apple, installer la prise en charge USB d’Apple ou ouvrir la page des Paramètres Windows où la question se règle. Ce qui exige des droits d’administrateur est effectué par les outils de Windows eux-mêmes, après la demande de consentement habituelle. Le score est la part des lignes notées qui sont en ordre, pondérée selon l’importance de chacune pour la recopie de l’écran (le décodage vidéo matériel compte le plus). Il indique à quel point le PC est bien préparé ; ce n’est pas un test de performances. **Copier le rapport** place la page dans le presse-papiers sous forme de texte brut, pour un rapport de bogue. Rien de cette page ne quitte votre PC, et aucun numéro de série ni nom d’appareil n’est affiché ou conservé.
 
 ## ⚙️ Options
 
@@ -192,7 +197,7 @@ La recopie en Wi-Fi et par USB a été vérifiée avec un iPhone 16 Pro Max (iOS
 ## ❓ FAQ
 
 **L’iPhone n’affiche pas mon PC dans la liste.**
-Les deux appareils doivent être sur le même réseau, et le Pare-feu Windows doit autoriser `mirror_dock.exe`. La page *Ce PC* de la fenêtre « À propos » indique si c’est le pare-feu ou un réseau défini comme *public* qui fait obstacle. Désactiver puis réactiver le Wi-Fi de l’iPhone actualise la liste.
+Les deux appareils doivent être sur le même réseau, et le Pare-feu Windows doit autoriser `mirror_dock.exe`. La page *Ce PC* de la fenêtre « À propos » indique si c’est le pare-feu ou un réseau défini comme *public* qui fait obstacle, et son bouton autorise MirrorDock dans le pare-feu. Désactiver puis réactiver le Wi-Fi de l’iPhone actualise la liste.
 
 **Le câble est branché, mais la recopie passe toujours par le Wi-Fi.**
 Le Partage de connexion doit être activé, et le choix de liaison doit être *USB en priorité*. La deuxième ligne du menu indique l’état de la liaison USB.
@@ -210,14 +215,14 @@ Le message en donne la raison : le câble n’est pas branché ou l’iPhone ne 
 C’est une option officielle d’Apple, destinée à ceux qui créent des apps. Elle permet à un ordinateur de confiance d’installer et de déboguer des apps et d’accéder aux services pour développeurs ; ce n’est pas un jailbreak du téléphone, et vous pouvez la désactiver au même endroit.
 
 **MirrorDock utilise-t-il Internet ?**
-La recopie de l’écran est locale. MirrorDock ne se connecte à Internet que pour deux choses : la recherche de mises à jour (GitHub, une fois par jour, désactivable) et, la première fois que vous contrôlez un iPhone, l’image disque développeur d’Apple et la signature d’Apple qui l’accompagne.
+La recopie de l’écran est locale. MirrorDock ne se connecte à Internet que pour deux choses : les mises à jour (la recherche sur GitHub une fois par jour, désactivable, et le téléchargement d’une version quand vous le demandez) et, la première fois que vous contrôlez un iPhone, l’image disque développeur d’Apple et la signature d’Apple qui l’accompagne.
 
 **Où se trouve le journal ?**
 `%LOCALAPPDATA%\MirrorDock\mirror_dock.log`, ou **Ouvrir le fichier journal** dans le menu.
 
 ## 🛠️ Compiler depuis les sources
 
-MSYS2 CLANG64 (clang 23, libc++ avec le module de la bibliothèque standard C++26, CMake 4.4, Ninja) et le compilateur de shaders du SDK Windows. FFmpeg, OpenSSL et libplist sont compilés en bibliothèques statiques à partir de commits épinglés ; ces commits figurent dans `win_native/build_scripts/build_inputs.tsv`, la liste qu’affiche la fenêtre « À propos ».
+MSYS2 CLANG64 (clang 23, libc++ avec le module de la bibliothèque standard C++26, CMake 4.4, Ninja) et le compilateur de shaders du SDK Windows. FFmpeg, OpenSSL et libplist sont compilés en bibliothèques statiques à partir de commits épinglés ; ces commits figurent dans `win_native/build_scripts/build_inputs.tsv`, la liste qu’affiche la fenêtre « À propos ». Une compilation personnelle qui doit se mettre à jour à partir de vos propres versions a besoin de sa propre clé de signature : voir `win_native/build_scripts/sign_release.ps1`.
 
 ```sh
 bash win_native/build_scripts/fetch_deps.sh <src_root>

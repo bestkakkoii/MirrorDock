@@ -163,6 +163,12 @@ mô tả ở trên là cách phản chiếu qua dây hoạt động được v�
               chế độ tự động).
 - Luôn ở trên cùng: nhấn T, hoặc chọn “Luôn ở trên cùng” trong menu. Tắt
   tiếng: nhấn M.
+- Chụp ảnh màn hình: nhấn F9, hoặc chọn “Chụp ảnh màn hình” trong menu hay
+  nút hình máy ảnh trên thanh điều khiển. Hình ảnh được lưu thành tệp PNG,
+  với kích thước mà điện thoại gửi chứ không phải kích thước cửa sổ, trong
+  thư mục “MirrorDock” nằm trong thư mục Ảnh của bạn (đặt tên theo ngày giờ),
+  và được sao chép vào bảng tạm. Một dòng chữ trên hình ảnh sẽ xác nhận điều
+  đó. F9 cũng hoạt động trong lúc đang điều khiển iPhone.
 - Trong lúc phản chiếu, máy tính không tự chuyển sang chế độ ngủ hay tự tắt
   màn hình.
 - Giao diện đi theo ngôn ngữ hiển thị của Windows: tiếng Anh, tiếng Trung
@@ -199,6 +205,14 @@ dạng một lần chạm trước khi lần bấm thứ hai tới: hãy bấm �
 có, hoặc nhấn F11. Thanh điều khiển không hiện ra trong lúc đang điều khiển
 iPhone, vì nó sẽ che mất phần dưới cùng của màn hình điện thoại: hãy dùng nút
 chuột phải.
+
+Trong lúc đang điều khiển, độ trễ ngắn hơn. iPhone gắn cho hình ảnh và âm
+thanh của nó dấu thời gian muộn hơn một chút so với lúc chúng đến nơi (với
+hình ảnh qua Wi-Fi là khoảng 85 ms), và bình thường chương trình chờ đến đúng
+thời điểm đó. Khi đang điều khiển, chương trình phát cả hai sớm nhất có thể,
+miễn là chúng đến kịp, và vẫn đồng bộ với nhau, nên kết quả của một lần chạm
+hiện ra sớm hơn. Việc chuyển đổi diễn ra êm trong vài giây, âm thanh không bị
+giật.
 
 Điều kiện cần có:
 - Một iPhone chạy iOS 27 trở lên đang cắm cáp USB và đã tin cậy máy tính này
@@ -265,10 +279,13 @@ báo điều này).
 8. Cập nhật và cửa sổ Giới thiệu
 --------------------------------
 - “Kiểm tra bản cập nhật…” trong menu sẽ hỏi GitHub về bản phát hành mới nhất
-  rồi hiện câu trả lời trong cửa sổ Giới thiệu. Khi có bản mới hơn, “Tải
-  xuống” mở tệp zip của bản đó trong trình duyệt, còn “Có gì mới” mở ghi chú
-  phát hành của nó: hãy giải nén gói mới đè lên thư mục cũ. Chương trình
-  không tự cài đặt bất cứ thứ gì.
+  rồi hiện câu trả lời trong cửa sổ Giới thiệu. Khi có bản mới hơn, “Cập nhật
+  ngay” sẽ tải bản đó về, kiểm tra rồi đặt vào chỗ của chương trình đang
+  chạy, sau đó chương trình tự khởi động lại. Nếu đang phản chiếu, việc khởi
+  động lại sẽ chờ đến khi phản chiếu kết thúc, hoặc đến khi bạn chọn “Khởi
+  động lại ngay”. “Tải xuống” vẫn mở tệp zip trong trình duyệt để bạn tự giải
+  nén đè lên thư mục cũ, còn “Có gì mới” mở ghi chú phát hành. Không có gì
+  được cài đặt nếu bạn không yêu cầu.
 - Mỗi ngày một lần, chương trình tự hỏi, và một thông báo sẽ cho bạn biết khi
   có bản phát hành mới hơn. Để tắt, hãy tắt “Tự động kiểm tra bản cập nhật”
   trong cửa sổ Giới thiệu.
@@ -277,6 +294,11 @@ báo điều này).
   tin nào về bạn hay máy tính. Chương trình không tự động kiểm tra qua kết
   nối mà Windows đánh dấu là kết nối bằng gói dữ liệu theo lưu lượng sử dụng,
   cũng như khi máy tính đang truy cập Internet qua iPhone.
+- Chỉ những bản phát hành chính gốc mới được cài đặt: mọi bản phát hành đều
+  được ký bằng một khóa không đặt trên Internet, và chương trình mang sẵn nửa
+  công khai của khóa đó. Gói nào có chữ ký không khớp sẽ không được cài đặt,
+  dù nó đến từ đâu. Nếu không ghi được vào thư mục của chương trình, hãy dùng
+  “Tải xuống”.
 - “Giới thiệu…” trong menu mở ra một cửa sổ riêng, gồm ba trang:
     Giới thiệu     phiên bản và ngày phát hành, phần kiểm tra bản cập nhật,
                    các liên kết đến dự án, hướng dẫn này và văn bản giấy phép
@@ -295,6 +317,12 @@ báo điều này).
   dòng đối với việc phản chiếu (giải mã video bằng phần cứng có trọng số lớn
   nhất). Điểm số cho biết máy tính được thiết lập tốt đến đâu; đây không
   phải là điểm benchmark.
+- Dòng nào của “Máy tính này” chưa tốt sẽ có một nút khi chương trình tự làm
+  được điều gì đó: cho phép chương trình qua Tường lửa Windows, khởi động
+  dịch vụ của Apple, cài đặt phần hỗ trợ USB của Apple, hoặc mở trang Cài đặt
+  của Windows nơi giải quyết việc đó. Những việc cần quyền quản trị viên do
+  chính các công cụ của Windows thực hiện, sau lời nhắc xác nhận quen thuộc.
+  Khi bạn quay lại cửa sổ, trang này được kiểm tra lại.
 - “Sao chép báo cáo” đưa nội dung trang đó vào bảng tạm dưới dạng văn bản
   thuần: hãy dán vào khi bạn báo lỗi. Không có gì trên trang này rời khỏi máy
   tính, và không có số sê-ri hay tên thiết bị nào được hiển thị hoặc lưu lại.

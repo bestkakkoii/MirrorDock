@@ -174,7 +174,10 @@ at startup (and on change) and configures itself:
   dialog instead, `UXPLAY_RESTARTED_AT` in the child's environment), session
   ending (Windows shutdown/sign-out: RAOP and mDNS are stopped, then
   `native_media_network_stopped()` releases the window thread, which waits at
-  most 2 s).
+  most 2 s), update installed (a newer release was put in place of the
+  running program: the program ends and starts
+  `native_media_restart_target()` with the same command line; when it was
+  ending anyway, it is not started again).
 * **Connection replacement:** when the AirPlay core replaces the connected
   client inside `conn_request` ("nohold", or the hand-over of the same client
   address whose old connection has been silent for `RAOP_HANDOVER_IDLE_SECS`
@@ -202,22 +205,28 @@ Engine modules (`win_native/src`, C++26 named modules, `import std;`):
 | `uxplay_status`, `uxplay_log`, `uxplay_clock` | explicit failure outcomes, log sink, QPC-ns timeline |
 | `uxplay_system_tuning` | EcoQoS/power-throttling opt-out, MMCSS, priority, DPI |
 | `uxplay_gpu_device` | D3D11 device on the GPU that physically scans out the monitor (QueryDisplayConfig LUID), DWM composition clock |
-| `uxplay_video_window` | Win32 window + UI thread: placement per orientation, aspect-locked resizing, borderless fullscreen toggle (double-click/F/F11/Alt+Enter, Esc), always on top (T), dark title bar, keep-awake while a stream plays, tray icon/menu (modes, link, mute, start with Windows, log, update check, about), the same menu on a right click anywhere on the picture (`WM_CONTEXTMENU`; a right click that cancels a frame opens none), second-launch and session-end messages |
+| `uxplay_video_window` | Win32 window + UI thread: placement per orientation, aspect-locked resizing, borderless fullscreen toggle (double-click/F/F11/Alt+Enter, Esc), always on top (T), dark title bar, keep-awake while a stream plays, tray icon/menu (modes, link, mute, screenshot, start with Windows, log, update check, about), the same menu on a right click anywhere on the picture (`WM_CONTEXTMENU`; a right click that cancels a frame opens none), second-launch and session-end messages; **F9** asks for a screenshot (a key of the window's own, also while the phone is controlled); `notice()` shows a line of text on the picture |
 | `uxplay_settings` | per-user settings in `HKCU\Software\MirrorDock` (read/write with explicit outcomes) and the "start with Windows" Run entry |
 | `uxplay_crash_report` | unhandled-exception / terminate record and minidump next to the log |
-| `uxplay_video_overlay` | player-style control bar: layered, non-activating popup owned by the video window, Direct2D/DirectWrite (software rasterizer), Segoe Fluent/MDL2 icon glyphs; fades in on real pointer movement, out after 3 s idle (stays while hovered); link switch, mute, menu, fullscreen, alert chips |
+| `uxplay_video_overlay` | player-style control bar: layered, non-activating popup owned by the video window, Direct2D/DirectWrite (software rasterizer), Segoe Fluent/MDL2 icon glyphs; fades in on real pointer movement, out after 3 s idle (stays while hovered); link switch, screenshot, mute, menu, fullscreen, alert chips. A second window of the same kind is the notice: a pill of text over the picture that goes away by itself (click-through, 1.8 s, then a fade) |
 | `uxplay_video_decoder`, `uxplay_video_frame` | FFmpeg H.264/HEVC, D3D11VA, shader-readable decoder textures (zero copy); surface pool sized from the stream (below); falls back to the software decoder by itself and replays the units since the last parameter sets; `luma_reader` (CPU view of a picture's luma for the crop detector) |
-| `uxplay_video_presenter` | flip-model swap chain, frame-latency waitable (max latency 1), timestamp-scheduled presentation on a high-resolution waitable timer, per-mode drop policy, crop region (`set_crop`), frees every per-stream GPU object and the swap chain when nothing is shown, reports a lost device |
+| `uxplay_video_presenter` | flip-model swap chain, frame-latency waitable (max latency 1), timestamp-scheduled presentation on a high-resolution waitable timer, per-mode drop policy, crop region (`set_crop`), frees every per-stream GPU object and the swap chain when nothing is shown, reports a lost device; `capture()` hands back the picture that is on screen in its own resolution (the render thread draws it once more, with the same shader, into an off-screen texture and reads that back) |
 | `uxplay_crop_detector` | pure logic: black-bar measurement of a luma plane and the cautious policy that turns it into a crop region (below) |
-| `uxplay_audio_decoder`, `uxplay_audio_output` | AAC-ELD/ALAC/AAC-LC/LPCM -> float32 at device rate; WASAPI IAudioClient3 low-latency period, per-sample scheduling with ≤0.3 % cubic-resampling drift correction, mute, soft limiter; the stream runs only while a source has audio queued (stopped after 3 s of silence, endpoint released 2 s later when no source is in use), endpoint failures are retried with back-off |
+| `uxplay_audio_decoder`, `uxplay_audio_output` | AAC-ELD/ALAC/AAC-LC/LPCM -> float32 at device rate; WASAPI IAudioClient3 low-latency period, per-sample scheduling with cubic-resampling rate correction (at most 1.2 %, so that it can follow the timeline's glide while the phone is controlled; in step with the clock it is a few parts in a million), mute, soft limiter; the stream runs only while a source has audio queued (stopped after 3 s of silence, endpoint released 2 s later when no source is in use), endpoint failures are retried with back-off |
 | `uxplay_media_engine` | the AirPlay pipeline and the shared presentation timeline |
 | `uxplay_media_types` | media source identity (AirPlay), `performance_mode` |
 | `uxplay_ui_text` | interface text table in eleven languages (completeness and `{}` placeholder counts checked at compile time), Windows display-language detection, DirectWrite locale |
 | `uxplay_usb_link` | iPhone USB network link (AirPlay over the Personal Hotspot cable): attach/link detection, tray status and hints, link classification for the window label, cellular-data guard |
-| `uxplay_update_check` | asks GitHub for the newest release (one request, see "About window" below) and compares it with the running version; `update_checker` checks on request and once a day on a thread of its own |
+| `uxplay_update_check` | asks GitHub for the newest release (one request, see "About window" below) and compares it with the running version; `update_checker` checks on request and once a day on a thread of its own; it also names the release's package and its signature file for the installer |
+| `uxplay_release_signature` | SHA-256, and the check of a release's signature (ECDSA P-256 through Windows CNG) against the public key the program carries |
+| `uxplay_zip_archive` | reads a zip that is in memory: stored and deflated entries (its own inflate), every file checked against its CRC-32; anything else a zip can be is refused |
+| `uxplay_update_install` | puts a newer release in place of the running program when the user asks for it (see "Installing an update" below) |
 | `uxplay_build_info` | data only: the inputs of the build with the versions it really used, and the program's own versions with their dates; both written by `win_native/CMakeLists.txt` when the build is configured |
-| `uxplay_system_report` | "This PC": measures what matters to the program (facts), judges it into rated rows with a score, words the rows in an interface language, and gives the plain-text report; `report_collector` measures on a thread of its own |
-| `uxplay_about_window` | the About window: a window and a thread of its own, three pages drawn with Direct2D/DirectWrite (software rasterizer), light or dark as Windows is set, per-monitor DPI, scrolling, mouse and keyboard; it shows what it is handed and reports what the user wants |
+| `uxplay_system_report` | "This PC": measures what matters to the program (facts), judges it into rated rows with a score, words the rows in an interface language, and gives the plain-text report; `report_collector` measures on a thread of its own; a row may name a `report_action`, the repair offered beside it |
+| `uxplay_system_repair` | carries out a `report_action`: a firewall rule (`netsh`) or Apple's service (`sc`) through `uxplay_elevation`, or the page of Windows' Settings where the matter is settled |
+| `uxplay_elevation` | starts one of Windows' own tools with administrator rights behind the consent prompt (`ShellExecuteExW`, "runas") and waits for its exit code; no code of the program runs elevated. Used by the USB link's adapter switch and by the repairs |
+| `uxplay_screenshot` | writes a picture as a PNG file (WIC) into `Pictures\MirrorDock` and puts it on the clipboard (a bitmap, and PNG for the programs that know it) |
+| `uxplay_about_window` | the About window: a window and a thread of its own, three pages drawn with Direct2D/DirectWrite (software rasterizer), light or dark as Windows is set, per-monitor DPI, scrolling, mouse and keyboard; it shows what it is handed (since 1.12 also how an update goes) and reports what the user wants (also a repair of a row, "Update now", "Restart now") |
 | `native_media_bridge.cpp` | C API (`win_native/include/native_media.h`) used by `uxplay.cpp` |
 
 ## Invariants
@@ -232,6 +241,24 @@ Engine modules (`win_native/src`, C++26 named modules, `import std;`):
   ~1–2 s). Audio lateness does **not** drive the delay (a mid-stream audio
   cold-start would otherwise spike it); audio stays in sync because it is
   scheduled against the same delay and re-anchors its own queue.
+  **While the phone is controlled (since 1.12) the delay may go below zero.**
+  An iPhone stamps pictures and sound ahead of the moment they arrive
+  (measured over Wi-Fi with 1.11, 3130x1440 HEVC at 30 fps: pictures were
+  decoded 82 ms before their timestamp on average and no later than about
+  50 ms before it, rare outliers apart; sound arrived 184 ms before its
+  timestamp), and at rest all of that is waited for, which is what makes
+  mirroring smooth. A hand on the mouse wants the picture sooner:
+  `media_engine::set_control_ready(true)` makes the timeline *follow the
+  lead*. The target is then the 95th percentile of the picture lateness
+  over the last 90 pictures within 30 s (at least 20 of them) plus the
+  margin, not below -150 ms, and not below what the sound needs (the median
+  of its arrival lateness plus 30 ms for its scatter plus the buffering
+  floor, once 40 packets were seen). The delay glides there, and back when
+  control ends, by 1 ms per 100 ms; a picture that comes late still raises
+  it at once. Sound and pictures keep one delay, so lips and voice stay
+  together; the audio output follows the glide by playing up to 1.2 %
+  faster or slower. The log's `sync delay` shows the value (negative while
+  following).
 * **GPU:** decode + present on the display-owning adapter (Intel here).
   Measured on this host (2868x1320@60, synthetic streams): Intel H.264 37 ms /
   HEVC 28 ms sync delay, 0–4 drops; GTX 960M H.264 70 ms, HEVC 122 ms with 70
@@ -673,11 +700,13 @@ client stopped it.
 
 ## The About window, the update check and "This PC" (since 1.11)
 
-**Who owns what.** `native_media_bridge.cpp` creates three objects once the
+**Who owns what.** `native_media_bridge.cpp` creates four objects once the
 engine exists (`create_about`): the `about_window` (no window yet), the
-`update_checker` and the `report_collector`. The window only shows and asks:
-`set_update` / `set_facts` hand it what to show, `about_events` reports the
-three things a user can want (check now, automatic on/off, measure again).
+`update_checker`, the `report_collector` and (since 1.12) the
+`update_installer`. The window only shows and asks: `set_update` /
+`set_facts` / `set_install` hand it what to show, `about_events` reports
+what a user can want (check now, automatic on/off, measure again; since
+1.12 a repair of a row, "Update now", "Restart now").
 `show_about` runs on the video window's thread (menu command, click on the
 notification): it opens the window or brings it to the front, above a video
 window that is "always on top", and requests the facts when the window was
@@ -685,19 +714,25 @@ not open. If the window cannot be created, a plain message box says version
 and project address.
 
 `native_media_stop` ends them in this order: the About **window** first
-(`about_window::close`: its buttons call the other two), then the checker and
-the collector (their threads hand results to the About object, which still
-exists, and read the link monitor and the engine), then the About object,
-then the link monitor and the engine. Neither the checker nor the collector
-makes the end of the program wait for the network or the phone: the HTTP
-request and the question to the iPhone run on helper threads that own
-nothing but a shared block, and a stop abandons them (they log nothing).
+(`about_window::close`: its buttons call the others), then the checker, the
+installer (the checker may hand it a release) and the collector (their
+threads hand results to the About object, which still exists, and read the
+link monitor and the engine), then the About object, then the link monitor
+and the engine. None of them makes the end of the program wait for the
+network or the phone: the HTTP requests and the question to the iPhone run
+on helper threads that own nothing but a shared block, and a stop abandons
+them (they log nothing). A repair runs on a thread of its own as well
+(behind it may be a consent prompt nobody answers); what it does when it
+is over it does only while the bridge says the engine is still there.
 
-**What leaves the PC.** Only the update request: `GET
+**What leaves the PC.** The update request: `GET
 https://api.github.com/repos/<owner>/<project>/releases/latest` with
 `User-Agent: MirrorDock/<version>` and `Accept: application/vnd.github+json`
 (`uxplay_version.h` names the address, the tag prefix and the package name).
-Nothing is downloaded or installed. The answer is parsed with libplist's
+Nothing else is fetched until the user clicks "Update now": then two more
+requests with the same `User-Agent` fetch the release's signature file and
+its package from the project's release page (GitHub redirects them to its
+file server; WinHTTP follows). The answer is parsed with libplist's
 JSON reader (`property_list::parse_json`); of the addresses in it only those
 below `UXPLAY_PROJECT_URL` are kept, anything else is replaced by the fixed
 `/releases/latest` addresses, and the About window hands the shell nothing
@@ -752,6 +787,90 @@ firewall verdict comes from the rules of Windows Firewall for exactly this
 executable in the active profiles; another firewall product is not seen.
 "Copy report" is `report_text`: the same rows in English.
 
+**Repairs on "This PC" (since 1.12).** A row that is not in order may name
+a `report_action`; the About window shows it as a button under the row's
+advice, and `uxplay_system_repair::repair` carries it out:
+
+| action | offered when | what it does |
+|---|---|---|
+| `allow_through_firewall` | the firewall is on and has no rule for this executable, or a rule that blocks it | elevated `netsh advfirewall firewall add rule name="MirrorDock" dir=in action=allow program="<exe>" enable=yes profile=<the active kinds of network>`; with a blocking rule instead `set rule name=all dir=in program="<exe>" new action=allow enable=yes` |
+| `open_firewall_settings` | the firewall blocks every incoming connection (`firewall_verdict::shut`: no rule can help) | `windowsdefender://network/` |
+| `start_apple_service` | Apple's USB support is installed and its service does not answer | elevated `sc start "Apple Mobile Device Service"` |
+| `install_apple_support` | Apple's USB support is not installed | the packaged `install_apple_usb_support.cmd`; without that file the Store page of "Apple Devices" |
+| `enable_usb_adapter` | the iPhone's network adapter is disabled while USB is preferred | the link monitor's own elevated switch (as in the menu) |
+| `install_update` | a newer release exists | the update, as "Update now" |
+| `open_display_settings`, `open_network_settings`, `open_power_settings`, `open_sound_settings`, `open_windows_update` | the row's matter is the user's own choice (refresh rate, kind of network, energy saver, output device, an old Windows or graphics driver) | `ms-settings:display-advanced`, `:network`, `:batterysaver`, `:sound`, `:windowsupdate` |
+
+Whether a repair helped is never assumed: the PC is measured again when it
+is over, and again when the user comes back to the About window (3 s after
+the last measurement at the earliest), because a page of Settings gives no
+sign when the user is done there. A consent prompt that is declined is no
+failure; a tool that ends with an error is logged with its exit code and
+told in a notification.
+
+**Installing an update (since 1.12).** "Update now" asks the checker
+afresh (what is installed is what is the newest *now*); when the answer
+names a newer release, `update_installer::prepare` works on a thread of its
+own:
+
+1. the release must carry a signature file (`mirror_dock_win64.zip.sig`):
+   one without is offered for download in the browser only;
+2. `.update` in the program's folder is made (a folder that cannot be
+   written to ends it here, before anything is fetched);
+3. the signature file (at most 4096 bytes), then the package (at most
+   64 MiB, its size as the release says), with the progress shown;
+4. `check_release_signature`: ECDSA P-256 over the SHA-256 of the zip
+   against the public key in `uxplay_release_signature.cpp`;
+5. the package is unpacked with the program's own zip reader into
+   `.update\new`. Every name must lie below `MirrorDock/`, have no `.` or
+   `..` part, none of the characters Windows reserves, no part that ends
+   with a dot or a space, and at most 200 characters;
+6. the version resource of the unpacked `mirror_dock.exe` must be the
+   version the release claims, and that must be newer than the running
+   program (an old signed package cannot be passed off as a new one).
+
+Then the release is *ready*. `apply()` puts it in place: every top-level
+item the release has is moved from the program's folder into `.update\old`
+(Windows lets a running executable be renamed) and the new one into its
+place; a step that fails moves everything back. Files the release does not
+have are not touched (settings are in the registry). A note,
+`.update\installed`, names the version. It is applied at once when no
+picture is on screen; otherwise when the stream ends
+(`native_media_airplay_video_stop`) or on "Restart now". Only one caller
+applies (the three can coincide), and nothing is applied while Windows ends
+the session (a process ended half-way would leave files of two versions).
+After it the bridge emits `NATIVE_MEDIA_EVENT_UPDATE_INSTALLED`, and the
+host ends the session cycles and starts `native_media_restart_target()`:
+the release's executable name in the program's folder, whatever the
+running copy was called, with the same command line. The new process waits
+for the single-instance mutex as any second start does. When the program
+was ending anyway (the user's "Exit" ended the stream the release waited
+for), it is not started again: the next start is the new program.
+
+At its start `update_installer::create` looks for the note. With it, this
+is the first start after an update: the user is told once (the note is
+removed at once), and a thread deletes `.update` (it tries for 10 s: the
+replaced program may still hold its own file). Without it, what was
+unpacked and never applied is deleted, and files in `.update\old` stay:
+they are what an apply could not put back. The next update clears the
+folder before it starts.
+
+**Signing a release.** The key pair is made once with
+`win_native/build_scripts/sign_release.ps1 -KeyFile <key.pem> -NewKey`
+(PowerShell 7.2 or newer): the private key is a PKCS#8 PEM file outside the
+tree, readable by the maintainer's account only, and it is never put into
+the repository, a package or a log; the public key is the 64 bytes (X, Y)
+of `release_key`. Every release: package, then
+`sign_release.ps1 -KeyFile <key.pem> -Package dist/mirror_dock_win64.zip`,
+which writes `mirror_dock_win64.zip.sig` (128 hexadecimal digits: r, then
+s) and checks it; both files are uploaded as assets of the release. A
+release without the `.sig` cannot be installed by the program, only
+downloaded. Without the private key no further release can be installed by
+the programs in the field (they would need one manual download of a
+release built with a new key), so the file needs a backup that is as
+private as the file. A fork that publishes releases of its own needs a key
+of its own and its own `UXPLAY_PROJECT_URL`.
+
 **The lists on "Components".** `win_native/build_scripts/build_inputs.tsv`
 is the one list of the inputs: `fetch_deps.sh` clones from it, and
 `uxplay_generate_build_info` (in `win_native/CMakeLists.txt`) turns it into
@@ -782,6 +901,8 @@ MSYSTEM=CLANG64 bash -lc 'bash win_native/build_scripts/build_uxplay_native.sh <
 <build_dir>/win_native/engine_smoke_test.exe <annexb stream> h264|h265 60 [auto|intel|nvidia] [quiet|loud] [zh-TW|zh-CN|en]
 # package (exe + guide + licences + complete corresponding source)
 python -I win_native/build_scripts/package_zip.py <build_dir> <uxplay_src> <msys2>/clang64 <src_root> dist/mirror_dock_win64.zip
+# sign it (writes dist/mirror_dock_win64.zip.sig; see "Signing a release")
+pwsh -File win_native/build_scripts/sign_release.ps1 -KeyFile <key.pem> -Package dist/mirror_dock_win64.zip
 ```
 
 CMake targets of the owned C++: `uxplay_base` (failure outcomes and the log:
@@ -865,8 +986,8 @@ relinking is possible from the bundled source and build scripts.
 
 Owned source files are **UTF-8 with BOM and CRLF**: `uxplay.cpp`, `lib/*.c|h`,
 `lib/mdnsd/`, everything under `win_native/` (C++ modules, headers, tests,
-`uxplay.rc`, Python scripts) and `phone_control/`, and the `CMakeLists.txt`
-files. `.gitattributes`
+`uxplay.rc`, Python and PowerShell scripts) and `phone_control/`, and the
+`CMakeLists.txt` files. `.gitattributes`
 and `.editorconfig` keep it that way; `python -I
 win_native/build_scripts/source_encoding.py check <files>` verifies it (valid
 UTF-8, BOM, CRLF only) and `convert` repairs it.
@@ -899,6 +1020,12 @@ its protocols are documented in public GPL code, the only secrets it touches
 (the keys of the phone's pairing record, which Apple's driver service hands
 out) are used for the TLS session and never stored or logged, and the two
 pinned values in it (image hashes, Apple's root certificate) are public.
+The update's signature check (1.12) was looked at the same way: what an
+analyst finds is a public key and a call into Windows' cryptography, both
+in the published source. Hiding them would protect nothing: whoever can
+change the program on a PC needs no update to run their code there, and
+whoever cannot change it is stopped by the signature, which rests on the
+private key alone. That key never enters the tree, a build or a package.
 
 ## Options specific to this build
 
@@ -1244,3 +1371,85 @@ finished READMEs as the source of each language's wording. Every heading
 underline of the guides was set to the heading's width on screen.
 
 Everything listed as not observed for 1.9, 1.9.1 and 1.10 still applies.
+
+## State of 1.12 (2026-11-13)
+
+1.12 adds the screenshot, the shorter delay while the phone is controlled,
+the repairs of "This PC" and the update that installs itself (see
+"Invariants", "Repairs on "This PC"", "Installing an update" and "Signing a
+release" above).
+
+**How it was tested.** As for 1.11 the owner was using the PC (mirroring to
+and controlling the phone with 1.11), so nothing was shown on the desktop
+in use, no input was injected there, and its clipboard was left alone.
+Scripts outside the tree ran the engine test and the program on a second
+desktop that is never shown, or on a window station of its own (it has a
+clipboard of its own). Four things about that environment cost time:
+
+- A desktop that is not displayed paces the presenter: the engine test
+  there ends with 436 of 480 pictures decoded and `sync delay 135.0 ms`
+  (the delay's upper limit), and reports FAIL. A build of 2026-11-12
+  behaves the same there; on a window station of its own, where nothing is
+  composed at all, the same test passes with 17.8 ms. Timing can only be
+  judged on the latter, or on a real screen.
+- The engine test's output reaches a redirected file in blocks, so a
+  script that waits for a line may see it only at the end.
+- A layered window (the control bar, the notice) paints nothing itself:
+  `PrintWindow` gives a black picture unless it asks the compositor
+  (`PW_RENDERFULLCONTENT`).
+- A program that restarts itself does not pass redirected output on; the
+  new one writes its log file. A test sets `LOCALAPPDATA` for the first
+  one, so that the log lands in a folder of the test's and not in the
+  user's.
+
+**Observed (2026-11-13, this PC):**
+- four builds of the 1.12 code, warnings as errors, the last three without
+  a diagnostic (the first stopped at the compile-time check of the texts,
+  see the changelog);
+- the screenshot with the engine test and a 2868x1320 HEVC stream: F9
+  wrote `MirrorDock <date> <time>.png` (2868 x 1320, 669,713 bytes) into
+  `Pictures\MirrorDock` and put a bitmap of the same size (24 bits a pixel)
+  and the PNG on the clipboard; the picture is the test pattern, upright,
+  with its colours. With the clipboard held open by the test, the file was
+  written all the same, the log said why the clipboard was not
+  (`OpenClipboard failed (code 0x5)`), and the notice read "Screenshot
+  saved" instead of "... and copied";
+- the notice (a dark pill with white text) and the control bar with its
+  new camera button, pictured through the compositor;
+- the zip reader and the signature check, built unchanged into a console
+  probe outside the tree: the published 1.11 package unpacked to 212 files
+  of 16,491,411 bytes, every file's SHA-256 equal to what Python's
+  `zipfile` gives; the test signature of that package fits, the package
+  with one byte changed does not, the signature with one digit changed
+  does not, a file that is no signature is called that;
+- the download as the installer does it (the program's HTTP client, same
+  request): the 1.11 package from GitHub, 5,901,151 bytes in 1.9 s through
+  the redirection, 742 progress reports, the SHA-256 of the release;
+- the About window of 1.12.0 against the published 1.11: "up to date", the
+  log names the release as "not signed"; "This PC" with the button "Open
+  display settings" under the display row (the monitor runs at 50 Hz); 96
+  of 100 as before. No repair button was clicked: each opens a page of
+  Settings or a consent prompt on the desktop in use;
+- the ten translated READMEs match the master (0 differences each), the
+  eleven user guides have their thirteen sections, BOM and CRLF, and the
+  interface table has 241 texts in eleven languages (checked at compile
+  time).
+
+**Not observed:**
+- the update end to end (fetch, check, unpack, apply, restart, the first
+  start of the new program): it needs a published release that is signed,
+  which 1.12 is the first to be. It is tried right after the release with
+  a build of the same sources numbered below 1.12; what was seen is
+  recorded in the repository's copy of this file;
+- the shorter delay with a phone: the timeline's arithmetic was written
+  from the measurements above, and `sync delay` in the log of a control
+  session will show whether it settles near -56 ms as expected;
+- a repair carried out (firewall rule, Apple's service), a firewall that
+  is on or shut, the buttons of the other rows;
+- F9 while the phone is controlled, the camera button clicked, the menu
+  item;
+- the new texts on screen in the languages other than Traditional Chinese
+  and English.
+
+Everything listed as not observed for 1.9 to 1.11 still applies, except
+that the update check now also tells whether a release is signed.

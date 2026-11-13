@@ -44,6 +44,7 @@ namespace uxplay
         constexpr UINT message_keep_awake = WM_APP + 12;
         constexpr UINT message_detach = WM_APP + 13;
         constexpr UINT message_remote_control = WM_APP + 14;
+        constexpr UINT message_notice = WM_APP + 15;
         // answer to the second-launch message of an instance with our name
         constexpr LRESULT second_launch_answer = 1;
 
@@ -96,6 +97,7 @@ namespace uxplay
             menu_crop_automatic,
             menu_crop_select,
             menu_remote_control,
+            menu_screenshot,
             menu_autostart,
             menu_open_log,
             menu_check_for_updates,
@@ -174,6 +176,7 @@ namespace uxplay
         std::wstring notify_text;
         std::optional<tray_command> notify_action;
         std::optional<tray_command> balloon_action; // UI thread only
+        std::wstring notice_text;                   // the line to show on the picture (notice)
         std::wstring usb_link_text{ui_string(ui_text::usb_checking)};
         std::mutex text_mutex;
         HWND window = nullptr;
@@ -512,7 +515,7 @@ namespace uxplay
             }
         }
         bool const alt_down = (details & (1 << 29)) != 0;
-        if (key == VK_F8 || key == VK_F11 || (key == VK_ESCAPE && is_fullscreen.load()) ||
+        if (key == VK_F8 || key == VK_F9 || key == VK_F11 || (key == VK_ESCAPE && is_fullscreen.load()) ||
             (alt_down && (key == VK_RETURN || key == VK_F4 || key == VK_SPACE)))
         {
             return false; // the window's own keys
@@ -1086,6 +1089,7 @@ namespace uxplay
              shown);
         item(menu_always_on_top, ui_text::always_on_top, L"T", always_on_top.load());
         item(menu_mute, ui_text::mute, L"M", muted.load());
+        item(menu_screenshot, ui_text::screenshot, L"F9", false, shown);
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         item(menu_autostart, ui_text::start_with_windows, {}, autostart.load());
         item(menu_open_log, ui_text::open_log, {}, false, log_available.load());
@@ -1143,6 +1147,9 @@ namespace uxplay
             break;
         case menu_remote_control:
             tray(tray_command::toggle_remote_control);
+            break;
+        case menu_screenshot:
+            tray(tray_command::save_screenshot);
             break;
         case menu_autostart:
             tray(tray_command::toggle_autostart);
@@ -1246,6 +1253,9 @@ namespace uxplay
         case overlay_command::enable_link_adapter:
             SetForegroundWindow(window);
             tray(tray_command::enable_link_adapter);
+            break;
+        case overlay_command::save_screenshot:
+            tray(tray_command::save_screenshot);
             break;
         case overlay_command::open_menu:
             show_tray_menu();
@@ -1398,6 +1408,17 @@ namespace uxplay
             return 0;
         case message_overlay_update:
             refresh_overlay();
+            return 0;
+        case message_notice:
+            if (overlay)
+            {
+                std::wstring text;
+                {
+                    std::scoped_lock lock{text_mutex};
+                    text = notice_text;
+                }
+                overlay->notice(std::move(text));
+            }
             return 0;
         case message_tray_notify:
             if (tray_added)
@@ -1707,6 +1728,16 @@ namespace uxplay
                 if ((lparam & (1 << 30)) == 0) // not the auto-repeat of a held key
                 {
                     tray(tray_command::toggle_remote_control);
+                }
+                return 0;
+            }
+            // the screenshot is the window's key too: it works the same
+            // whether the phone is controlled or not
+            if (wparam == VK_F9)
+            {
+                if ((lparam & (1 << 30)) == 0)
+                {
+                    tray(tray_command::save_screenshot);
                 }
                 return 0;
             }
@@ -2133,6 +2164,15 @@ namespace uxplay
             impl->notify_action = on_click;
         }
         PostMessageW(impl->window, message_tray_notify, 0, 0);
+    }
+
+    void video_window::notice(std::wstring text)
+    {
+        {
+            std::scoped_lock lock{impl->text_mutex};
+            impl->notice_text = std::move(text);
+        }
+        PostMessageW(impl->window, message_notice, 0, 0);
     }
 
     bool video_window::visible() const

@@ -47,6 +47,27 @@ export namespace uxplay
         none // information; does not count in the score
     };
 
+    // What the program can do about a row that is not in order, at the press
+    // of a button (uxplay_system_repair, and for the last two the parts of the
+    // program they belong to).  A setting that is the user's to choose is
+    // never changed: such a button opens the page of Windows' Settings where
+    // it is chosen.
+    enum class report_action
+    {
+        none,
+        allow_through_firewall, // Windows Firewall lets connections to this program in (administrator)
+        open_firewall_settings, // Windows Security: there all incoming connections are blocked
+        open_network_settings,  // Settings: the network (connect; make it a private one)
+        open_display_settings,  // Settings: advanced display (the refresh rate)
+        open_power_settings,    // Settings: power (energy saver)
+        open_sound_settings,    // Settings: sound (no output device)
+        open_windows_update,    // Settings: Windows Update (Windows itself, the graphics driver)
+        install_apple_support,  // Apple's USB support: the installer that comes with the program, or the Store
+        start_apple_service,    // Apple Mobile Device Service (administrator)
+        enable_usb_adapter,     // the iPhone's network adapter, disabled in Windows (uxplay_usb_link)
+        install_update          // the newer release (uxplay_update_install)
+    };
+
     struct report_entry
     {
         report_group group = report_group::system;
@@ -55,6 +76,9 @@ export namespace uxplay
         report_rating rating = report_rating::none;
         unsigned int weight = 0; // its share in the score (0 for a row that is not rated)
         std::wstring advice;     // what to do about a row that is not good; else empty
+        // the button beside that advice: what it does and what it says (none, empty: no button)
+        report_action action = report_action::none;
+        std::wstring action_label;
     };
 
     struct system_report
@@ -97,9 +121,24 @@ export namespace uxplay
         unknown,
         off,
         allowed,
-        blocked,
-        no_rule
+        blocked, // a rule keeps connections to this program out
+        no_rule,
+        shut     // every incoming connection is blocked, whatever the rules say
     };
+
+    // Windows Firewall and this program, as far as a repair needs it
+    // (bits: NET_FW_PROFILE2_DOMAIN 1, _PRIVATE 2, _PUBLIC 4).
+    struct firewall_facts
+    {
+        firewall_verdict verdict = firewall_verdict::unknown;
+        long active_profiles = 0;   // of the networks the PC is on now
+        long allowing_profiles = 0; // in which an enabled rule lets connections to this program in
+        bool inbound_rule = false;  // a rule for connections to this program exists (allowing or blocking)
+    };
+
+    // Looks at the firewall's rules for this executable.  COM must be
+    // initialized on the calling thread.
+    [[nodiscard]] firewall_facts measure_firewall_rules();
 
     enum class phone_condition
     {

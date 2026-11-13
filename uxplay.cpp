@@ -152,8 +152,12 @@ static std::atomic<bool> reset_httpd{false};
 /* exit was requested (menu, Ctrl+C, shutdown): never cleared, so a reset
    that arrives at the same time cannot turn the exit into a relaunch */
 static std::atomic<bool> exit_requested{false};
-/* the Direct3D device was lost: start the program again after the shutdown */
+/* the Direct3D device was lost, or a newer release was put in place of this
+   one: start the program again after the shutdown */
 static std::atomic<bool> restart_after_exit{false};
+/* that restart follows an update: the new program is started, whatever the
+   name of the one that runs */
+static std::atomic<bool> restart_into_update{false};
 static bool force_h264_only = false;    /* "-h264": do not offer H.265 to the client */
 static int gpu_preference = 0;          /* "-gpu auto|intel|nvidia" */
 static int ui_language_choice = 0;      /* "-ui": 0 auto, 1 zh-TW, 2 zh-CN, 3 en, 4 ja, 5 ko, 6 es, 7 de, 8 fr,
@@ -2709,6 +2713,19 @@ static void native_event_callback(native_media_event event, void *user_data) {
         restart_after_exit = true;
         request_exit();
         break;
+    case NATIVE_MEDIA_EVENT_UPDATE_INSTALLED:
+        if (exit_requested) {
+            /* the release waited for the stream's end, and the stream ended
+               because the user ends the program: it stays ended, and the
+               next start is the new program */
+            LOGI("a newer release was put in place of this program while it was ending: the next start runs it");
+            break;
+        }
+        LOGI("a newer release was put in place of this program: ending it and starting the new one");
+        restart_into_update = true;
+        restart_after_exit = true;
+        request_exit();
+        break;
     case NATIVE_MEDIA_EVENT_SESSION_ENDING:
         event_loop.post(on_session_ending);
         break;
@@ -2957,33 +2974,48 @@ static bool claim_single_instance(void) {
     return false;
 }
 
-/* Starts this program again with the same command line (the Direct3D device
- * was lost).  A second loss within a minute of such a restart is not followed
- * by another one: the cause is then not transient.  On failure the reason has
- * been reported with startup_message(). */
-static bool restart_program(void) {
+/* Starts the program again with the same command line: this program after
+ * the Direct3D device was lost, the new one after an update was put in place
+ * (into_update).  A second device loss within a minute of such a restart is
+ * not followed by another one: the cause is then not transient.  On failure
+ * the reason has been reported with startup_message(). */
+static bool restart_program(bool into_update) {
     static const char restarted_at[] = "UXPLAY_RESTARTED_AT";
-    ULONGLONG const now = GetTickCount64();
-    char previous[32];
-    DWORD const length = GetEnvironmentVariableA(restarted_at, previous, sizeof(previous));
-    if (length > 0 && length < sizeof(previous)) {
-        ULONGLONG const then = strtoull(previous, NULL, 10);
-        if (now >= then && now - then < 60000) {
-            startup_message("the graphics device was lost again within a minute of the automatic restart, so "
-                            "the program was not started again; check the display driver");
-            return false;
+    if (!into_update) {
+        ULONGLONG const now = GetTickCount64();
+        char previous[32];
+        DWORD const length = GetEnvironmentVariableA(restarted_at, previous, sizeof(previous));
+        if (length > 0 && length < sizeof(previous)) {
+            ULONGLONG const then = strtoull(previous, NULL, 10);
+            if (now >= then && now - then < 60000) {
+                startup_message("the graphics device was lost again within a minute of the automatic restart, so "
+                                "the program was not started again; check the display driver");
+                return false;
+            }
+        }
+        char stamp[32];
+        snprintf(stamp, sizeof(stamp), "%llu", (unsigned long long) now);
+        if (!SetEnvironmentVariableA(restarted_at, stamp)) {
+            LOGW("restart: the restart time could not be recorded (Windows error %lu)", (unsigned long) GetLastError());
         }
     }
-    char stamp[32];
-    snprintf(stamp, sizeof(stamp), "%llu", (unsigned long long) now);
-    if (!SetEnvironmentVariableA(restarted_at, stamp)) {
-        LOGW("restart: the restart time could not be recorded (Windows error %lu)", (unsigned long) GetLastError());
-    }
     std::vector<wchar_t> path(32768);
-    DWORD const used = GetModuleFileNameW(NULL, path.data(), (DWORD) path.size());
-    if (used == 0 || used >= path.size()) {
-        startup_message("restart: the program path is unavailable (Windows error %lu)", (unsigned long) GetLastError());
-        return false;
+    if (into_update) {
+        /* the new program has the name a release gives it; the one that runs
+           was moved aside and may have had another name */
+        std::wstring const target = native_media_restart_target();
+        if (target.empty() || target.size() >= path.size()) {
+            startup_message("restart after the update: the path of the new program is unavailable; start "
+                            UXPLAY_EXECUTABLE_NAME " by hand");
+            return false;
+        }
+        std::copy(target.begin(), target.end(), path.begin());
+    } else {
+        DWORD const used = GetModuleFileNameW(NULL, path.data(), (DWORD) path.size());
+        if (used == 0 || used >= path.size()) {
+            startup_message("restart: the program path is unavailable (Windows error %lu)", (unsigned long) GetLastError());
+            return false;
+        }
     }
     std::wstring command_line = GetCommandLineW();
     STARTUPINFOW startup;
@@ -3369,7 +3401,7 @@ static void cleanup(int exit_code) {
     native_media_stop();
     /* the window and the tray icon are gone.  A restart is started first: it
        waits (claim_single_instance) until this process lets go below. */
-    if (exit_code == 0 && restart_after_exit && !restart_program()) {
+    if (exit_code == 0 && restart_after_exit && !restart_program(restart_into_update)) {
         exit_code = 1;
     }
     if (shutdown_complete_event) {

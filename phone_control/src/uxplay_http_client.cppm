@@ -27,6 +27,8 @@ export namespace uxplay
         std::chrono::milliseconds patience = std::chrono::seconds{30};
         // asked between the pieces of the answer; true ends the request with a failure
         std::function<bool()> cancelled;
+        // told after every piece of the answer how many bytes of its body have arrived
+        std::function<void(std::size_t received)> received;
         // When not empty (https only): the one root certificate (DER) the
         // server's certificate must lead to, in place of the roots Windows
         // trusts - for a server whose certificate comes from its owner's own

@@ -95,6 +95,16 @@ export namespace uxplay
         int stream_height = 0;
     };
 
+    // The picture on screen as it is shown: its visible part in the picture's
+    // own pixels (not the window's), whatever the size of the window.
+    struct captured_picture
+    {
+        int width = 0;
+        int height = 0;
+        // 4 bytes a pixel (blue, green, red, unused), rows from the top, no padding
+        std::vector<std::uint8_t> pixels;
+    };
+
     class video_presenter
     {
     public:
@@ -138,6 +148,14 @@ export namespace uxplay
         // the presenter may hold to the device (gpu_device::presentation_hold),
         // which sizes the decoder surface pool of the next stream.
         void set_performance_mode(performance_mode mode);
+
+        // A copy of the picture on screen (a screenshot).  The render thread
+        // makes it when it next draws, which it is asked to do at once: the
+        // call waits for that, some milliseconds, and no longer than
+        // `patience`.  A failure when nothing is shown, when the graphics
+        // device is lost or when the copy cannot be made.  Not from the
+        // display change listener; one call at a time.
+        [[nodiscard]] outcome<captured_picture> capture(std::chrono::milliseconds patience);
 
         [[nodiscard]] presenter_statistics statistics() const;
 

@@ -7,6 +7,7 @@
 *.cppm  text eol=crlf
 *.rc    text eol=crlf
 *.py    text eol=crlf
+*.ps1   text eol=crlf
 *.hlsl  text eol=crlf
 *.cmd   text eol=crlf
 *.manifest text eol=crlf

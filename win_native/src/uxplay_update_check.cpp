@@ -43,6 +43,8 @@ namespace uxplay
         constexpr std::string_view project_url = UXPLAY_PROJECT_URL;
         constexpr std::string_view tag_prefix = UXPLAY_RELEASE_TAG_PREFIX;
         constexpr std::string_view package_name = UXPLAY_RELEASE_PACKAGE_NAME;
+        // the package's signature is published beside it (build_scripts/sign_release.ps1)
+        constexpr std::string_view signature_name = UXPLAY_RELEASE_PACKAGE_NAME ".sig";
         // of whatever release is the newest: GitHub redirects these
         constexpr char newest_page_url[] = UXPLAY_PROJECT_URL "/releases/latest";
         constexpr char newest_package_url[] = UXPLAY_PROJECT_URL "/releases/latest/download/" UXPLAY_RELEASE_PACKAGE_NAME;
@@ -299,17 +301,21 @@ namespace uxplay
         for (std::size_t index = 0; index < files.size(); ++index)
         {
             property_node const file = files.element(index);
-            if (file.item("name").text().value_or(std::string{}) != package_name)
+            std::string const name = file.item("name").text().value_or(std::string{});
+            std::optional<std::string> const address = file.item("browser_download_url").text();
+            bool const usable = address && project_address(*address);
+            if (name == package_name)
             {
-                continue;
+                if (usable)
+                {
+                    release.package_url = *address;
+                }
+                release.package_bytes = file.item("size").number().value_or(0);
             }
-            if (std::optional<std::string> const address = file.item("browser_download_url").text();
-                address && project_address(*address))
+            else if (name == signature_name && usable)
             {
-                release.package_url = *address;
+                release.signature_url = *address;
             }
-            release.package_bytes = file.item("size").number().value_or(0);
-            break;
         }
         return release;
     }
@@ -470,11 +476,11 @@ namespace uxplay
                     std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
                 settings::store_number(setting_checked_at, static_cast<std::uint32_t>(seconds));
                 settings::store_number(setting_newest, packed_version(newest.version));
-                log::info("update check: the newest release is {}{}{}; this is {}", newest.version.text(),
+                log::info("update check: the newest release is {}{}{}{}; this is {}", newest.version.text(),
                           newest.date.empty() ? std::string{} : std::format(" ({})", newest.date),
                           newest.package_bytes == 0 ? std::string{", no package found among its files"}
                                                     : std::format(", package of {} bytes", newest.package_bytes),
-                          running_version().text());
+                          newest.signature_url.empty() ? ", not signed" : ", signed", running_version().text());
             }
             else
             {

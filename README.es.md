@@ -33,11 +33,12 @@ Se basa en el núcleo del protocolo AirPlay de [UxPlay](https://github.com/FDH2/
 | 🔊 **Sonido sincronizado** | Salida WASAPI de baja latencia en la misma línea de tiempo que la imagen, para que la voz coincida con los labios. |
 | 🎛️ **Tres modos** | *Calidad*, *Equilibrado* (predeterminado) y *Rendimiento*: usted elige entre la imagen más nítida y el menor retardo. |
 | ✂️ **Recorte de barras negras** | Recorta automáticamente las barras negras que rodean una película, o le permite encuadrar con el mouse cualquier parte de la imagen. |
-| 🖱️ **Control del iPhone** | Haga clic, arrastre, desplácese y escriba sobre la imagen, y el teléfono hace lo mismo. Viene integrado: sin programas auxiliares y sin jailbreak (iOS 27, cable USB, modo de desarrollador). |
+| 🖱️ **Control del iPhone** | Haga clic, arrastre, desplácese y escriba sobre la imagen, y el teléfono hace lo mismo; mientras tanto, la imagen deja de esperar a sus marcas de tiempo y sigue a su mano antes. Viene integrado: sin programas auxiliares y sin jailbreak (iOS 27, cable USB, modo de desarrollador). |
 | 🪟 **Una ventana como debe ser** | Se abre con un tamaño razonable, mantiene la relación de aspecto al redimensionarla, recuerda el tamaño y la posición, pasa a pantalla completa con una tecla y puede quedar siempre visible. |
+| 📸 **Capturas de pantalla** | **F9** guarda la imagen duplicada con la resolución completa del teléfono en un archivo PNG y la copia en el portapapeles. |
 | 🌐 **Once idiomas** | La interfaz sigue el idioma para mostrar de Windows. |
-| 🩺 **Conoce su equipo** | La ventana «Acerca de» comprueba lo que importa para la duplicación (GPU, controladores, red, firewall, la compatibilidad USB de Apple), lo puntúa y le dice qué arreglar. |
-| 🔄 **Búsqueda de actualizaciones** | Le avisa cuando sale una versión nueva: una consulta a GitHub al día, que se desactiva con un clic. |
+| 🩺 **Conoce su equipo** | La ventana «Acerca de» comprueba lo que importa para la duplicación (GPU, controladores, red, firewall, la compatibilidad USB de Apple), lo puntúa, le dice qué arreglar y arregla lo que puede con solo pulsar un botón. |
+| 🔄 **Actualización con un clic** | Le avisa cuando sale una versión nueva y la instala cuando usted lo pide. Cada versión va firmada y se comprueba antes de instalarla. |
 | 🧳 **Un solo archivo** | Un único ejecutable de unos 12 MB que solo necesita el propio Windows. |
 
 ## 🚀 Inicio rápido
@@ -100,7 +101,9 @@ Qué se necesita:
 > [!NOTE]
 > AirPlay no puede transmitir la entrada del mouse ni del teclado, así que el control va por otro camino: los servicios para desarrolladores de iOS, los mismos que Xcode usa para manejar un dispositivo real. Para instalarlos, MirrorDock descarga la imagen de Apple desde el repositorio [DeveloperDiskImage](https://github.com/doronz88/DeveloperDiskImage) y pide al servicio de firma de Apple (`gs.apple.com`) que la firme para su teléfono, con lo que Apple recibe los números de identificación de su chip, exactamente igual que con Xcode. A partir de ahí, el control no se comunica con nadie.
 
-Mientras el control está activado, los comandos propios de la ventana tienen prioridad: **F8**, **F11**, **Alt+Enter**, **Alt+F4**, **Esc** en pantalla completa y el doble clic siguen reservados a la ventana. En un doble clic, el primer clic ya ha llegado al teléfono como un toque cuando llega el segundo, así que haga doble clic en una barra negra si la hay, o pulse **F11**. La barra de control no aparece, porque taparía la parte inferior de la pantalla del teléfono.
+Mientras el control está activado, los comandos propios de la ventana tienen prioridad: **F8**, **F9**, **F11**, **Alt+Enter**, **Alt+F4**, **Esc** en pantalla completa y el doble clic siguen reservados a la ventana. En un doble clic, el primer clic ya ha llegado al teléfono como un toque cuando llega el segundo, así que haga doble clic en una barra negra si la hay, o pulse **F11**. La barra de control no aparece, porque taparía la parte inferior de la pantalla del teléfono.
+
+**Menos retardo mientras controla.** El iPhone marca sus imágenes y su sonido con una hora algo posterior al momento en que llegan (las imágenes, unos 85 ms por Wi-Fi), y normalmente MirrorDock espera a esa hora. Con el control activado reproduce ambos en cuanto llegan a tiempo, siempre sincronizados entre sí, de modo que el efecto de un toque se ve antes. El cambio se hace de forma gradual en unos segundos, sin saltos en el sonido.
 
 ## ⌨️ Teclado y mouse
 
@@ -111,19 +114,21 @@ Mientras el control está activado, los comandos propios de la ventana tienen pr
 | Encuadrar el área visible | **X** |
 | Siempre visible | **T** |
 | Silenciar (solo en el equipo) | **M** |
+| Captura de pantalla (archivo PNG y portapapeles) | **F9** |
 | Activar o desactivar el control del iPhone | **F8** |
 | Barra de control | Mueva el mouse sobre la imagen |
 | Menú | Haga clic con el botón derecho en cualquier punto de la imagen |
 
-Mientras se controla el iPhone, las teclas de letras escriben en el teléfono; **F8** se las devuelve a la ventana.
+Mientras se controla el iPhone, las teclas de letras escriben en el teléfono; **F8** se las devuelve a la ventana. Las capturas se guardan en la carpeta *MirrorDock* dentro de su carpeta *Imágenes*, con la fecha y la hora por nombre, al tamaño que envía el teléfono y no al de la ventana.
 
 ## 🔄 Actualizaciones
 
-**Buscar actualizaciones…** en el menú pregunta a GitHub cuál es la versión más reciente y muestra la respuesta en la ventana «Acerca de». Cuando hay una más nueva, **Descargar** abre su zip en el navegador y **Novedades** abre sus notas de la versión. MirrorDock no instala nada por su cuenta.
+**Buscar actualizaciones…** en el menú pregunta a GitHub cuál es la versión más reciente y muestra la respuesta en la ventana «Acerca de». Cuando hay una más nueva, **Actualizar ahora** la descarga, la comprueba y la coloca en lugar del programa en ejecución, que después se reinicia solo; si hay una duplicación en curso, ese reinicio espera a que termine, o a que usted elija **Reiniciar ahora**. **Descargar** sigue abriendo el zip en el navegador por si prefiere descomprimirlo usted mismo, y **Novedades** abre las notas de la versión. No se instala nada si usted no lo pide.
 
 - **Búsqueda automática.** Una vez al día, con una notificación cuando sale una versión nueva. Un interruptor en la ventana «Acerca de» la desactiva.
 - **Qué se envía.** Una sola petición a `api.github.com`. GitHub ve su dirección IP y el nombre de cliente `MirrorDock/<version>`, y nada sobre usted ni sobre su equipo.
 - **Sin gastar sus datos móviles.** No se hace ninguna búsqueda automática con una conexión que Windows marque como de uso medido, ni mientras la conexión a Internet del equipo pase por el iPhone.
+- **Solo versiones auténticas.** Cada versión se firma con una clave que no está en Internet, y MirrorDock lleva su mitad pública. Un paquete cuya firma no encaja no se instala, venga de donde venga.
 
 ## 🩺 «Acerca de» y Este equipo
 
@@ -135,7 +140,7 @@ Mientras se controla el iPhone, las teclas de letras escriben en el teléfono; *
 | **Este equipo** | Lo que importa a MirrorDock en su equipo, fila por fila: Windows, pantalla, alimentación, red, firewall, procesador, memoria, GPU y su decodificación de video, sonido, controlador gráfico, la compatibilidad USB de Apple y el iPhone conectado por cable |
 | **Componentes** | Todas las bibliotecas y herramientas con las que está hecho MirrorDock, con versión, fecha y licencia, y cuándo se publicó cada versión de MirrorDock |
 
-Cada fila de *Este equipo* se califica como correcta, con aviso o con problema, y una fila que no está bien dice qué hacer al respecto. La puntuación es la parte de las filas calificadas que están en orden, ponderada según lo que cada una importa para la duplicación (la decodificación de video por hardware es la que más cuenta). Indica lo bien preparado que está el equipo; no es una prueba de rendimiento. **Copiar informe** copia la página al portapapeles como texto sin formato, para un informe de errores. Nada de esta página sale de su equipo, y no se muestra ni se guarda ningún número de serie ni nombre de dispositivo.
+Cada fila de *Este equipo* se califica como correcta, con aviso o con problema. Una fila que no está bien dice qué hacer al respecto, y tiene un botón cuando MirrorDock puede hacerlo por usted: permitir el programa en el Firewall de Windows, iniciar el servicio de Apple, instalar la compatibilidad USB de Apple o abrir la página de la Configuración de Windows donde se resuelve el asunto. Lo que requiere derechos de administrador lo hacen las propias herramientas de Windows, tras el aviso de consentimiento habitual. La puntuación es la parte de las filas calificadas que están en orden, ponderada según lo que cada una importa para la duplicación (la decodificación de video por hardware es la que más cuenta). Indica lo bien preparado que está el equipo; no es una prueba de rendimiento. **Copiar informe** copia la página al portapapeles como texto sin formato, para un informe de errores. Nada de esta página sale de su equipo, y no se muestra ni se guarda ningún número de serie ni nombre de dispositivo.
 
 ## ⚙️ Opciones
 
@@ -192,7 +197,7 @@ La duplicación por Wi-Fi y por USB se verificó con un iPhone 16 Pro Max (iOS 2
 ## ❓ Preguntas frecuentes
 
 **El iPhone no muestra mi equipo en la lista.**
-Ambos deben estar en la misma red, y el Firewall de Windows debe permitir `mirror_dock.exe`. La página *Este equipo* de la ventana «Acerca de» indica si lo que estorba es el firewall o una red configurada como *pública*. Desactivar y volver a activar el Wi-Fi del iPhone actualiza la lista.
+Ambos deben estar en la misma red, y el Firewall de Windows debe permitir `mirror_dock.exe`. La página *Este equipo* de la ventana «Acerca de» indica si lo que estorba es el firewall o una red configurada como *pública*, y su botón permite MirrorDock en el firewall. Desactivar y volver a activar el Wi-Fi del iPhone actualiza la lista.
 
 **El cable está conectado, pero la duplicación sigue usando Wi-Fi.**
 Punto de acceso personal debe estar activado, y la conexión elegida debe ser *Preferir USB*. La segunda línea del menú muestra el estado de la conexión USB.
@@ -210,14 +215,14 @@ El mensaje indica el motivo: el cable no está conectado o el iPhone no confía 
 Es una opción de la propia Apple, pensada para quienes crean apps. Permite que un equipo de confianza instale y depure apps y acceda a los servicios para desarrolladores; no le hace jailbreak al teléfono, y puede volver a desactivarla en el mismo lugar.
 
 **¿MirrorDock usa Internet?**
-La duplicación es local. MirrorDock solo se conecta a Internet para dos cosas: la búsqueda de actualizaciones (GitHub, una vez al día, y se puede desactivar) y, la primera vez que controla un iPhone, la imagen de disco de desarrollador de Apple y la firma de Apple para ella.
+La duplicación es local. MirrorDock solo se conecta a Internet para dos cosas: las actualizaciones (la búsqueda en GitHub una vez al día, que se puede desactivar, y la descarga de una versión cuando usted la pide) y, la primera vez que controla un iPhone, la imagen de disco de desarrollador de Apple y la firma de Apple para ella.
 
 **¿Dónde está el registro?**
 `%LOCALAPPDATA%\MirrorDock\mirror_dock.log`, o **Abrir archivo de registro** en el menú.
 
 ## 🛠️ Compilar desde el código fuente
 
-MSYS2 CLANG64 (clang 23, libc++ con el módulo de la biblioteca estándar de C++26, CMake 4.4, Ninja) y el compilador de sombreadores del SDK de Windows. FFmpeg, OpenSSL y libplist se compilan como bibliotecas estáticas a partir de commits fijados; esos commits están en `win_native/build_scripts/build_inputs.tsv`, la lista que muestra la ventana «Acerca de».
+MSYS2 CLANG64 (clang 23, libc++ con el módulo de la biblioteca estándar de C++26, CMake 4.4, Ninja) y el compilador de sombreadores del SDK de Windows. FFmpeg, OpenSSL y libplist se compilan como bibliotecas estáticas a partir de commits fijados; esos commits están en `win_native/build_scripts/build_inputs.tsv`, la lista que muestra la ventana «Acerca de». Una compilación propia que deba actualizarse desde versiones propias necesita una clave de firma propia: consulte `win_native/build_scripts/sign_release.ps1`.
 
 ```sh
 bash win_native/build_scripts/fetch_deps.sh <src_root>

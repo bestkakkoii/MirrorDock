@@ -176,6 +176,12 @@ con las versiones actuales de iOS.
                 modo automático).
 - Siempre visible: presione T, o elija «Siempre visible» en el menú.
   Silenciar: presione M.
+- Captura de pantalla: presione F9, o elija «Captura de pantalla» en el menú
+  o el botón de la cámara en la barra de control. La imagen se guarda como
+  archivo PNG, al tamaño que envía el teléfono y no al de la ventana, en la
+  carpeta «MirrorDock» dentro de su carpeta Imágenes (con la fecha y la hora
+  por nombre), y se copia en el portapapeles. Una línea sobre la imagen lo
+  confirma. F9 también funciona mientras se controla el iPhone.
 - Durante la duplicación, el equipo no entra en suspensión ni apaga la
   pantalla por sí solo.
 - La interfaz sigue el idioma para mostrar de Windows: inglés, chino
@@ -218,6 +224,14 @@ llegado al teléfono como un toque cuando llega el segundo: haga doble clic en
 una barra negra si la hay, o pulse F11. La barra de control no aparece
 mientras el control está activado, porque taparía la parte inferior de la
 pantalla del teléfono: use el botón derecho del mouse.
+
+Mientras el control está activado, el retardo es menor. El iPhone marca sus
+imágenes y su sonido con una hora algo posterior al momento en que llegan
+(las imágenes, unos 85 ms por Wi-Fi), y normalmente el programa espera a esa
+hora. Con el control activado reproduce ambos en cuanto llegan a tiempo,
+siempre sincronizados entre sí, de modo que el efecto de un toque se ve
+antes. El cambio se hace de forma gradual en unos segundos, sin saltos en el
+sonido.
 
 Qué se necesita:
 - Un iPhone con iOS 27 o posterior, conectado por el cable USB y que confíe
@@ -287,9 +301,12 @@ búfer más amplio de «Calidad») surte pleno efecto en la siguiente conexión
 -------------------------------------------
 - «Buscar actualizaciones…» en el menú pregunta a GitHub cuál es la versión
   más reciente y muestra la respuesta en la ventana «Acerca de». Cuando hay
-  una más nueva, «Descargar» abre su zip en el navegador y «Novedades» abre
-  sus notas de la versión: descomprima el paquete nuevo sobre la carpeta
-  anterior. El programa no instala nada por su cuenta.
+  una más nueva, «Actualizar ahora» la descarga, la comprueba y la coloca en
+  lugar del programa en ejecución, que después se reinicia solo. Si hay una
+  duplicación en curso, ese reinicio espera a que termine, o a que usted
+  elija «Reiniciar ahora». «Descargar» sigue abriendo el zip en el navegador,
+  para descomprimirlo usted mismo sobre la carpeta anterior, y «Novedades»
+  abre las notas de la versión. No se instala nada si usted no lo pide.
 - Una vez al día el programa pregunta por sí solo, y una notificación le
   avisa cuando sale una versión nueva. Para evitarlo, desactive «Buscar
   actualizaciones automáticamente» en la ventana «Acerca de».
@@ -298,6 +315,10 @@ búfer más amplio de «Calidad») surte pleno efecto en la siguiente conexión
   No se hace ninguna búsqueda automática con una conexión que Windows marque
   como de uso medido, ni mientras la conexión a Internet del equipo pase por
   el iPhone.
+- Solo se instalan versiones auténticas: cada versión se firma con una clave
+  que no está en Internet, y el programa lleva su mitad pública. Un paquete
+  cuya firma no encaja no se instala, venga de donde venga. Si no se puede
+  escribir en la carpeta del programa, use «Descargar».
 - «Acerca de…» en el menú abre una ventana propia con tres páginas:
     Acerca de    versión y fecha de publicación, la búsqueda de
                  actualizaciones y enlaces al proyecto, a esta guía y a los
@@ -316,6 +337,13 @@ búfer más amplio de «Calidad») surte pleno efecto en la siguiente conexión
   están en orden, ponderada según lo que cada una importa para la duplicación
   (la decodificación de video por hardware es la que más cuenta). Indica lo
   bien preparado que está el equipo; no es una prueba de rendimiento.
+- Una fila de «Este equipo» que no está bien tiene un botón cuando el
+  programa puede hacer algo por sí mismo: permitir el programa en el Firewall
+  de Windows, iniciar el servicio de Apple, instalar la compatibilidad USB de
+  Apple o abrir la página de la Configuración de Windows donde se resuelve el
+  asunto. Lo que requiere derechos de administrador lo hacen las propias
+  herramientas de Windows, tras el aviso de consentimiento habitual. Al
+  volver a la ventana, la página se comprueba de nuevo.
 - «Copiar informe» copia esa página al portapapeles como texto sin formato:
   péguela cuando informe de un problema. Nada de la página sale del equipo, y
   no se muestra ni se guarda ningún número de serie ni nombre de dispositivo.

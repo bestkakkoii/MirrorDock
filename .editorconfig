@@ -5,7 +5,7 @@ root = true
 insert_final_newline = true
 
 # owned source code: UTF-8 with BOM, CRLF
-[*.{c,h,cpp,cppm,rc,py}]
+[*.{c,h,cpp,cppm,rc,py,ps1}]
 charset = utf-8-bom
 end_of_line = crlf
 

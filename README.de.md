@@ -33,11 +33,12 @@ Es baut auf dem AirPlay-Protokollkern von [UxPlay](https://github.com/FDH2/UxPla
 | 🔊 **Ton synchron zum Bild** | WASAPI-Ausgabe mit geringer Latenz auf derselben Zeitachse wie das Bild – Lippenbewegung und Stimme passen zusammen. |
 | 🎛️ **Drei Modi** | *Qualität*, *Ausgewogen* (Standard) und *Leistung*: Sie entscheiden zwischen dem schärfsten Bild und der geringsten Verzögerung. |
 | ✂️ **Schwarze Balken abschneiden** | Schneidet die schwarzen Balken rund um einen Film automatisch ab – oder Sie rahmen mit der Maus einen beliebigen Teil des Bildes ein. |
-| 🖱️ **iPhone steuern** | Klicken, ziehen, scrollen und schreiben Sie im Bild, und das Smartphone führt es aus. Fest eingebaut: kein Hilfsprogramm, kein Jailbreak (setzt iOS 27, das USB-Kabel und den Entwicklermodus voraus). |
+| 🖱️ **iPhone steuern** | Klicken, ziehen, scrollen und schreiben Sie im Bild, und das Smartphone führt es aus; währenddessen wartet das Bild nicht mehr auf seine Zeitstempel und folgt Ihrer Hand schneller. Fest eingebaut: kein Hilfsprogramm, kein Jailbreak (setzt iOS 27, das USB-Kabel und den Entwicklermodus voraus). |
 | 🪟 **Ein richtiges Fenster** | Öffnet sich in sinnvoller Größe, behält beim Ändern der Größe das Seitenverhältnis bei, merkt sich Größe und Position, Vollbild per Tastendruck, immer im Vordergrund. |
+| 📸 **Bildschirmfotos** | **F9** speichert das gespiegelte Bild in der vollen Auflösung des Smartphones als PNG-Datei und kopiert es in die Zwischenablage. |
 | 🌐 **Elf Sprachen** | Die Oberfläche richtet sich nach Ihrer Windows-Anzeigesprache. |
-| 🩺 **Kennt Ihren PC** | Das Info-Fenster prüft, worauf es bei der Spiegelung ankommt (Grafikkarte, Treiber, Netzwerk, Firewall, Apples USB-Unterstützung), bewertet es und sagt, was zu beheben ist. |
-| 🔄 **Update-Prüfung** | Meldet, wenn eine neuere Version erschienen ist: eine Anfrage an GitHub pro Tag, mit einem Klick abschaltbar. |
+| 🩺 **Kennt Ihren PC** | Das Info-Fenster prüft, worauf es bei der Spiegelung ankommt (Grafikkarte, Treiber, Netzwerk, Firewall, Apples USB-Unterstützung), bewertet es, sagt, was zu beheben ist, und behebt auf Knopfdruck, was es selbst beheben kann. |
+| 🔄 **Update mit einem Klick** | Meldet, wenn eine neuere Version erschienen ist, und installiert sie, sobald Sie es wünschen. Jede Version ist signiert und wird vor der Installation geprüft. |
 | 🧳 **Eine einzige Datei** | Eine einzelne ausführbare Datei von rund 12 MB, die nichts außer Windows selbst benötigt. |
 
 ## 🚀 Schnellstart
@@ -100,7 +101,9 @@ Was Sie dafür brauchen:
 > [!NOTE]
 > AirPlay kann keine Eingaben übertragen, also nimmt die Steuerung einen anderen Weg: über die Entwicklerdienste von iOS – dieselben, mit denen Xcode ein echtes Gerät bedient. Um sie zu installieren, lädt MirrorDock das Image von Apple aus dem Repository [DeveloperDiskImage](https://github.com/doronz88/DeveloperDiskImage) herunter und lässt es von Apples Signierdienst (`gs.apple.com`) für Ihr Smartphone signieren. Dabei erfährt Apple die Chipnummern des Smartphones – genau wie bei Xcode. Danach nimmt die Steuerung zu niemandem mehr Kontakt auf.
 
-Solange die Steuerung eingeschaltet ist, haben die eigenen Befehle des Fensters Vorrang: **F8**, **F11**, **Alt+Enter**, **Alt+F4**, **Esc** im Vollbild und der Doppelklick gehören weiterhin dem Fenster. Bei einem Doppelklick ist der erste Klick bereits als Tippen beim Smartphone angekommen, wenn der zweite folgt; doppelklicken Sie deshalb auf einen schwarzen Balken, sofern es einen gibt, oder drücken Sie **F11**. Die Steuerleiste bleibt ausgeblendet, weil sie den unteren Rand des Smartphone-Bildschirms verdecken würde.
+Solange die Steuerung eingeschaltet ist, haben die eigenen Befehle des Fensters Vorrang: **F8**, **F9**, **F11**, **Alt+Enter**, **Alt+F4**, **Esc** im Vollbild und der Doppelklick gehören weiterhin dem Fenster. Bei einem Doppelklick ist der erste Klick bereits als Tippen beim Smartphone angekommen, wenn der zweite folgt; doppelklicken Sie deshalb auf einen schwarzen Balken, sofern es einen gibt, oder drücken Sie **F11**. Die Steuerleiste bleibt ausgeblendet, weil sie den unteren Rand des Smartphone-Bildschirms verdecken würde.
+
+**Weniger Verzögerung beim Steuern.** Ein iPhone versieht Bild und Ton mit Zeitstempeln, die etwas hinter dem Moment ihres Eintreffens liegen (beim Bild über Wi-Fi etwa 85 ms), und normalerweise wartet MirrorDock diese Zeitpunkte ab. Bei eingeschalteter Steuerung gibt es beides so früh wieder, wie es rechtzeitig eintrifft, weiterhin synchron zueinander; was eine Berührung bewirkt, ist deshalb früher zu sehen. Der Wechsel geschieht gleitend innerhalb einiger Sekunden, ohne Sprung im Ton.
 
 ## ⌨️ Tastatur und Maus
 
@@ -111,19 +114,21 @@ Solange die Steuerung eingeschaltet ist, haben die eigenen Befehle des Fensters 
 | Anzuzeigenden Bereich einrahmen | **X** |
 | Immer im Vordergrund | **T** |
 | Stummschalten (nur am PC) | **M** |
+| Bildschirmfoto (PNG-Datei und Zwischenablage) | **F9** |
 | iPhone-Steuerung ein / aus | **F8** |
 | Steuerleiste | Maus über das Bild bewegen |
 | Menü | Rechtsklick an beliebiger Stelle im Bild |
 
-Solange das iPhone gesteuert wird, gehen die Buchstabentasten an das Smartphone; **F8** gibt sie dem Fenster zurück.
+Solange das iPhone gesteuert wird, gehen die Buchstabentasten an das Smartphone; **F8** gibt sie dem Fenster zurück. Bildschirmfotos werden im Ordner *MirrorDock* in Ihrem Ordner *Bilder* gespeichert, benannt nach Datum und Uhrzeit, in der Größe, die das Smartphone sendet, nicht in der des Fensters.
 
 ## 🔄 Updates
 
-**Nach Updates suchen…** im Menü fragt bei GitHub nach der neuesten Version und zeigt die Antwort im Info-Fenster an. Gibt es eine neuere, öffnet **Herunterladen** deren ZIP-Archiv in Ihrem Browser und **Neuerungen** die zugehörigen Versionshinweise. MirrorDock installiert von sich aus nichts.
+**Nach Updates suchen…** im Menü fragt bei GitHub nach der neuesten Version und zeigt die Antwort im Info-Fenster an. Gibt es eine neuere, lädt **Jetzt aktualisieren** sie herunter, prüft sie und setzt sie an die Stelle des laufenden Programms, das danach von selbst neu startet; läuft gerade eine Spiegelung, wartet der Neustart auf deren Ende oder auf **Jetzt neu starten**. **Herunterladen** öffnet weiterhin das ZIP-Archiv in Ihrem Browser, falls Sie es lieber selbst entpacken, und **Neuerungen** die zugehörigen Versionshinweise. Ohne Ihren Auftrag wird nichts installiert.
 
 - **Automatische Prüfung.** Einmal täglich, mit einer Benachrichtigung, sobald eine neuere Version erschienen ist. Ein Schalter im Info-Fenster stellt sie ab.
 - **Was übertragen wird.** Eine einzige Anfrage an `api.github.com`. GitHub sieht Ihre IP-Adresse und den Client-Namen `MirrorDock/<version>`, sonst nichts über Sie oder Ihren PC.
 - **Nicht über Ihre mobilen Daten.** Über eine Verbindung, die Windows als getaktet kennzeichnet, wird nicht automatisch nach Updates gesucht – ebenso wenig, solange der PC über das iPhone ins Internet geht.
+- **Nur echte Versionen.** Jede Version wird mit einem Schlüssel signiert, der nicht im Internet liegt, und MirrorDock trägt dessen öffentliche Hälfte in sich. Ein Paket, dessen Signatur nicht passt, wird nicht installiert, woher es auch kommt.
 
 ## 🩺 „Info“ und „Dieser PC“
 
@@ -135,7 +140,7 @@ Solange das iPhone gesteuert wird, gehen die Buchstabentasten an das Smartphone;
 | **Dieser PC** | Zeile für Zeile alles, worauf es für MirrorDock auf Ihrem PC ankommt: Windows, Bildschirm, Stromversorgung, Netzwerk, Firewall, Prozessor, Arbeitsspeicher, Grafikkarte und deren Videodekodierung, Ton, Grafiktreiber, Apples USB-Unterstützung, das iPhone am Kabel |
 | **Komponenten** | Alle Bibliotheken und Werkzeuge, aus denen MirrorDock gebaut ist, mit Version, Datum und Lizenz – und wann welche Version von MirrorDock veröffentlicht wurde |
 
-Jede Zeile von *Dieser PC* wird mit „gut“, „Achtung“ oder „Problem“ bewertet, und eine Zeile, die nicht gut ist, sagt, was zu tun ist. Die Punktzahl ist der Anteil der bewerteten Zeilen, die in Ordnung sind, gewichtet danach, wie wichtig jede für die Spiegelung ist (die Hardware-Videodekodierung zählt am meisten). Sie sagt aus, wie gut der PC eingerichtet ist; ein Benchmark ist sie nicht. **Bericht kopieren** legt die Seite als reinen Text in die Zwischenablage, etwa für einen Fehlerbericht. Nichts von dieser Seite verlässt Ihren PC, und es wird weder eine Seriennummer noch ein Gerätename angezeigt oder gespeichert.
+Jede Zeile von *Dieser PC* wird mit „gut“, „Achtung“ oder „Problem“ bewertet. Eine Zeile, die nicht gut ist, sagt, was zu tun ist, und hat eine Schaltfläche, wenn MirrorDock es Ihnen abnehmen kann: das Programm in der Windows-Firewall zulassen, Apples Dienst starten, Apples USB-Unterstützung installieren oder die Seite der Windows-Einstellungen öffnen, auf der sich die Sache regeln lässt. Was Administratorrechte braucht, erledigen Windows-eigene Werkzeuge nach der üblichen Zustimmungsabfrage. Die Punktzahl ist der Anteil der bewerteten Zeilen, die in Ordnung sind, gewichtet danach, wie wichtig jede für die Spiegelung ist (die Hardware-Videodekodierung zählt am meisten). Sie sagt aus, wie gut der PC eingerichtet ist; ein Benchmark ist sie nicht. **Bericht kopieren** legt die Seite als reinen Text in die Zwischenablage, etwa für einen Fehlerbericht. Nichts von dieser Seite verlässt Ihren PC, und es wird weder eine Seriennummer noch ein Gerätename angezeigt oder gespeichert.
 
 ## ⚙️ Optionen
 
@@ -192,7 +197,7 @@ Die Spiegelung über Wi-Fi und über USB wurde bis Version 1.5 mit einem iPhone 
 ## ❓ Häufige Fragen
 
 **Das iPhone zeigt meinen PC nicht an.**
-Beide Geräte müssen sich im selben Netzwerk befinden, und die Windows-Firewall muss `mirror_dock.exe` zulassen. Die Seite *Dieser PC* des Info-Fensters zeigt, ob die Firewall oder ein als *öffentlich* eingestuftes Netzwerk im Weg steht. Wenn Sie Wi-Fi am iPhone aus- und wieder einschalten, wird die Liste aktualisiert.
+Beide Geräte müssen sich im selben Netzwerk befinden, und die Windows-Firewall muss `mirror_dock.exe` zulassen. Die Seite *Dieser PC* des Info-Fensters zeigt, ob die Firewall oder ein als *öffentlich* eingestuftes Netzwerk im Weg steht, und ihre Schaltfläche lässt MirrorDock in der Firewall zu. Wenn Sie Wi-Fi am iPhone aus- und wieder einschalten, wird die Liste aktualisiert.
 
 **Das Kabel ist angeschlossen, aber die Spiegelung läuft weiterhin über Wi-Fi.**
 Der persönliche Hotspot muss aktiviert sein, und als Verbindung muss *USB bevorzugen* gewählt sein. Die zweite Zeile des Menüs zeigt den Zustand der USB-Verbindung.
@@ -210,14 +215,14 @@ Die Meldung nennt den Grund: Das Kabel ist nicht angeschlossen oder das iPhone v
 Er ist Apples eigener Schalter für alle, die Apps entwickeln. Mit ihm darf ein Computer, dem das iPhone vertraut, Apps installieren und debuggen und auf die Entwicklerdienste zugreifen; ein Jailbreak ist das nicht, und an derselben Stelle lässt er sich wieder ausschalten.
 
 **Nutzt MirrorDock das Internet?**
-Die Spiegelung läuft lokal. Online geht MirrorDock nur für zwei Dinge: für die Update-Prüfung (GitHub, einmal täglich, abschaltbar) und, wenn Sie zum ersten Mal ein iPhone steuern, für Apples Developer Disk Image und Apples Signatur dafür.
+Die Spiegelung läuft lokal. Online geht MirrorDock nur für zwei Dinge: für Updates (die Prüfung bei GitHub einmal täglich, die sich abschalten lässt, und den Download einer Version, wenn Sie ihn verlangen) und, wenn Sie zum ersten Mal ein iPhone steuern, für Apples Developer Disk Image und Apples Signatur dafür.
 
 **Wo finde ich das Protokoll?**
 Unter `%LOCALAPPDATA%\MirrorDock\mirror_dock.log` oder über **Protokolldatei öffnen** im Menü.
 
 ## 🛠️ Aus dem Quellcode bauen
 
-MSYS2 CLANG64 (clang 23, libc++ mit dem Modul der C++26-Standardbibliothek, CMake 4.4, Ninja) und der Shader-Compiler des Windows SDK. FFmpeg, OpenSSL und libplist werden aus gepinnten Commits als statische Bibliotheken gebaut; die Pins stehen in `win_native/build_scripts/build_inputs.tsv` – der Liste, die das Info-Fenster anzeigt.
+MSYS2 CLANG64 (clang 23, libc++ mit dem Modul der C++26-Standardbibliothek, CMake 4.4, Ninja) und der Shader-Compiler des Windows SDK. FFmpeg, OpenSSL und libplist werden aus gepinnten Commits als statische Bibliotheken gebaut; die Pins stehen in `win_native/build_scripts/build_inputs.tsv` – der Liste, die das Info-Fenster anzeigt. Ein eigener Build, der sich aus eigenen Versionen aktualisieren soll, braucht einen eigenen Signaturschlüssel: siehe `win_native/build_scripts/sign_release.ps1`.
 
 ```sh
 bash win_native/build_scripts/fetch_deps.sh <src_root>

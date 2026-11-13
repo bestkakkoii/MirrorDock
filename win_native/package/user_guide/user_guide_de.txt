@@ -186,6 +186,13 @@ kabelgebundene Spiegelung, die mit aktuellem iOS funktioniert.
                  automatischen Modus erneut C).
 - Immer im Vordergrund: Drücken Sie T oder wählen Sie im Menü „Immer im
   Vordergrund“. Stummschalten: Drücken Sie M.
+- Bildschirmfoto: Drücken Sie F9, oder wählen Sie im Menü „Bildschirmfoto“
+  oder die Kamera-Schaltfläche der Steuerleiste. Das Bild wird als PNG-Datei
+  gespeichert, in der Größe, die das Smartphone sendet, nicht in der des
+  Fensters, und zwar im Ordner „MirrorDock“ in Ihrem Ordner „Bilder“ (benannt
+  nach Datum und Uhrzeit), und in die Zwischenablage kopiert. Eine Zeile über
+  dem Bild bestätigt es. F9 funktioniert auch, während das iPhone gesteuert
+  wird.
 - Während der Spiegelung wechselt der PC nicht von selbst in den
   Standbymodus und schaltet den Bildschirm nicht ab.
 - Die Oberfläche richtet sich nach der Windows-Anzeigesprache: Englisch,
@@ -228,6 +235,14 @@ Sie deshalb auf einen schwarzen Balken, sofern es einen gibt, oder drücken
 Sie F11. Solange die Steuerung eingeschaltet ist, bleibt die Steuerleiste
 ausgeblendet, weil sie den unteren Rand des Smartphone-Bildschirms verdecken
 würde: Verwenden Sie stattdessen die rechte Maustaste.
+
+Bei eingeschalteter Steuerung ist die Verzögerung kürzer. Ein iPhone versieht
+Bild und Ton mit Zeitstempeln, die etwas hinter dem Moment ihres Eintreffens
+liegen (beim Bild über Wi-Fi etwa 85 ms), und normalerweise wartet das
+Programm diese Zeitpunkte ab. Bei eingeschalteter Steuerung gibt es beides so
+früh wieder, wie es rechtzeitig eintrifft, weiterhin synchron zueinander; was
+eine Berührung bewirkt, ist deshalb früher zu sehen. Der Wechsel geschieht
+gleitend innerhalb einiger Sekunden, ohne Sprung im Ton.
 
 Was Sie dafür brauchen:
 - Ein iPhone mit iOS 27 oder neuer, das am USB-Kabel hängt und diesem PC
@@ -296,10 +311,13 @@ hin).
 8. Updates und das Info-Fenster
 -------------------------------
 - „Nach Updates suchen…“ im Menü fragt bei GitHub nach der neuesten Version
-  und zeigt die Antwort im Info-Fenster an. Gibt es eine neuere, öffnet
-  „Herunterladen“ deren ZIP-Archiv in Ihrem Browser und „Neuerungen“ die
-  zugehörigen Versionshinweise: Entpacken Sie das neue Paket über den alten
-  Ordner. Das Programm installiert von sich aus nichts.
+  und zeigt die Antwort im Info-Fenster an. Gibt es eine neuere, lädt „Jetzt
+  aktualisieren“ sie herunter, prüft sie und setzt sie an die Stelle des
+  laufenden Programms, das danach von selbst neu startet. Läuft gerade eine
+  Spiegelung, wartet der Neustart auf deren Ende oder auf „Jetzt neu starten“.
+  „Herunterladen“ öffnet weiterhin das ZIP-Archiv in Ihrem Browser, damit Sie
+  es selbst über den alten Ordner entpacken können, und „Neuerungen“ die
+  zugehörigen Versionshinweise. Ohne Ihren Auftrag wird nichts installiert.
 - Einmal täglich fragt das Programm von selbst nach, und eine Benachrichtigung
   meldet, wenn eine neuere Version erschienen ist. Um das abzustellen,
   schalten Sie im Info-Fenster „Automatisch nach Updates suchen“ aus.
@@ -308,6 +326,11 @@ hin).
   Sie oder den PC. Über eine Verbindung, die Windows als getaktet
   kennzeichnet, wird nicht automatisch nach Updates gesucht – ebenso wenig,
   solange der PC über das iPhone ins Internet geht.
+- Installiert werden nur echte Versionen: Jede Version wird mit einem
+  Schlüssel signiert, der nicht im Internet liegt, und das Programm trägt
+  dessen öffentliche Hälfte in sich. Ein Paket, dessen Signatur nicht passt,
+  wird nicht installiert, woher es auch kommt. Lässt sich in den Ordner des
+  Programms nicht schreiben, verwenden Sie „Herunterladen“.
 - „Info…“ im Menü öffnet ein eigenes Fenster mit drei Seiten:
     Info         Version und Veröffentlichungsdatum, die Update-Prüfung,
                  Links zum Projekt, zu diesem Handbuch und zu den Lizenztexten
@@ -325,6 +348,13 @@ hin).
   in Ordnung sind, gewichtet danach, wie wichtig jede für die Spiegelung
   ist (die Hardware-Videodekodierung zählt am meisten). Sie sagt aus, wie
   gut der PC eingerichtet ist; ein Benchmark ist sie nicht.
+- Eine Zeile von „Dieser PC“, die nicht gut ist, hat eine Schaltfläche, wenn
+  das Programm selbst etwas dagegen tun kann: das Programm in der
+  Windows-Firewall zulassen, Apples Dienst starten, Apples USB-Unterstützung
+  installieren oder die Seite der Windows-Einstellungen öffnen, auf der sich
+  die Sache regeln lässt. Was Administratorrechte braucht, erledigen
+  Windows-eigene Werkzeuge nach der üblichen Zustimmungsabfrage. Wenn Sie zum
+  Fenster zurückkehren, wird die Seite erneut geprüft.
 - „Bericht kopieren“ legt diese Seite als reinen Text in die Zwischenablage:
   Fügen Sie ihn ein, wenn Sie ein Problem melden. Nichts von dieser Seite
   verlässt den PC, und es wird weder eine Seriennummer noch ein Gerätename

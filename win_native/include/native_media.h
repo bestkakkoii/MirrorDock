@@ -37,8 +37,10 @@ typedef enum native_media_event {
     NATIVE_MEDIA_EVENT_DISPLAY_CHANGED = 7, /* monitor attached/detached or its mode changed: query again */
     NATIVE_MEDIA_EVENT_START_FAILED = 8,    /* the engine could not start: native_media_failure_text() */
     NATIVE_MEDIA_EVENT_DEVICE_LOST = 9,     /* the Direct3D device was lost: restart the program */
-    NATIVE_MEDIA_EVENT_SESSION_ENDING = 10  /* Windows shuts down / sign-out: stop the network services,
+    NATIVE_MEDIA_EVENT_SESSION_ENDING = 10, /* Windows shuts down / sign-out: stop the network services,
                                                then call native_media_network_stopped() */
+    NATIVE_MEDIA_EVENT_UPDATE_INSTALLED = 11 /* a newer release was put in place of this one: end the
+                                                program and start native_media_restart_target() */
 } native_media_event;
 
 /* what the receiver optimizes for (uxplay_media_types: performance_mode) */
@@ -106,6 +108,12 @@ int native_media_activate_running_instance(const char *receiver_name);
 
 /* The host stopped its network services after NATIVE_MEDIA_EVENT_SESSION_ENDING. */
 void native_media_network_stopped(void);
+
+/* After NATIVE_MEDIA_EVENT_UPDATE_INSTALLED: the executable to start once
+ * this run has ended (the new program, which has the name a release gives
+ * it; the running one was moved aside).  Empty when the folder of the
+ * program is not known.  Valid for the life of the process. */
+const wchar_t *native_media_restart_target(void);
 
 /* Modal error box for a failure the user would otherwise never see (the
  * program has no console): title from the interface language, text UTF-8. */

@@ -340,15 +340,17 @@ namespace uxplay
         // Would Windows Firewall let a connection from the network reach this
         // program?  From its rules for this executable in the profiles that
         // are active now.  Another firewall product is not looked at.
-        [[nodiscard]] firewall_verdict measure_firewall()
+        [[nodiscard]] firewall_facts look_at_firewall()
         {
+            firewall_facts found;
             ComPtr<INetFwPolicy2> policy;
             long active = 0;
             if (FAILED(CoCreateInstance(__uuidof(NetFwPolicy2), nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&policy))) ||
                 FAILED(policy->get_CurrentProfileTypes(&active)))
             {
-                return firewall_verdict::unknown;
+                return found;
             }
+            found.active_profiles = active;
             bool enabled = false;
             bool shut = false;
             for (NET_FW_PROFILE_TYPE2 const profile :
@@ -366,14 +368,6 @@ namespace uxplay
                     shut = true;
                 }
             }
-            if (!enabled)
-            {
-                return firewall_verdict::off;
-            }
-            if (shut)
-            {
-                return firewall_verdict::blocked;
-            }
             std::wstring const program = executable_path();
             ComPtr<INetFwRules> rules;
             ComPtr<IUnknown> enumeration;
@@ -381,7 +375,8 @@ namespace uxplay
             if (program.empty() || FAILED(policy->get_Rules(&rules)) || FAILED(rules->get__NewEnum(&enumeration)) ||
                 FAILED(enumeration.As(&enumerator)))
             {
-                return firewall_verdict::unknown;
+                found.verdict = !enabled ? firewall_verdict::off : shut ? firewall_verdict::shut : firewall_verdict::unknown;
+                return found;
             }
             bool allowed = false;
             bool blocked = false;
@@ -404,9 +399,9 @@ namespace uxplay
                 NET_FW_RULE_DIRECTION direction = NET_FW_RULE_DIR_OUT;
                 long profiles = 0;
                 BSTR application = nullptr;
-                if (!rule || FAILED(rule->get_Enabled(&rule_enabled)) || rule_enabled == VARIANT_FALSE ||
+                if (!rule || FAILED(rule->get_Enabled(&rule_enabled)) ||
                     FAILED(rule->get_Direction(&direction)) || direction != NET_FW_RULE_DIR_IN ||
-                    FAILED(rule->get_Profiles(&profiles)) || (profiles & active) == 0 ||
+                    FAILED(rule->get_Profiles(&profiles)) ||
                     FAILED(rule->get_ApplicationName(&application)) || application == nullptr)
                 {
                     continue;
@@ -420,14 +415,29 @@ namespace uxplay
                 {
                     continue;
                 }
+                found.inbound_rule = true; // whatever it says, and whether it is switched on or not
                 NET_FW_ACTION action = NET_FW_ACTION_BLOCK;
-                if (SUCCEEDED(rule->get_Action(&action)))
+                if (rule_enabled == VARIANT_FALSE || FAILED(rule->get_Action(&action)))
+                {
+                    continue;
+                }
+                if (action == NET_FW_ACTION_ALLOW)
+                {
+                    found.allowing_profiles |= profiles;
+                }
+                if ((profiles & active) != 0)
                 {
                     (action == NET_FW_ACTION_ALLOW ? allowed : blocked) = true;
                 }
             }
-            // a rule that blocks wins over one that allows
-            return blocked ? firewall_verdict::blocked : allowed ? firewall_verdict::allowed : firewall_verdict::no_rule;
+            // no firewall, a firewall that lets nothing in, then the rules: one
+            // that blocks wins over one that allows
+            found.verdict = !enabled  ? firewall_verdict::off
+                            : shut    ? firewall_verdict::shut
+                            : blocked ? firewall_verdict::blocked
+                            : allowed ? firewall_verdict::allowed
+                                      : firewall_verdict::no_rule;
+            return found;
         }
 
         // ---- hardware -----------------------------------------------------------
@@ -795,7 +805,8 @@ namespace uxplay
             system_report report;
 
             void add(report_group group, ui_text label, std::wstring value, report_rating rating = report_rating::none,
-                     unsigned int weight = 0, std::optional<ui_text> advice = std::nullopt)
+                     unsigned int weight = 0, std::optional<ui_text> advice = std::nullopt,
+                     report_action action = report_action::none)
             {
                 report_entry entry;
                 entry.group = group;
@@ -803,12 +814,51 @@ namespace uxplay
                 entry.value = std::move(value);
                 entry.rating = rating;
                 entry.weight = rating == report_rating::none ? 0 : weight;
-                // what to do is said about a row that is not in order
+                // what to do is said about a row that is not in order, and
+                // what the program can do about it is offered beside that
                 if (advice && (rating == report_rating::attention || rating == report_rating::problem))
                 {
                     entry.advice = words.text(*advice);
+                    if (std::optional<ui_text> const name = action_name(action); name)
+                    {
+                        entry.action = action;
+                        entry.action_label = words.text(*name);
+                    }
                 }
                 report.entries.push_back(std::move(entry));
+            }
+
+            // what the button for an action says
+            [[nodiscard]] static std::optional<ui_text> action_name(report_action action)
+            {
+                switch (action)
+                {
+                case report_action::allow_through_firewall:
+                    return ui_text::fix_allow_firewall;
+                case report_action::open_firewall_settings:
+                    return ui_text::fix_open_firewall;
+                case report_action::open_network_settings:
+                    return ui_text::fix_open_network;
+                case report_action::open_display_settings:
+                    return ui_text::fix_open_display;
+                case report_action::open_power_settings:
+                    return ui_text::fix_open_power;
+                case report_action::open_sound_settings:
+                    return ui_text::fix_open_sound;
+                case report_action::open_windows_update:
+                    return ui_text::fix_open_windows_update;
+                case report_action::install_apple_support:
+                    return ui_text::fix_install_apple_support;
+                case report_action::start_apple_service:
+                    return ui_text::fix_start_apple_service;
+                case report_action::enable_usb_adapter:
+                    return ui_text::enable_usb_adapter;
+                case report_action::install_update:
+                    return ui_text::update_install;
+                case report_action::none:
+                    break;
+                }
+                return std::nullopt;
             }
         };
 
@@ -903,7 +953,7 @@ namespace uxplay
         measure_display(facts);
         measure_power(facts);
         measure_network(facts);
-        facts.firewall = measure_firewall();
+        facts.firewall = look_at_firewall().verdict;
         measure_processor(facts);
         measure_memory(facts);
         measure_graphics(facts);
@@ -946,6 +996,11 @@ namespace uxplay
         }
     }
 
+    firewall_facts measure_firewall_rules()
+    {
+        return look_at_firewall();
+    }
+
     system_report build_report(system_facts const &facts, ui_language language)
     {
         report_builder builder;
@@ -965,7 +1020,7 @@ namespace uxplay
             bool const current = facts.windows_build >= oldest_good_windows_build;
             builder.add(report_group::system, ui_text::row_windows, std::move(value),
                         facts.windows_build == 0 ? none : current ? good : attention, weight_windows,
-                        ui_text::advice_windows);
+                        ui_text::advice_windows, report_action::open_windows_update);
         }
         if (facts.display_width > 0 && facts.display_height > 0 && !facts.displays.empty())
         {
@@ -990,13 +1045,13 @@ namespace uxplay
             if (fastest - slowest > uneven_refresh_hz)
             {
                 builder.add(report_group::system, ui_text::row_display, std::move(value), attention, weight_display,
-                            ui_text::advice_display_duplicate);
+                            ui_text::advice_display_duplicate, report_action::open_display_settings);
             }
             else
             {
                 builder.add(report_group::system, ui_text::row_display, std::move(value),
                             slowest >= slowest_good_display_hz ? good : attention, weight_display,
-                            ui_text::advice_display);
+                            ui_text::advice_display, report_action::open_display_settings);
             }
         }
         {
@@ -1014,7 +1069,7 @@ namespace uxplay
             else if (facts.energy_saver)
             {
                 builder.add(report_group::system, ui_text::row_power, words.format(ui_text::value_energy_saver, {percent}),
-                            attention, weight_power, ui_text::advice_energy_saver);
+                            attention, weight_power, ui_text::advice_energy_saver, report_action::open_power_settings);
             }
             else
             {
@@ -1025,7 +1080,7 @@ namespace uxplay
         if (!facts.network_connected)
         {
             builder.add(report_group::system, ui_text::row_network, words.text(ui_text::value_not_connected), attention,
-                        weight_network, ui_text::advice_no_network);
+                        weight_network, ui_text::advice_no_network, report_action::open_network_settings);
         }
         else
         {
@@ -1049,7 +1104,7 @@ namespace uxplay
             if (facts.network == network_category::public_network)
             {
                 builder.add(report_group::system, ui_text::row_network, std::move(value), attention, weight_network,
-                            ui_text::advice_public_network);
+                            ui_text::advice_public_network, report_action::open_network_settings);
             }
             else
             {
@@ -1069,11 +1124,16 @@ namespace uxplay
             break;
         case firewall_verdict::blocked:
             builder.add(report_group::system, ui_text::row_firewall, words.text(ui_text::value_firewall_blocks), problem,
-                        weight_firewall, ui_text::advice_firewall);
+                        weight_firewall, ui_text::advice_firewall, report_action::allow_through_firewall);
             break;
         case firewall_verdict::no_rule:
             builder.add(report_group::system, ui_text::row_firewall, words.text(ui_text::value_firewall_no_rule),
-                        attention, weight_firewall, ui_text::advice_firewall);
+                        attention, weight_firewall, ui_text::advice_firewall, report_action::allow_through_firewall);
+            break;
+        case firewall_verdict::shut:
+            // no rule helps while the firewall lets nothing in at all
+            builder.add(report_group::system, ui_text::row_firewall, words.text(ui_text::value_firewall_shut), problem,
+                        weight_firewall, ui_text::advice_firewall_shut, report_action::open_firewall_settings);
             break;
         case firewall_verdict::unknown:
             break;
@@ -1112,7 +1172,8 @@ namespace uxplay
             {
                 join(value, words.text(ui_text::value_in_use));
                 builder.add(report_group::hardware, ui_text::row_graphics, std::move(value),
-                            card.software ? problem : good, weight_graphics, ui_text::advice_software_renderer);
+                            card.software ? problem : good, weight_graphics, ui_text::advice_software_renderer,
+                            report_action::open_windows_update);
             }
             else
             {
@@ -1141,7 +1202,7 @@ namespace uxplay
         else
         {
             builder.add(report_group::hardware, ui_text::row_sound, words.text(ui_text::value_none), problem,
-                        weight_sound, ui_text::advice_no_sound);
+                        weight_sound, ui_text::advice_no_sound, report_action::open_sound_settings);
         }
 
         // ---- drivers
@@ -1164,12 +1225,13 @@ namespace uxplay
                                                                  : ui_text::value_service_stopped));
             builder.add(report_group::drivers, ui_text::row_apple_support, std::move(value),
                         facts.apple_service_reachable ? good : attention, weight_apple_support,
-                        ui_text::advice_apple_service);
+                        ui_text::advice_apple_service, report_action::start_apple_service);
         }
         else
         {
             builder.add(report_group::drivers, ui_text::row_apple_support, words.text(ui_text::value_not_installed),
-                        attention, weight_apple_support, ui_text::advice_apple_support);
+                        attention, weight_apple_support, ui_text::advice_apple_support,
+                        report_action::install_apple_support);
         }
         if (!facts.apple_usb_driver.empty())
         {
@@ -1188,7 +1250,8 @@ namespace uxplay
                 value += program.usb_link_address;
             }
             builder.add(report_group::drivers, ui_text::row_usb_link, std::move(value),
-                        program.usb_adapter_disabled ? attention : none, weight_usb_link, ui_text::advice_usb_adapter);
+                        program.usb_adapter_disabled ? attention : none, weight_usb_link, ui_text::advice_usb_adapter,
+                        report_action::enable_usb_adapter);
         }
 
         // ---- software
@@ -1203,7 +1266,7 @@ namespace uxplay
             case update_knowledge::newer_available:
                 join(value, words.format(ui_text::value_newer, {program.newest_version}));
                 builder.add(report_group::software, ui_text::row_program, std::move(value), attention, weight_program,
-                            ui_text::advice_update);
+                            ui_text::advice_update, report_action::install_update);
                 break;
             case update_knowledge::unknown:
                 builder.add(report_group::software, ui_text::row_program, std::move(value));

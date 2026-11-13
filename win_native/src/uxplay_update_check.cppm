@@ -6,7 +6,8 @@
 // and the name and version of this program as the "User-Agent" GitHub asks
 // every client for; nothing about the user or this PC.  The answer is only
 // looked at: nothing is downloaded or installed here.  The user opens the
-// release's page or its package in the browser.
+// release's page or its package in the browser, or has the program install it
+// (uxplay_update_install).
 //
 // update_checker runs the checks on a thread of its own: at once when asked
 // (check_now), and by itself once a day while "automatic" is on.  The first
@@ -50,6 +51,10 @@ export namespace uxplay
         std::string page_url;    // its page on GitHub
         std::string package_url; // the zip to download
         std::uint64_t package_bytes = 0; // 0 when not known
+        // The signature of that zip, for the program's own update
+        // (uxplay_update_install).  Empty: the release has none, or only its
+        // version is known (kept from an earlier run).
+        std::string signature_url;
 
         bool operator==(published_release const &) const = default;
     };

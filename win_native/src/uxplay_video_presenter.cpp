@@ -301,6 +301,8 @@ namespace uxplay
         std::int64_t interval_wake_overshoot = 0;
         int interval_stream_width = 0;
         int interval_stream_height = 0;
+        // a screenshot someone waits for (capture()); the render thread takes it
+        std::shared_ptr<std::promise<outcome<captured_picture>>> capture_request;
 
         std::thread render_thread;
 
@@ -311,6 +313,9 @@ namespace uxplay
         outcome<plane_views const *> views_for(decoded_frame const &frame);
         status upload(decoded_frame const &frame);
         status draw(decoded_frame const &frame, picture_region const &visible, bool bilinear_only);
+        status draw_into(decoded_frame const &frame, picture_region const &visible, bool bilinear_only,
+                         ID3D11RenderTargetView *destination, int destination_width, int destination_height);
+        outcome<captured_picture> read_back(decoded_frame const &frame, picture_region const &visible);
         void report_render_failure(failure const &problem);
         void render_loop();
         [[nodiscard]] std::optional<media_source> displayed_source() const;
@@ -627,7 +632,6 @@ namespace uxplay
     status video_presenter::state::draw(decoded_frame const &frame, picture_region const &visible,
                                         bool bilinear_only)
     {
-        ID3D11DeviceContext *context = gpu->context();
         if (!back_buffer_view)
         {
             ComPtr<ID3D11Texture2D> back_buffer;
@@ -643,7 +647,17 @@ namespace uxplay
                 return std::unexpected(make_hresult_failure("CreateRenderTargetView", result));
             }
         }
+        return draw_into(frame, visible, bilinear_only, back_buffer_view.Get(), swap_width, swap_height);
+    }
 
+    // The same into any render target of destination_width x
+    // destination_height: the back buffer, or the texture a screenshot is
+    // read from.
+    status video_presenter::state::draw_into(decoded_frame const &frame, picture_region const &visible,
+                                             bool bilinear_only, ID3D11RenderTargetView *destination,
+                                             int destination_width, int destination_height)
+    {
+        ID3D11DeviceContext *context = gpu->context();
         auto views = views_for(frame);
         if (!views)
         {
@@ -660,10 +674,11 @@ namespace uxplay
         D3D11_TEXTURE2D_DESC texture_description{};
         luma_texture->GetDesc(&texture_description);
 
-        // aspect-correct letterbox of the visible part inside the client area:
-        // in a window of that part's aspect ratio it touches all four edges
-        double const scale = std::min(static_cast<double>(swap_width) / visible.width,
-                                      static_cast<double>(swap_height) / visible.height);
+        // aspect-correct letterbox of the visible part inside the destination
+        // (the client area): where that has the part's aspect ratio it touches
+        // all four edges
+        double const scale = std::min(static_cast<double>(destination_width) / visible.width,
+                                      static_cast<double>(destination_height) / visible.height);
         double const view_width = visible.width * scale;
         double const view_height = visible.height * scale;
 
@@ -705,12 +720,12 @@ namespace uxplay
         context->Unmap(constant_buffer.Get(), 0);
 
         float const black[4] = {0.0F, 0.0F, 0.0F, 1.0F};
-        context->ClearRenderTargetView(back_buffer_view.Get(), black);
-        ID3D11RenderTargetView *targets[] = {back_buffer_view.Get()};
+        context->ClearRenderTargetView(destination, black);
+        ID3D11RenderTargetView *targets[] = {destination};
         context->OMSetRenderTargets(1, targets, nullptr);
         D3D11_VIEWPORT viewport{};
-        viewport.TopLeftX = static_cast<float>(std::floor((swap_width - view_width) / 2.0));
-        viewport.TopLeftY = static_cast<float>(std::floor((swap_height - view_height) / 2.0));
+        viewport.TopLeftX = static_cast<float>(std::floor((destination_width - view_width) / 2.0));
+        viewport.TopLeftY = static_cast<float>(std::floor((destination_height - view_height) / 2.0));
         viewport.Width = static_cast<float>(std::round(view_width));
         viewport.Height = static_cast<float>(std::round(view_height));
         viewport.MaxDepth = 1.0F;
@@ -732,6 +747,70 @@ namespace uxplay
         ID3D11ShaderResourceView *cleared[3] = {nullptr, nullptr, nullptr};
         context->PSSetShaderResources(0, 3, cleared);
         return {};
+    }
+
+    // The visible part of the picture, pixel for pixel, read back from the
+    // GPU (render thread, GPU lock held).  It goes through the same shader
+    // as the screen, at a scale of one: what is saved is what is shown, minus
+    // the window's scaling.
+    outcome<captured_picture> video_presenter::state::read_back(decoded_frame const &frame,
+                                                                picture_region const &visible)
+    {
+        ID3D11Device *device = gpu->device();
+        ID3D11DeviceContext *context = gpu->context();
+        D3D11_TEXTURE2D_DESC description{};
+        description.Width = static_cast<UINT>(visible.width);
+        description.Height = static_cast<UINT>(visible.height);
+        description.MipLevels = 1;
+        description.ArraySize = 1;
+        description.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+        description.SampleDesc.Count = 1;
+        description.Usage = D3D11_USAGE_DEFAULT;
+        description.BindFlags = D3D11_BIND_RENDER_TARGET;
+        ComPtr<ID3D11Texture2D> drawn;
+        if (HRESULT const result = device->CreateTexture2D(&description, nullptr, &drawn); FAILED(result))
+        {
+            return std::unexpected(make_hresult_failure("CreateTexture2D (screenshot)", result));
+        }
+        ComPtr<ID3D11RenderTargetView> view;
+        if (HRESULT const result = device->CreateRenderTargetView(drawn.Get(), nullptr, &view); FAILED(result) || !view)
+        {
+            return std::unexpected(make_hresult_failure("CreateRenderTargetView (screenshot)", result));
+        }
+        status const rendered = draw_into(frame, visible, true, view.Get(), visible.width, visible.height);
+        // the texture goes away with this call: nothing may stay bound to it
+        context->OMSetRenderTargets(0, nullptr, nullptr);
+        if (!rendered)
+        {
+            return std::unexpected(rendered.error());
+        }
+        description.Usage = D3D11_USAGE_STAGING;
+        description.BindFlags = 0;
+        description.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+        ComPtr<ID3D11Texture2D> staging;
+        if (HRESULT const result = device->CreateTexture2D(&description, nullptr, &staging); FAILED(result))
+        {
+            return std::unexpected(make_hresult_failure("CreateTexture2D (screenshot copy)", result));
+        }
+        context->CopyResource(staging.Get(), drawn.Get());
+        D3D11_MAPPED_SUBRESOURCE mapped{};
+        if (HRESULT const result = context->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped); FAILED(result))
+        {
+            return std::unexpected(make_hresult_failure("ID3D11DeviceContext::Map (screenshot)", result));
+        }
+        captured_picture picture;
+        picture.width = visible.width;
+        picture.height = visible.height;
+        std::size_t const row_bytes = static_cast<std::size_t>(visible.width) * 4;
+        picture.pixels.resize(row_bytes * static_cast<std::size_t>(visible.height));
+        auto const *source = static_cast<std::uint8_t const *>(mapped.pData);
+        for (int row = 0; row < visible.height; ++row)
+        {
+            std::memcpy(picture.pixels.data() + static_cast<std::size_t>(row) * row_bytes,
+                        source + static_cast<std::size_t>(row) * mapped.RowPitch, row_bytes);
+        }
+        context->Unmap(staging.Get(), 0);
+        return picture;
     }
 
     // A failed GPU call.  Device loss is reported once and ends all GPU work;
@@ -856,12 +935,15 @@ namespace uxplay
             int width = 0;
             int height = 0;
             bool release_now = false;
+            std::shared_ptr<std::promise<outcome<captured_picture>>> capture_now;
             {
                 std::scoped_lock lock{mutex};
                 if (stopping)
                 {
                     return;
                 }
+                capture_now = std::move(capture_request);
+                capture_request.reset();
                 std::int64_t const now = clock::now_ns();
                 std::int64_t const period = refresh_period.load(std::memory_order_relaxed);
                 std::int64_t const lead = period / 2;
@@ -1006,6 +1088,22 @@ namespace uxplay
                 ++stats.presented;
                 interval_stream_width = to_draw->width();
                 interval_stream_height = to_draw->height();
+            }
+            if (capture_now)
+            {
+                // a screenshot: the picture that was just drawn, read back
+                outcome<captured_picture> copy = std::unexpected(make_failure("screenshot", 0, "no picture is shown"));
+                if (device_lost.load(std::memory_order_relaxed))
+                {
+                    copy = std::unexpected(make_failure("screenshot", 0, "the graphics device was lost"));
+                }
+                else if (to_draw)
+                {
+                    std::scoped_lock gpu_lock{gpu->context_mutex()};
+                    copy = read_back(*to_draw, visible);
+                }
+                capture_now->set_value(std::move(copy));
+                capture_now.reset();
             }
             to_draw.reset();
 
@@ -1216,6 +1314,41 @@ namespace uxplay
             impl->redraw_requested = true;
         }
         impl->wake();
+    }
+
+    outcome<captured_picture> video_presenter::capture(std::chrono::milliseconds patience)
+    {
+        auto const request = std::make_shared<std::promise<outcome<captured_picture>>>();
+        std::future<outcome<captured_picture>> answer = request->get_future();
+        {
+            std::scoped_lock lock{impl->mutex};
+            if (impl->capture_request)
+            {
+                return std::unexpected(make_failure("screenshot", 0, "another one is being taken"));
+            }
+            impl->capture_request = request;
+            impl->redraw_requested = true; // the render thread draws the picture again, then copies it
+        }
+        impl->wake();
+        if (answer.wait_for(patience) != std::future_status::ready)
+        {
+            std::scoped_lock lock{impl->mutex};
+            if (impl->capture_request == request)
+            {
+                impl->capture_request.reset();
+                return std::unexpected(make_failure("screenshot", patience.count(),
+                                                    "the picture was not drawn again within this many milliseconds"));
+            }
+            // the render thread took the request in this very moment: its answer is on the way
+        }
+        try
+        {
+            return answer.get();
+        }
+        catch (std::future_error const &cause)
+        {
+            return std::unexpected(make_failure("screenshot", cause.code().value(), "the presenter ended first"));
+        }
     }
 
     presenter_statistics video_presenter::statistics() const

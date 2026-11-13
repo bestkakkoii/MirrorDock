@@ -30,7 +30,11 @@ namespace uxplay
         constexpr double correction_deadband_ns = 500'000.0;
         // error (ns) corrected per second of playback at full correction
         constexpr double correction_horizon_ns = 1'000'000'000.0;
-        constexpr double max_rate_correction = 0.003;
+        // 1.2 %: enough to follow a delay that glides by 10 ms a second (the
+        // engine's presentation_timeline) with an error of some 10 ms, far
+        // from a hard resynchronization; in step with the clock the
+        // correction is a few parts in a million, whatever this limit
+        constexpr double max_rate_correction = 0.012;
         constexpr double contiguous_tolerance_ns = 2'000'000.0;
         constexpr double max_gap_fill_ns = 500'000'000.0;
         constexpr std::size_t max_queued_frames = 48000 * 4;

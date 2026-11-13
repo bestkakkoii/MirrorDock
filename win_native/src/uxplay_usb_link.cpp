@@ -9,14 +9,13 @@ module;
 #include <iphlpapi.h>
 #include <netioapi.h>
 #include <cfgmgr32.h>
-#include <objbase.h>
-#include <shellapi.h>
 
 module uxplay_usb_link;
 
 import std;
 import uxplay_status;
 import uxplay_log;
+import uxplay_elevation;
 
 namespace uxplay
 {
@@ -34,7 +33,7 @@ namespace uxplay
         constexpr auto waiting_poll_interval = std::chrono::seconds{5};
         constexpr auto idle_poll_interval = std::chrono::seconds{60};
         constexpr auto settle_delay = std::chrono::milliseconds{300};
-        constexpr DWORD guard_process_timeout_ms = 60'000;
+        constexpr std::chrono::milliseconds guard_process_patience{60'000};
         // the link needs a few seconds after attach (enumeration + DHCP)
         constexpr auto link_grace = std::chrono::seconds{8};
         // USB\VID_05AC&PID_12xx: Apple iOS devices (iPhone, iPad, iPod touch)
@@ -307,78 +306,6 @@ namespace uxplay
             }
         };
 
-        struct com_scope
-        {
-            bool initialized = false;
-
-            com_scope()
-                : initialized{SUCCEEDED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE))}
-            {
-            }
-
-            com_scope(com_scope const &) = delete;
-            com_scope &operator=(com_scope const &) = delete;
-
-            ~com_scope()
-            {
-                if (initialized)
-                {
-                    CoUninitialize();
-                }
-            }
-        };
-
-        std::wstring system_tool(std::wstring_view name)
-        {
-            std::array<wchar_t, MAX_PATH> directory{};
-            UINT const length = GetSystemDirectoryW(directory.data(), static_cast<UINT>(directory.size()));
-            if (length == 0 || length >= directory.size())
-            {
-                return std::wstring{name};
-            }
-            return std::format(L"{}\\{}", std::wstring_view{directory.data(), length}, name);
-        }
-
-        // Runs a Microsoft-signed system tool elevated (UAC prompt owned by
-        // `owner`) and returns its exit code.  A declined prompt is a failure
-        // with code ERROR_CANCELLED.
-        outcome<DWORD> run_elevated(std::wstring const &file, std::wstring const &parameters, HWND owner)
-        {
-            com_scope const com;
-            SHELLEXECUTEINFOW request{};
-            request.cbSize = sizeof(request);
-            request.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
-            request.hwnd = owner;
-            request.lpVerb = L"runas";
-            request.lpFile = file.c_str();
-            request.lpParameters = parameters.c_str();
-            request.nShow = SW_HIDE;
-            if (ShellExecuteExW(&request) == FALSE)
-            {
-                DWORD const error = GetLastError();
-                if (error == ERROR_CANCELLED)
-                {
-                    return std::unexpected(make_failure("administrator consent", ERROR_CANCELLED,
-                                                        "administrator consent was declined"));
-                }
-                return std::unexpected(make_win32_failure("ShellExecuteExW(runas)", error));
-            }
-            if (request.hProcess == nullptr)
-            {
-                return std::unexpected(make_failure("ShellExecuteExW(runas)", 0, "no process handle returned"));
-            }
-            DWORD exit_code = 0;
-            DWORD const waited = WaitForSingleObject(request.hProcess, guard_process_timeout_ms);
-            bool const got_code = waited == WAIT_OBJECT_0 && GetExitCodeProcess(request.hProcess, &exit_code) != FALSE;
-            DWORD const wait_error = got_code ? 0 : (waited == WAIT_TIMEOUT ? WAIT_TIMEOUT : GetLastError());
-            CloseHandle(request.hProcess);
-            if (!got_code)
-            {
-                return std::unexpected(make_failure("waiting for the elevated tool", wait_error,
-                                                    waited == WAIT_TIMEOUT ? "timed out" : "wait failed"));
-            }
-            return exit_code;
-        }
     }
 
     bool usb_link_state::data_leak() const
@@ -681,7 +608,7 @@ namespace uxplay
         log::info("USB link: asking for administrator consent to keep PC internet off the iPhone's cellular data "
                   "(interface {})",
                   ipv4_index);
-        outcome<DWORD> const ran = run_elevated(system_tool(L"cmd.exe"), command, owner);
+        outcome<DWORD> const ran = run_elevated(system_tool(L"cmd.exe"), command, owner, guard_process_patience);
         if (!ran)
         {
             std::string const detail = ran.error().describe();
@@ -741,7 +668,8 @@ namespace uxplay
         // touches neither the rest of the iPhone's USB device nor charging.
         log::info("USB link: asking for administrator consent to re-enable {}", utf16_to_utf8(id));
         outcome<DWORD> const ran =
-            run_elevated(system_tool(L"pnputil.exe"), std::format(L"/enable-device \"{}\"", id), owner);
+            run_elevated(system_tool(L"pnputil.exe"), std::format(L"/enable-device \"{}\"", id), owner,
+                         guard_process_patience);
         if (!ran)
         {
             std::string const detail = ran.error().describe();

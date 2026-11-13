@@ -32,7 +32,9 @@ import uxplay_ui_text;
 import uxplay_settings;
 import uxplay_crash_report;
 import uxplay_update_check;
+import uxplay_update_install;
 import uxplay_system_report;
+import uxplay_system_repair;
 import uxplay_about_window;
 
 namespace
@@ -118,9 +120,25 @@ namespace
         std::unique_ptr<uxplay::about_window> about_owner;
         std::unique_ptr<uxplay::update_checker> updates_owner;
         std::unique_ptr<uxplay::report_collector> collector_owner;
+        std::unique_ptr<uxplay::update_installer> installer_owner;
         std::atomic<uxplay::about_window *> about{nullptr};
         std::atomic<uxplay::update_checker *> updates{nullptr};
+        std::atomic<uxplay::update_installer *> installer{nullptr};
         std::atomic<uxplay::report_collector *> collector{nullptr};
+        // "Update now" was chosen: the release the check finds next is installed
+        std::atomic<bool> install_wanted{false};
+        // Windows ends the session: the process may be ended at any moment,
+        // so nothing is put in place of the running program any more
+        std::atomic<bool> session_ending{false};
+        // A repair of "This PC" runs on a thread of its own, one at a time:
+        // behind it may be a consent prompt the user takes long to answer, or
+        // never answers.  The end of the program does not wait for it: what
+        // the thread does once the repair is over (the log, the look at the
+        // PC, a notification) it does under repair_mutex and only while
+        // `running` says the engine and the collector are still there.
+        std::atomic<bool> repair_busy{false};
+        std::mutex repair_mutex;
+        bool running = false; // guarded by repair_mutex
         // the AirPlay stream as it was configured, for "This PC" (width 0: none)
         std::atomic<int> stream_codec{0}; // 0 = H.264, 1 = H.265
         std::atomic<int> stream_width{0};
@@ -383,6 +401,8 @@ namespace
         }
     }
 
+    void request_report();
+
     void on_admin_result(uxplay::usb_link_action action, bool done, std::string const &detail)
     {
         uxplay::media_engine *const ready = bridge().engine.load(std::memory_order_acquire);
@@ -405,6 +425,7 @@ namespace
                                                       : uxplay::ui_text::enable_failed));
             }
             refresh_usb_link_line();
+            request_report(); // "This PC" has a row about the adapter (and a button for this)
             return;
         }
         if (done)
@@ -610,6 +631,11 @@ namespace
         {
             about->set_update(updates->current());
         }
+        if (uxplay::update_installer *const installer = state.installer.load(std::memory_order_acquire);
+            installer != nullptr)
+        {
+            about->set_install(installer->current());
+        }
         bool const was_open = about->is_open();
         if (uxplay::status const shown = about->show(page, topmost); !shown)
         {
@@ -628,6 +654,138 @@ namespace
         }
     }
 
+    // The release that is ready is put in place of the running program, and
+    // the host is told to end the program and start the new one (any thread).
+    // Why it could not be done shows in the About window.
+    void apply_update()
+    {
+        bridge_state &state = bridge();
+        uxplay::update_installer *const installer = state.installer.load(std::memory_order_acquire);
+        if (installer == nullptr)
+        {
+            return;
+        }
+        if (state.session_ending.load())
+        {
+            // (a process that is ended half-way through would leave the
+            // program's folder with files of two versions)
+            uxplay::log::info("update: Windows is ending the session, so the release that is ready is not put in "
+                              "place; \"Update now\" fetches it again");
+            return;
+        }
+        if (uxplay::status const applied = installer->apply(); applied)
+        {
+            emit(NATIVE_MEDIA_EVENT_UPDATE_INSTALLED);
+        }
+    }
+
+    // The installation moved on (the installer's thread, or the thread that
+    // called apply_update).
+    void on_install_change(uxplay::install_state const &install)
+    {
+        bridge_state &state = bridge();
+        if (uxplay::about_window *const about = state.about.load(std::memory_order_acquire); about != nullptr)
+        {
+            about->set_install(install);
+        }
+        if (install.phase != uxplay::install_phase::ready)
+        {
+            return;
+        }
+        // Put in place at once, unless a stream is on screen: the restart
+        // would cut it.  Then it waits for the stream's end, or for the user
+        // to say "now" in the About window.
+        uxplay::media_engine *const ready = state.engine.load(std::memory_order_acquire);
+        if (ready != nullptr && ready->showing_video())
+        {
+            uxplay::log::info("update: {} is ready; it is put in place when the stream ends, or when the user says so",
+                              install.version.text());
+            return;
+        }
+        apply_update();
+    }
+
+    // "Update now" (the About window's thread): the newest release is asked
+    // for afresh, so that what is installed is what is the newest now, and
+    // installed when the answer names a newer one (on_update_change).
+    void start_install()
+    {
+        bridge_state &state = bridge();
+        if (uxplay::update_checker *const updates = state.updates.load(std::memory_order_acquire); updates != nullptr)
+        {
+            state.install_wanted.store(true);
+            updates->check_now();
+        }
+    }
+
+    // A button beside a row of "This PC" (the About window's thread).  The
+    // repair itself runs on a thread of its own; the PC is measured again
+    // when it is over, whatever came of it.
+    void run_repair(uxplay::report_action action)
+    {
+        bridge_state &state = bridge();
+        if (action == uxplay::report_action::install_update)
+        {
+            start_install();
+            request_report();
+            return;
+        }
+        // the window the user just clicked in: a consent prompt belongs to it
+        HWND const owner = GetForegroundWindow();
+        if (action == uxplay::report_action::enable_usb_adapter)
+        {
+            if (uxplay::usb_link_monitor *const link = state.usb_link.load(std::memory_order_acquire); link != nullptr)
+            {
+                link->enable_link_adapter(owner); // its result arrives in on_admin_result
+            }
+            else
+            {
+                request_report();
+            }
+            return;
+        }
+        if (!uxplay::repairs(action) || state.repair_busy.exchange(true))
+        {
+            request_report(); // nothing was started: the page shows the PC as it is
+            return;
+        }
+        try
+        {
+            std::thread{[action, owner]
+            {
+                uxplay::repair_outcome const outcome = uxplay::repair(action, owner);
+                bridge_state &current = bridge();
+                {
+                    std::scoped_lock lock{current.repair_mutex};
+                    if (current.running)
+                    {
+                        if (outcome.result == uxplay::repair_result::failed)
+                        {
+                            uxplay::log::warning("repair: {}", outcome.detail);
+                            if (uxplay::media_engine *const ready = current.engine.load(std::memory_order_acquire);
+                                ready != nullptr)
+                            {
+                                ready->notify(L"" UXPLAY_PRODUCT_NAME, ui_text_string(uxplay::ui_text::fix_failed_text));
+                            }
+                        }
+                        else
+                        {
+                            uxplay::log::info("repair: {}", outcome.detail);
+                        }
+                        request_report();
+                    }
+                }
+                current.repair_busy.store(false);
+            }}.detach();
+        }
+        catch (std::system_error const &cause)
+        {
+            state.repair_busy.store(false);
+            uxplay::log::warning("repair: no thread for it ({})", cause.what());
+            request_report();
+        }
+    }
+
     // The update check has something new to show (its thread, or the thread
     // of whoever switched "automatic").
     void on_update_change(uxplay::update_state const &update, bool by_request)
@@ -641,6 +799,16 @@ namespace
             if (settled && about->is_open())
             {
                 request_report(); // the row about this program says whether it is the newest
+            }
+        }
+        // "Update now" waited for this answer
+        if (update.phase != uxplay::update_phase::checking && state.install_wanted.exchange(false) &&
+            update.phase == uxplay::update_phase::newer_available && update.newest)
+        {
+            if (uxplay::update_installer *const installer = state.installer.load(std::memory_order_acquire);
+                installer != nullptr)
+            {
+                installer->prepare(*update.newest);
             }
         }
         // A newer release that a check nobody asked for has found: said once
@@ -745,6 +913,18 @@ namespace
         {
             request_report();
         };
+        about_events.on_report_action = [](uxplay::report_action action)
+        {
+            run_repair(action);
+        };
+        about_events.on_install_update = []
+        {
+            start_install();
+        };
+        about_events.on_apply_update = []
+        {
+            apply_update();
+        };
         state.about_owner = uxplay::about_window::create(std::move(identity), std::move(about_events));
         state.about.store(state.about_owner.get(), std::memory_order_release);
 
@@ -756,6 +936,25 @@ namespace
             }
         });
         state.collector.store(state.collector_owner.get(), std::memory_order_release);
+
+        uxplay::install_events install_events;
+        install_events.on_change = [](uxplay::install_state const &install)
+        {
+            on_install_change(install);
+        };
+        state.installer_owner = uxplay::update_installer::create(std::move(install_events));
+        state.installer.store(state.installer_owner.get(), std::memory_order_release);
+        if (state.installer_owner->updated_at_start())
+        {
+            // the program was replaced and started again by itself: say so
+            state.engine_owner->notify(ui_text_string(uxplay::ui_text::update_installed_title),
+                                       ui_text_with(uxplay::ui_text::update_installed_text, {L"" UXPLAY_VERSION_TEXT}),
+                                       uxplay::tray_command::about);
+        }
+        {
+            std::scoped_lock lock{state.repair_mutex};
+            state.running = true;
+        }
 
         uxplay::update_events update_events;
         update_events.on_change = [](uxplay::update_state const &update, bool by_request)
@@ -829,6 +1028,7 @@ namespace
             {
                 return;
             }
+            current.session_ending.store(true);
             ResetEvent(current.network_stopped_event);
             emit(NATIVE_MEDIA_EVENT_SESSION_ENDING);
             if (WaitForSingleObject(current.network_stopped_event, session_end_wait_ms) != WAIT_OBJECT_0)
@@ -939,6 +1139,7 @@ namespace
             case uxplay::tray_command::toggle_always_on_top:
             case uxplay::tray_command::toggle_mute:
             case uxplay::tray_command::crop_select:
+            case uxplay::tray_command::save_screenshot:
                 break; // handled by the window / the engine
             }
         };
@@ -1137,8 +1338,18 @@ extern "C" void native_media_stop(void)
     {
         state.about_owner->close();
     }
+    {
+        // a repair that is still waiting (for an answer to a consent prompt,
+        // say) is left alone: once it is over it finds nothing to report to
+        std::scoped_lock repair_lock{state.repair_mutex};
+        state.running = false;
+    }
     state.updates.store(nullptr);
     state.updates_owner.reset();
+    // (the installer after the check, which may hand it a release; its
+    // thread reports to the About object and asks the engine)
+    state.installer.store(nullptr);
+    state.installer_owner.reset();
     state.collector.store(nullptr);
     state.collector_owner.reset();
     state.about.store(nullptr);
@@ -1362,8 +1573,23 @@ extern "C" void native_media_airplay_video_stop(void)
         ready->video_stop(media_source::airplay);
     }
     state.stream_width.store(0);
-    std::scoped_lock lock{state.mapping_mutex};
-    state.remote_to_local_offset.reset();
+    {
+        std::scoped_lock lock{state.mapping_mutex};
+        state.remote_to_local_offset.reset();
+    }
+    // an update that waited for the stream to end is put in place now
+    if (uxplay::update_installer *const installer = state.installer.load(std::memory_order_acquire);
+        installer != nullptr && installer->current().phase == uxplay::install_phase::ready)
+    {
+        uxplay::log::info("update: the stream ended; the release that was ready is put in place");
+        apply_update();
+    }
+}
+
+extern "C" const wchar_t *native_media_restart_target(void)
+{
+    static std::wstring const target = uxplay::update_installer::restart_target().wstring();
+    return target.c_str();
 }
 
 extern "C" void native_media_airplay_audio_configure(unsigned char compression_type, bool timestamp_sync,

@@ -195,9 +195,15 @@ target_sources( uxplay_native
       src/uxplay_audio_decoder.cppm
       src/uxplay_media_engine.cppm
       src/uxplay_usb_link.cppm
+      src/uxplay_elevation.cppm
+      src/uxplay_screenshot.cppm
+      src/uxplay_zip_archive.cppm
+      src/uxplay_release_signature.cppm
       src/uxplay_update_check.cppm
+      src/uxplay_update_install.cppm
       src/uxplay_build_info.cppm
       src/uxplay_system_report.cppm
+      src/uxplay_system_repair.cppm
       src/uxplay_about_window.cppm
   PRIVATE
     src/uxplay_clock.cpp
@@ -216,9 +222,15 @@ target_sources( uxplay_native
     src/uxplay_audio_decoder.cpp
     src/uxplay_media_engine.cpp
     src/uxplay_usb_link.cpp
+    src/uxplay_elevation.cpp
+    src/uxplay_screenshot.cpp
+    src/uxplay_zip_archive.cpp
+    src/uxplay_release_signature.cpp
     src/uxplay_update_check.cpp
+    src/uxplay_update_install.cpp
     src/uxplay_build_info.cpp
     src/uxplay_system_report.cpp
+    src/uxplay_system_repair.cpp
     src/uxplay_about_window.cpp
     src/native_media_bridge.cpp )
 # the two tables written above (the compiler's own list of included files does
@@ -241,7 +253,7 @@ target_link_libraries( uxplay_native PUBLIC
   uxplay_base phone_control
   avcodec swresample avutil
   d3d11 dxgi dwmapi avrt ole32 oleaut32 uuid user32 gdi32 bcrypt ws2_32 crypt32 iphlpapi cfgmgr32 d2d1 dwrite
-  imm32 shcore )
+  imm32 shcore windowscodecs version shell32 )
 
 # ---- tests (not part of the shipped program) -------------------------------
 option( UXPLAY_NATIVE_TESTS "Build the native engine tests" ON )

@@ -2780,6 +2780,473 @@ namespace uxplay
               L"Giấy phép",
               L"สัญญาอนุญาต",
               L"Лицензия"}},
+            {ui_text::screenshot,
+             {L"截圖",
+              L"截图",
+              L"Screenshot",
+              L"スクリーンショット",
+              L"스크린샷",
+              L"Captura de pantalla",
+              L"Bildschirmfoto",
+              L"Capture d’écran",
+              L"Chụp ảnh màn hình",
+              L"จับภาพหน้าจอ",
+              L"Снимок экрана"}},
+            {ui_text::screenshot_saved_copied,
+             {L"截圖已儲存並複製",
+              L"截图已保存并复制",
+              L"Screenshot saved and copied",
+              L"スクリーンショットを保存してコピーしました",
+              L"스크린샷을 저장하고 복사했습니다",
+              L"Captura guardada y copiada",
+              L"Bildschirmfoto gespeichert und kopiert",
+              L"Capture enregistrée et copiée",
+              L"Đã lưu và sao chép ảnh chụp màn hình",
+              L"บันทึกและคัดลอกภาพหน้าจอแล้ว",
+              L"Снимок экрана сохранен и скопирован"}},
+            {ui_text::screenshot_saved,
+             {L"截圖已儲存",
+              L"截图已保存",
+              L"Screenshot saved",
+              L"スクリーンショットを保存しました",
+              L"스크린샷을 저장했습니다",
+              L"Captura guardada",
+              L"Bildschirmfoto gespeichert",
+              L"Capture enregistrée",
+              L"Đã lưu ảnh chụp màn hình",
+              L"บันทึกภาพหน้าจอแล้ว",
+              L"Снимок экрана сохранен"}},
+            {ui_text::screenshot_failed,
+             {L"截圖失敗，詳見記錄檔",
+              L"截图失败，详见日志",
+              L"Screenshot failed; see the log file",
+              L"スクリーンショットを保存できませんでした。ログファイルを確認してください",
+              L"스크린샷을 저장하지 못했습니다. 로그 파일을 확인하세요",
+              L"No se pudo guardar la captura; consulte el archivo de registro",
+              L"Bildschirmfoto fehlgeschlagen. Details stehen in der Protokolldatei",
+              L"Échec de la capture ; consultez le fichier journal",
+              L"Không chụp được màn hình; xem chi tiết trong tệp nhật ký",
+              L"จับภาพหน้าจอไม่สำเร็จ โปรดดูไฟล์บันทึก",
+              L"Не удалось сделать снимок экрана. Подробности — в файле журнала"}},
+            {ui_text::update_install,
+             {L"立即更新",
+              L"立即更新",
+              L"Update now",
+              L"今すぐアップデート",
+              L"지금 업데이트",
+              L"Actualizar ahora",
+              L"Jetzt aktualisieren",
+              L"Mettre à jour maintenant",
+              L"Cập nhật ngay",
+              L"อัปเดตตอนนี้",
+              L"Обновить сейчас"}},
+            {ui_text::update_retry,
+             {L"再試一次",
+              L"重试",
+              L"Try again",
+              L"もう一度試す",
+              L"다시 시도",
+              L"Reintentar",
+              L"Erneut versuchen",
+              L"Réessayer",
+              L"Thử lại",
+              L"ลองอีกครั้ง",
+              L"Повторить"}},
+            {ui_text::update_downloading,
+             {L"正在下載 {}…",
+              L"正在下载 {}…",
+              L"Downloading {}…",
+              L"{} をダウンロードしています…",
+              L"{} 다운로드 중…",
+              L"Descargando {}…",
+              L"{} wird heruntergeladen…",
+              L"Téléchargement de {}…",
+              L"Đang tải xuống {}…",
+              L"กำลังดาวน์โหลด {}…",
+              L"Скачивание {}…"}},
+            {ui_text::update_unpacking,
+             {L"正在檢查並解開 {}…",
+              L"正在检查并解压 {}…",
+              L"Checking and unpacking {}…",
+              L"{} を確認して展開しています…",
+              L"{} 확인 및 압축 해제 중…",
+              L"Comprobando y descomprimiendo {}…",
+              L"{} wird geprüft und entpackt…",
+              L"Vérification et décompression de {}…",
+              L"Đang kiểm tra và giải nén {}…",
+              L"กำลังตรวจสอบและแตกไฟล์ {}…",
+              L"Проверка и распаковка {}…"}},
+            {ui_text::update_ready,
+             {L"{} 已準備好",
+              L"{} 已准备好",
+              L"{} is ready",
+              L"{} の準備ができました",
+              L"{} 준비 완료",
+              L"La versión {} está lista",
+              L"{} ist bereit",
+              L"La version {} est prête",
+              L"Phiên bản {} đã sẵn sàng",
+              L"เวอร์ชัน {} พร้อมแล้ว",
+              L"Версия {} готова"}},
+            {ui_text::update_ready_text,
+             {L"現在正在鏡像，所以先不重新啟動。鏡像一結束，MirrorDock 就會自己換成新版本；也可以按「立即重新啟動」現在就換。",
+              L"现在正在镜像，所以先不重新启动。镜像一结束，MirrorDock 就会自动换成新版本；也可以点“立即重新启动”现在就换。",
+              L"Mirroring is running, so MirrorDock does not restart yet. It switches to the new version as soon"
+              L" as mirroring ends, or right now if you choose \"Restart now\".",
+              L"ミラーリング中のため、まだ再起動しません。ミラーリングが終わると自動的に新しいバージョンに切り替わります。「今すぐ再起動」を選べば、すぐに切り替えられます。",
+              L"미러링 중이라 아직 다시 시작하지 않습니다. 미러링이 끝나면 자동으로 새 버전으로 바뀌며, ‘지금 다시 시작’을 누르면 바로 바뀝니다.",
+              L"Hay una duplicación en curso, así que MirrorDock aún no se reinicia. Pasará a la nueva versión e"
+              L"n cuanto termine la duplicación, o ahora mismo si elige «Reiniciar ahora».",
+              L"Gerade läuft eine Spiegelung, deshalb startet MirrorDock noch nicht neu. Sobald sie endet, wechs"
+              L"elt MirrorDock zur neuen Version – oder sofort, wenn Sie „Jetzt neu starten“ wählen.",
+              L"Une recopie de l’écran est en cours : MirrorDock ne redémarre donc pas encore. Il passera à la n"
+              L"ouvelle version dès qu’elle se terminera, ou tout de suite si vous choisissez « Redémarrer maint"
+              L"enant ».",
+              L"Đang phản chiếu nên MirrorDock chưa khởi động lại. Ngay khi phản chiếu kết thúc, MirrorDock sẽ t"
+              L"ự chuyển sang phiên bản mới; hoặc chọn “Khởi động lại ngay” để chuyển luôn.",
+              L"ขณะนี้กำลังสะท้อนภาพหน้าจออยู่ MirrorDock จึงยังไม่เริ่มใหม่ เมื่อการสะท้อนภาพสิ้นสุด MirrorDock"
+              L" จะเปลี่ยนเป็นเวอร์ชันใหม่เอง หรือเลือก “เริ่มใหม่ตอนนี้” เพื่อเปลี่ยนทันที",
+              L"Сейчас идет дублирование экрана, поэтому MirrorDock пока не перезапускается. Он перейдет на нову"
+              L"ю версию, как только дублирование закончится, — или сразу, если выбрать «Перезапустить сейчас»."}},
+            {ui_text::update_restart_now,
+             {L"立即重新啟動",
+              L"立即重新启动",
+              L"Restart now",
+              L"今すぐ再起動",
+              L"지금 다시 시작",
+              L"Reiniciar ahora",
+              L"Jetzt neu starten",
+              L"Redémarrer maintenant",
+              L"Khởi động lại ngay",
+              L"เริ่มใหม่ตอนนี้",
+              L"Перезапустить сейчас"}},
+            {ui_text::update_restarting,
+             {L"正在重新啟動…",
+              L"正在重新启动…",
+              L"Restarting…",
+              L"再起動しています…",
+              L"다시 시작하는 중…",
+              L"Reiniciando…",
+              L"Neustart läuft…",
+              L"Redémarrage…",
+              L"Đang khởi động lại…",
+              L"กำลังเริ่มใหม่…",
+              L"Перезапуск…"}},
+            {ui_text::update_install_failed,
+             {L"更新沒有安裝",
+              L"更新未安装",
+              L"The update was not installed",
+              L"アップデートをインストールできませんでした",
+              L"업데이트를 설치하지 못했습니다",
+              L"No se instaló la actualización",
+              L"Das Update wurde nicht installiert",
+              L"La mise à jour n’a pas été installée",
+              L"Chưa cài đặt được bản cập nhật",
+              L"ไม่ได้ติดตั้งการอัปเดต",
+              L"Обновление не установлено"}},
+            {ui_text::update_problem_no_signature,
+             {L"這個版本沒有附簽章，MirrorDock 無法確認它的來源，所以不會自動安裝。可以按「下載」自行更新。",
+              L"这个版本没有附带签名，MirrorDock 无法确认它的来源，所以不会自动安装。可以点“下载”自行更新。",
+              L"This release carries no signature, so MirrorDock cannot tell where it comes from and does not in"
+              L"stall it. \"Download\" lets you update by hand.",
+              L"このリリースには署名がないため、MirrorDock は配布元を確認できず、自動ではインストールしません。「ダウンロード」から手動でアップデートできます。",
+              L"이 릴리스에는 서명이 없어 MirrorDock이 출처를 확인할 수 없으므로 자동으로 설치하지 않습니다. ‘다운로드’로 직접 업데이트할 수 있습니다.",
+              L"Esta versión no lleva firma, por lo que MirrorDock no puede comprobar su procedencia y no la ins"
+              L"tala. Con «Descargar» puede actualizar a mano.",
+              L"Diese Version trägt keine Signatur. MirrorDock kann ihre Herkunft daher nicht prüfen und install"
+              L"iert sie nicht. Über „Herunterladen“ können Sie von Hand aktualisieren.",
+              L"Cette version ne porte pas de signature : MirrorDock ne peut pas vérifier sa provenance et ne l’"
+              L"installe pas. « Télécharger » vous permet de faire la mise à jour vous-même.",
+              L"Bản phát hành này không có chữ ký nên MirrorDock không thể xác nhận nguồn gốc và không tự cài đặ"
+              L"t. Bạn có thể dùng “Tải xuống” để tự cập nhật.",
+              L"รุ่นนี้ไม่มีลายเซ็น MirrorDock จึงตรวจสอบที่มาไม่ได้และจะไม่ติดตั้งให้ คุณอัปเดตเองได้โดยเลือก “"
+              L"ดาวน์โหลด”",
+              L"У этого выпуска нет подписи, поэтому MirrorDock не может проверить его происхождение и не устана"
+              L"вливает его. Обновиться вручную можно с помощью кнопки «Скачать»."}},
+            {ui_text::update_problem_download,
+             {L"下載沒有完成。請確認網路連線後再試一次。",
+              L"下载没有完成。请检查网络连接后重试。",
+              L"The download did not finish. Check the internet connection and try again.",
+              L"ダウンロードが完了しませんでした。インターネット接続を確認して、もう一度お試しください。",
+              L"다운로드가 완료되지 않았습니다. 인터넷 연결을 확인한 다음 다시 시도하세요.",
+              L"La descarga no terminó. Compruebe la conexión a Internet y vuelva a intentarlo.",
+              L"Der Download wurde nicht abgeschlossen. Prüfen Sie die Internetverbindung und versuchen Sie es e"
+              L"rneut.",
+              L"Le téléchargement n’a pas abouti. Vérifiez la connexion Internet, puis réessayez.",
+              L"Tải xuống chưa hoàn tất. Hãy kiểm tra kết nối Internet rồi thử lại.",
+              L"ดาวน์โหลดไม่เสร็จ โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ตแล้วลองอีกครั้ง",
+              L"Скачивание не завершилось. Проверьте подключение к интернету и повторите попытку."}},
+            {ui_text::update_problem_not_genuine,
+             {L"下載到的檔案不是專案發布的那一份，沒有安裝。請稍後再試；若一再發生，請到專案頁面回報。",
+              L"下载到的文件不是项目发布的那一份，没有安装。请稍后再试；如果反复出现，请到项目页面反馈。",
+              L"The file that arrived is not the one the project published, so it was not installed. Try again l"
+              L"ater; if it keeps happening, report it on the project's page.",
+              L"届いたファイルはプロジェクトが公開したものと一致しないため、インストールしませんでした。しばらくしてからもう一度お試しください。繰り返し起きる場合は、プロジェクトのページで報告してください。",
+              L"받은 파일이 프로젝트에서 배포한 파일과 달라 설치하지 않았습니다. 잠시 후 다시 시도하세요. 계속 반복되면 프로젝트 페이지에 알려 주세요.",
+              L"El archivo recibido no es el que publicó el proyecto, así que no se instaló. Vuelva a intentarlo"
+              L" más tarde; si se repite, comuníquelo en la página del proyecto.",
+              L"Die empfangene Datei ist nicht die, die das Projekt veröffentlicht hat, und wurde deshalb nicht "
+              L"installiert. Versuchen Sie es später erneut; wiederholt sich das, melden Sie es bitte auf der Pr"
+              L"ojektseite.",
+              L"Le fichier reçu n’est pas celui que le projet a publié ; il n’a donc pas été installé. Réessayez"
+              L" plus tard ; si cela se reproduit, signalez-le sur la page du projet.",
+              L"Tệp nhận được không phải là tệp mà dự án đã phát hành nên không được cài đặt. Hãy thử lại sau; n"
+              L"ếu vẫn lặp lại, vui lòng báo trên trang của dự án.",
+              L"ไฟล์ที่ได้รับไม่ใช่ไฟล์ที่โครงการเผยแพร่ จึงไม่ได้ติดตั้ง โปรดลองอีกครั้งในภายหลัง หากยังเกิดซ้ำ"
+              L" โปรดแจ้งที่หน้าของโครงการ",
+              L"Полученный файл не совпадает с тем, что опубликовал проект, поэтому он не установлен. Повторите "
+              L"попытку позже; если это повторяется, сообщите об этом на странице проекта."}},
+            {ui_text::update_problem_package,
+             {L"更新檔損壞，或內容和這個版本不符，沒有安裝。請再試一次，或按「下載」自行更新。",
+              L"更新包已损坏，或内容与这个版本不符，没有安装。请重试，或点“下载”自行更新。",
+              L"The package is damaged or is not what this release should contain, so it was not installed. Try "
+              L"again, or use \"Download\" to update by hand.",
+              L"パッケージが壊れているか、このリリースの内容と一致しないため、インストールしませんでした。もう一度試すか、「ダウンロード」から手動でアップデートしてください。",
+              L"패키지가 손상되었거나 이 릴리스의 내용과 달라 설치하지 않았습니다. 다시 시도하거나 ‘다운로드’로 직접 업데이트하세요.",
+              L"El paquete está dañado o no es lo que debería contener esta versión, así que no se instaló. Vuel"
+              L"va a intentarlo o use «Descargar» para actualizar a mano.",
+              L"Das Paket ist beschädigt oder enthält nicht, was diese Version enthalten sollte, und wurde desha"
+              L"lb nicht installiert. Versuchen Sie es erneut oder aktualisieren Sie über „Herunterladen“ von Ha"
+              L"nd.",
+              L"Le paquet est endommagé ou ne contient pas ce que cette version devrait contenir ; il n’a donc p"
+              L"as été installé. Réessayez, ou utilisez « Télécharger » pour faire la mise à jour vous-même.",
+              L"Gói cập nhật bị hỏng hoặc không đúng với nội dung của bản phát hành này nên không được cài đặt. "
+              L"Hãy thử lại, hoặc dùng “Tải xuống” để tự cập nhật.",
+              L"แพ็กเกจเสียหายหรือมีเนื้อหาไม่ตรงกับรุ่นนี้ จึงไม่ได้ติดตั้ง โปรดลองอีกครั้ง หรือเลือก “ดาวน์โหล"
+              L"ด” เพื่ออัปเดตเอง",
+              L"Пакет поврежден или содержит не то, что должно быть в этом выпуске, поэтому он не установлен. По"
+              L"вторите попытку или обновитесь вручную с помощью кнопки «Скачать»."}},
+            {ui_text::update_problem_folder,
+             {L"MirrorDock 所在的資料夾無法寫入，沒辦法換上新版本，原本的檔案都沒有變動。請按「下載」，把新版本解壓縮到你想放的位置。",
+              L"MirrorDock 所在的文件夹无法写入，没办法换上新版本，原有文件都没有改动。请点“下载”，把新版本解压到你想放的位置。",
+              L"The folder MirrorDock runs from cannot be written to, so the new version could not be put in pla"
+              L"ce; your files are as they were. Use \"Download\" and unpack the new version where you want it.",
+              L"MirrorDock のあるフォルダーに書き込めないため、新しいバージョンに置き換えられませんでした。ファイルは元のままです。「ダウンロード」を選び、新しいバージョンをお好みの場所に展開してく"
+              L"ださい。",
+              L"MirrorDock이 있는 폴더에 쓸 수 없어 새 버전으로 바꾸지 못했습니다. 기존 파일은 그대로입니다. ‘다운로드’를 눌러 새 버전을 원하는 위치에 압축 해제하세요.",
+              L"No se puede escribir en la carpeta de MirrorDock, por lo que no se pudo colocar la nueva versión"
+              L"; sus archivos siguen como estaban. Use «Descargar» y descomprima la nueva versión donde prefier"
+              L"a.",
+              L"In den Ordner von MirrorDock kann nicht geschrieben werden, deshalb ließ sich die neue Version n"
+              L"icht einsetzen; Ihre Dateien sind unverändert. Wählen Sie „Herunterladen“ und entpacken Sie die "
+              L"neue Version an einem Ort Ihrer Wahl.",
+              L"Impossible d’écrire dans le dossier de MirrorDock : la nouvelle version n’a pas pu être mise en "
+              L"place, et vos fichiers sont restés tels quels. Utilisez « Télécharger » et décompressez la nouve"
+              L"lle version à l’endroit de votre choix.",
+              L"Không ghi được vào thư mục chứa MirrorDock nên không thể thay bằng phiên bản mới; các tệp của bạ"
+              L"n vẫn như cũ. Hãy dùng “Tải xuống” rồi giải nén phiên bản mới vào nơi bạn muốn.",
+              L"เขียนลงในโฟลเดอร์ของ MirrorDock ไม่ได้ จึงเปลี่ยนเป็นเวอร์ชันใหม่ไม่ได้ ไฟล์ของคุณยังคงเหมือนเดิ"
+              L"ม โปรดเลือก “ดาวน์โหลด” แล้วแตกไฟล์เวอร์ชันใหม่ไว้ในตำแหน่งที่ต้องการ",
+              L"В папку MirrorDock нельзя записать, поэтому установить новую версию не удалось; ваши файлы остал"
+              L"ись без изменений. Нажмите «Скачать» и распакуйте новую версию в удобное место."}},
+            {ui_text::update_problem_other,
+             {L"發生未預期的問題，詳細原因寫在記錄檔裡。可以按「下載」自行更新。",
+              L"发生了意外的问题，详细原因写在日志里。可以点“下载”自行更新。",
+              L"Something unexpected went wrong; the log file has the details. \"Download\" lets you update by h"
+              L"and.",
+              L"予期しない問題が発生しました。詳細はログファイルに記録されています。「ダウンロード」から手動でアップデートできます。",
+              L"예기치 않은 문제가 발생했습니다. 자세한 내용은 로그 파일에 기록되어 있습니다. ‘다운로드’로 직접 업데이트할 수 있습니다.",
+              L"Ocurrió un problema inesperado; los detalles están en el archivo de registro. Con «Descargar» pu"
+              L"ede actualizar a mano.",
+              L"Ein unerwartetes Problem ist aufgetreten; Details stehen in der Protokolldatei. Über „Herunterla"
+              L"den“ können Sie von Hand aktualisieren.",
+              L"Un problème inattendu est survenu ; les détails figurent dans le fichier journal. « Télécharger "
+              L"» vous permet de faire la mise à jour vous-même.",
+              L"Đã xảy ra sự cố không mong muốn; xem chi tiết trong tệp nhật ký. Bạn có thể dùng “Tải xuống” để "
+              L"tự cập nhật.",
+              L"เกิดปัญหาที่ไม่คาดคิด ดูรายละเอียดได้ในไฟล์บันทึก คุณอัปเดตเองได้โดยเลือก “ดาวน์โหลด”",
+              L"Произошла непредвиденная ошибка. Подробности — в файле журнала. Обновиться вручную можно с помощ"
+              L"ью кнопки «Скачать»."}},
+            {ui_text::update_installed_title,
+             {L"MirrorDock 已更新",
+              L"MirrorDock 已更新",
+              L"MirrorDock was updated",
+              L"MirrorDock をアップデートしました",
+              L"MirrorDock을 업데이트했습니다",
+              L"MirrorDock se ha actualizado",
+              L"MirrorDock wurde aktualisiert",
+              L"MirrorDock a été mis à jour",
+              L"MirrorDock đã được cập nhật",
+              L"อัปเดต MirrorDock แล้ว",
+              L"MirrorDock обновлен"}},
+            {ui_text::update_installed_text,
+             {L"現在是 {} 版。",
+              L"现在是 {} 版。",
+              L"This is version {} now.",
+              L"バージョン {} になりました。",
+              L"이제 버전 {}입니다.",
+              L"Ahora es la versión {}.",
+              L"Dies ist jetzt Version {}.",
+              L"Vous utilisez maintenant la version {}.",
+              L"Hiện là phiên bản {}.",
+              L"ขณะนี้เป็นเวอร์ชัน {}",
+              L"Теперь это версия {}."}},
+            {ui_text::fix_allow_firewall,
+             {L"允許通過防火牆",
+              L"允许通过防火墙",
+              L"Allow through the firewall",
+              L"ファイアウォールで許可",
+              L"방화벽에서 허용",
+              L"Permitir en el firewall",
+              L"In der Firewall zulassen",
+              L"Autoriser dans le pare-feu",
+              L"Cho phép qua tường lửa",
+              L"อนุญาตผ่านไฟร์วอลล์",
+              L"Разрешить в брандмауэре"}},
+            {ui_text::fix_open_firewall,
+             {L"開啟防火牆設定",
+              L"打开防火墙设置",
+              L"Open firewall settings",
+              L"ファイアウォールの設定を開く",
+              L"방화벽 설정 열기",
+              L"Abrir la configuración del firewall",
+              L"Firewall-Einstellungen öffnen",
+              L"Ouvrir les paramètres du pare-feu",
+              L"Mở cài đặt tường lửa",
+              L"เปิดการตั้งค่าไฟร์วอลล์",
+              L"Открыть параметры брандмауэра"}},
+            {ui_text::fix_open_network,
+             {L"開啟網路設定",
+              L"打开网络设置",
+              L"Open network settings",
+              L"ネットワークの設定を開く",
+              L"네트워크 설정 열기",
+              L"Abrir la configuración de red",
+              L"Netzwerkeinstellungen öffnen",
+              L"Ouvrir les paramètres réseau",
+              L"Mở cài đặt mạng",
+              L"เปิดการตั้งค่าเครือข่าย",
+              L"Открыть параметры сети"}},
+            {ui_text::fix_open_display,
+             {L"開啟顯示設定",
+              L"打开显示设置",
+              L"Open display settings",
+              L"ディスプレイの設定を開く",
+              L"디스플레이 설정 열기",
+              L"Abrir la configuración de pantalla",
+              L"Anzeigeeinstellungen öffnen",
+              L"Ouvrir les paramètres d’affichage",
+              L"Mở cài đặt màn hình",
+              L"เปิดการตั้งค่าจอแสดงผล",
+              L"Открыть параметры дисплея"}},
+            {ui_text::fix_open_power,
+             {L"開啟電源設定",
+              L"打开电源设置",
+              L"Open power settings",
+              L"電源の設定を開く",
+              L"전원 설정 열기",
+              L"Abrir la configuración de energía",
+              L"Energieeinstellungen öffnen",
+              L"Ouvrir les paramètres d’alimentation",
+              L"Mở cài đặt nguồn",
+              L"เปิดการตั้งค่าพลังงาน",
+              L"Открыть параметры питания"}},
+            {ui_text::fix_open_sound,
+             {L"開啟音效設定",
+              L"打开声音设置",
+              L"Open sound settings",
+              L"サウンドの設定を開く",
+              L"소리 설정 열기",
+              L"Abrir la configuración de sonido",
+              L"Soundeinstellungen öffnen",
+              L"Ouvrir les paramètres de son",
+              L"Mở cài đặt âm thanh",
+              L"เปิดการตั้งค่าเสียง",
+              L"Открыть параметры звука"}},
+            {ui_text::fix_open_windows_update,
+             {L"開啟 Windows Update",
+              L"打开 Windows 更新",
+              L"Open Windows Update",
+              L"Windows Update を開く",
+              L"Windows 업데이트 열기",
+              L"Abrir Windows Update",
+              L"Windows Update öffnen",
+              L"Ouvrir Windows Update",
+              L"Mở Windows Update",
+              L"เปิด Windows Update",
+              L"Открыть Центр обновления Windows"}},
+            {ui_text::fix_install_apple_support,
+             {L"安裝 Apple 的 USB 支援",
+              L"安装 Apple 的 USB 支持",
+              L"Install Apple's USB support",
+              L"Apple の USB サポートをインストール",
+              L"Apple USB 지원 설치",
+              L"Instalar la compatibilidad USB de Apple",
+              L"USB-Unterstützung von Apple installieren",
+              L"Installer la prise en charge USB d’Apple",
+              L"Cài đặt hỗ trợ USB của Apple",
+              L"ติดตั้งการรองรับ USB ของ Apple",
+              L"Установить поддержку USB от Apple"}},
+            {ui_text::fix_start_apple_service,
+             {L"啟動 Apple 的服務",
+              L"启动 Apple 的服务",
+              L"Start Apple's service",
+              L"Apple のサービスを開始",
+              L"Apple 서비스 시작",
+              L"Iniciar el servicio de Apple",
+              L"Apple-Dienst starten",
+              L"Démarrer le service d’Apple",
+              L"Khởi động dịch vụ của Apple",
+              L"เริ่มบริการของ Apple",
+              L"Запустить службу Apple"}},
+            {ui_text::fix_failed_text,
+             {L"這項修復沒有完成，詳細原因寫在記錄檔裡。",
+              L"这项修复没有完成，详细原因写在日志里。",
+              L"This repair was not made; the log file has the details.",
+              L"この修復は完了しませんでした。詳細はログファイルに記録されています。",
+              L"이 복구를 완료하지 못했습니다. 자세한 내용은 로그 파일에 기록되어 있습니다.",
+              L"No se pudo completar esta reparación; los detalles están en el archivo de registro.",
+              L"Diese Reparatur wurde nicht abgeschlossen; Details stehen in der Protokolldatei.",
+              L"Cette réparation n’a pas abouti ; les détails figurent dans le fichier journal.",
+              L"Chưa thực hiện được thao tác sửa này; xem chi tiết trong tệp nhật ký.",
+              L"การซ่อมแซมนี้ไม่สำเร็จ ดูรายละเอียดได้ในไฟล์บันทึก",
+              L"Выполнить это исправление не удалось. Подробности — в файле журнала."}},
+            {ui_text::value_firewall_shut,
+             {L"封鎖所有連入連線",
+              L"阻止所有传入连接",
+              L"Blocks all incoming connections",
+              L"すべての着信接続をブロックしています",
+              L"들어오는 연결을 모두 차단함",
+              L"Bloquea todas las conexiones entrantes",
+              L"Blockiert alle eingehenden Verbindungen",
+              L"Bloque toutes les connexions entrantes",
+              L"Đang chặn mọi kết nối đến",
+              L"บล็อกการเชื่อมต่อขาเข้าทั้งหมด",
+              L"Блокирует все входящие подключения"}},
+            {ui_text::advice_firewall_shut,
+             {L"Windows 防火牆現在不讓任何連線進來，連已允許的應用程式也一樣，所以 iPhone 連不上 MirrorDock。請到「Windows 安全性 > 防火牆與網路保護」，在目前使用的網路取"
+              L"消「封鎖所有連入連線」。",
+              L"Windows 防火墙现在不让任何连接进来，已允许的应用也一样，所以 iPhone 连不上 MirrorDock。请在“Windows 安全中心 > 防火墙和网络保护”中，为当前使用的网络取消"
+              L"“阻止所有传入连接”。",
+              L"Windows Firewall lets no connection in at present, not even to allowed apps, so the iPhone canno"
+              L"t reach MirrorDock. In \"Windows Security > Firewall & network protection\", open the network in"
+              L" use and clear \"Blocks all incoming connections\".",
+              L"Windows ファイアウォールが現在、許可済みのアプリも含めてすべての着信接続をブロックしているため、iPhone は MirrorDock に接続できません。「Windows セキュリティ"
+              L" > ファイアウォールとネットワーク保護」で使用中のネットワークを開き、「すべての着信接続をブロックします」をオフにしてください。",
+              L"Windows 방화벽이 지금 허용된 앱을 포함해 들어오는 연결을 모두 차단하고 있어 iPhone이 MirrorDock에 연결하지 못합니다. ‘Windows 보안 > 방화벽 "
+              L"및 네트워크 보호’에서 사용 중인 네트워크를 열고 ‘들어오는 연결을 모두 차단’을 끄세요.",
+              L"El Firewall de Windows no deja entrar ninguna conexión en este momento, ni siquiera a las aplica"
+              L"ciones permitidas, por lo que el iPhone no puede llegar a MirrorDock. En Seguridad de Windows > "
+              L"Firewall y protección de red, abra la red en uso y desactive «Bloquea todas las conexiones entra"
+              L"ntes».",
+              L"Die Windows-Firewall lässt derzeit keine Verbindung herein, auch nicht zu zugelassenen Apps; das"
+              L" iPhone kann MirrorDock deshalb nicht erreichen. Öffnen Sie unter „Windows-Sicherheit > Firewall"
+              L" & Netzwerkschutz“ das verwendete Netzwerk und deaktivieren Sie „Blockiert alle eingehenden Verb"
+              L"indungen“.",
+              L"Le Pare-feu Windows ne laisse entrer aucune connexion pour l’instant, pas même vers les applicat"
+              L"ions autorisées : l’iPhone ne peut donc pas joindre MirrorDock. Dans Sécurité Windows > Pare-feu"
+              L" et protection du réseau, ouvrez le réseau utilisé et désactivez « Bloque toutes les connexions "
+              L"entrantes ».",
+              L"Tường lửa Windows hiện không cho bất kỳ kết nối nào đi vào, kể cả tới các ứng dụng đã được cho p"
+              L"hép, nên iPhone không kết nối được tới MirrorDock. Trong “Bảo mật Windows > Tường lửa & bảo vệ m"
+              L"ạng”, hãy mở mạng đang dùng rồi tắt “Chặn tất cả kết nối đến”.",
+              L"ขณะนี้ไฟร์วอลล์ Windows ไม่ยอมให้การเชื่อมต่อใดเข้ามาเลย แม้แต่แอปที่อนุญาตไว้ iPhone จึงเชื่อมต"
+              L"่อกับ MirrorDock ไม่ได้ ไปที่ ความปลอดภัยของ Windows > ไฟร์วอลล์และการป้องกันเครือข่าย เปิดเครือ"
+              L"ข่ายที่ใช้อยู่ แล้วปิด “บล็อกการเชื่อมต่อขาเข้าทั้งหมด”",
+              L"Сейчас брандмауэр Windows не пропускает ни одного входящего подключения, даже к разрешенным прил"
+              L"ожениям, поэтому iPhone не может подключиться к MirrorDock. Откройте «Безопасность Windows» > «Б"
+              L"рандмауэр и защита сети», выберите используемую сеть и отключите параметр «Блокировать все входя"
+              L"щие подключения»."}},
         }};
 
         consteval bool text_table_is_complete()
@@ -2806,16 +3273,15 @@ namespace uxplay
 
         // ui_format fills the "{}" of a text in order: every language must have
         // as many of them as the English text
+        // (searched with find, which the compiler evaluates in few steps: a
+        // loop over every character of every text ran into its step limit
+        // once the table had grown)
         consteval std::size_t placeholder_count(std::wstring_view text)
         {
             std::size_t count = 0;
-            for (std::size_t index = 0; index + 1 < text.size(); ++index)
+            for (std::size_t at = text.find(L"{}"); at != std::wstring_view::npos; at = text.find(L"{}", at + 2))
             {
-                if (text[index] == L'{' && text[index + 1] == L'}')
-                {
-                    ++count;
-                    ++index;
-                }
+                ++count;
             }
             return count;
         }
@@ -2824,9 +3290,10 @@ namespace uxplay
         {
             for (text_row const &row : text_table)
             {
+                std::size_t const expected = placeholder_count(row.text[english_index]);
                 for (std::wstring_view const text : row.text)
                 {
-                    if (placeholder_count(text) != placeholder_count(row.text[english_index]))
+                    if (placeholder_count(text) != expected)
                     {
                         return false;
                     }

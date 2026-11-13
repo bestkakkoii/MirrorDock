@@ -30,6 +30,13 @@ namespace uxplay
         constexpr UINT fade_tick_ms = 15;
         constexpr int fade_in_step = 64;  // ~60 ms
         constexpr int fade_out_step = 24; // ~160 ms
+        // the notice: shown at once, stays this long, then fades like the bar
+        constexpr UINT_PTR notice_hold_timer_id = 3;
+        constexpr UINT_PTR notice_fade_timer_id = 4;
+        constexpr UINT notice_hold_ms = 1800;
+        constexpr float notice_height = 40.0F;
+        constexpr float notice_padding = 20.0F;
+        constexpr float notice_top_margin = 24.0F;
 
         // layout in device-independent pixels (scaled by the owner's DPI)
         constexpr float bar_height = 84.0F;
@@ -54,6 +61,9 @@ namespace uxplay
         constexpr std::wstring_view glyph_more = L"";
         constexpr std::wstring_view glyph_shield = L"";
 
+        // "Camera" in both icon fonts
+        constexpr std::wstring_view glyph_camera = L"";
+
         enum class element
         {
             none,
@@ -61,6 +71,7 @@ namespace uxplay
             wifi_only,
             data_guard,
             enable_adapter,
+            capture,
             mute,
             more,
             fullscreen
@@ -126,6 +137,16 @@ namespace uxplay
         element pressed = element::none;
         bool pointer_inside = false;
 
+        // the notice (see video_overlay::notice): its own window and surface
+        HWND notice_window = nullptr;
+        HDC notice_dc = nullptr;
+        HBITMAP notice_bitmap = nullptr;
+        HGDIOBJ notice_previous_bitmap = nullptr;
+        int notice_pixel_width = 0;
+        int notice_pixel_height = 0;
+        int notice_alpha = 0;
+        bool notice_shown = false;
+
         state() = default;
         state(state const &) = delete;
         state &operator=(state const &) = delete;
@@ -147,6 +168,10 @@ namespace uxplay
         void show();
         void begin_fade_out();
         void hide_now();
+        void show_notice(std::wstring_view text);
+        void place_notice();
+        void hide_notice();
+        void release_notice_surface();
         element hit(LPARAM lparam) const;
         void run(element id);
         LRESULT handle(UINT message, WPARAM wparam, LPARAM lparam);
@@ -160,10 +185,18 @@ namespace uxplay
         {
             KillTimer(window, idle_timer_id);
             KillTimer(window, fade_timer_id);
+            KillTimer(window, notice_hold_timer_id);
+            KillTimer(window, notice_fade_timer_id);
             SetWindowLongPtrW(window, GWLP_USERDATA, 0);
             DestroyWindow(window);
         }
+        if (notice_window != nullptr)
+        {
+            SetWindowLongPtrW(notice_window, GWLP_USERDATA, 0);
+            DestroyWindow(notice_window);
+        }
         release_surface();
+        release_notice_surface();
     }
 
     status video_overlay::state::create_resources()
@@ -403,6 +436,7 @@ namespace uxplay
             ui_string(model.fullscreen ? ui_text::exit_full_screen : ui_text::full_screen);
         std::wstring_view const more_label = ui_string(ui_text::more);
         std::wstring_view const mute_label = ui_string(model.muted ? ui_text::unmute : ui_text::mute);
+        std::wstring_view const capture_label = ui_string(ui_text::screenshot);
         std::wstring_view const prefer_usb_label = ui_string(ui_text::prefer_usb_link);
         std::wstring_view const wifi_only_label = ui_string(ui_text::wifi_only);
         float const segment_one = text_width(prefer_usb_label, button_format.Get()) + 2.0F * text_padding;
@@ -412,8 +446,8 @@ namespace uxplay
         {
             return text_width(label, button_format.Get()) + chip_icon_width + 6.0F + 2.0F * chip_padding;
         };
-        float const icons_width =
-            button_width(fullscreen_label) + button_width(more_label) + button_width(mute_label) + 2.0F * icon_gap;
+        float const icons_width = button_width(fullscreen_label) + button_width(more_label) +
+                                  button_width(mute_label) + button_width(capture_label) + 3.0F * icon_gap;
         float chips_width = 0.0F;
         if (model.offer_enable_adapter)
         {
@@ -447,6 +481,8 @@ namespace uxplay
         draw_icon_button(element::more, glyph_more, more_label, right, top, left_edge);
         right = left_edge - icon_gap;
         draw_icon_button(element::mute, model.muted ? glyph_mute : glyph_volume, mute_label, right, top, left_edge);
+        right = left_edge - icon_gap;
+        draw_icon_button(element::capture, glyph_camera, capture_label, right, top, left_edge);
         right = left_edge - gap;
 
         if (show_segmented)
@@ -678,6 +714,9 @@ namespace uxplay
         case element::mute:
             on_command(overlay_command::toggle_mute);
             break;
+        case element::capture:
+            on_command(overlay_command::save_screenshot);
+            break;
         case element::more:
             on_command(overlay_command::open_menu);
             break;
@@ -788,11 +827,174 @@ namespace uxplay
                 present();
                 return 0;
             }
+            if (wparam == notice_hold_timer_id)
+            {
+                KillTimer(window, notice_hold_timer_id);
+                SetTimer(window, notice_fade_timer_id, fade_tick_ms, nullptr);
+                return 0;
+            }
+            if (wparam == notice_fade_timer_id)
+            {
+                notice_alpha -= fade_out_step;
+                if (notice_alpha <= 0)
+                {
+                    hide_notice();
+                }
+                else
+                {
+                    place_notice();
+                }
+                return 0;
+            }
             break;
         default:
             break;
         }
         return DefWindowProcW(window, message, wparam, lparam);
+    }
+
+    // ---- the notice ------------------------------------------------------------
+
+    void video_overlay::state::release_notice_surface()
+    {
+        if (notice_dc != nullptr && notice_previous_bitmap != nullptr)
+        {
+            SelectObject(notice_dc, notice_previous_bitmap);
+        }
+        if (notice_bitmap != nullptr)
+        {
+            DeleteObject(notice_bitmap);
+        }
+        if (notice_dc != nullptr)
+        {
+            DeleteDC(notice_dc);
+        }
+        notice_dc = nullptr;
+        notice_bitmap = nullptr;
+        notice_previous_bitmap = nullptr;
+        notice_pixel_width = 0;
+        notice_pixel_height = 0;
+    }
+
+    void video_overlay::state::hide_notice()
+    {
+        KillTimer(window, notice_hold_timer_id);
+        KillTimer(window, notice_fade_timer_id);
+        if (notice_shown && notice_window != nullptr)
+        {
+            ShowWindow(notice_window, SW_HIDE);
+        }
+        notice_shown = false;
+        notice_alpha = 0;
+        release_notice_surface(); // drawn anew for the next text
+    }
+
+    // Puts the notice where it belongs on the owner (top, centred) with its
+    // present opacity.
+    void video_overlay::state::place_notice()
+    {
+        if (!notice_shown || notice_window == nullptr || notice_dc == nullptr)
+        {
+            return;
+        }
+        if (!IsWindowVisible(owner) || IsIconic(owner) != FALSE)
+        {
+            hide_notice();
+            return;
+        }
+        RECT client{};
+        GetClientRect(owner, &client);
+        POINT origin{0, 0};
+        ClientToScreen(owner, &origin);
+        float const scale = static_cast<float>(GetDpiForWindow(owner)) / 96.0F;
+        POINT place{origin.x + (static_cast<int>(client.right) - notice_pixel_width) / 2,
+                    origin.y + static_cast<int>(std::lround(notice_top_margin * scale))};
+        BLENDFUNCTION blend{};
+        blend.BlendOp = AC_SRC_OVER;
+        blend.SourceConstantAlpha = static_cast<BYTE>(std::clamp(notice_alpha, 0, 255));
+        blend.AlphaFormat = AC_SRC_ALPHA;
+        POINT source{0, 0};
+        SIZE size{notice_pixel_width, notice_pixel_height};
+        UpdateLayeredWindow(notice_window, nullptr, &place, &size, notice_dc, &source, 0, &blend, ULW_ALPHA);
+    }
+
+    void video_overlay::state::show_notice(std::wstring_view text)
+    {
+        if (text.empty() || target == nullptr || !IsWindowVisible(owner) || IsIconic(owner) != FALSE)
+        {
+            return;
+        }
+        if (notice_window == nullptr)
+        {
+            // lets the mouse through: what is under it keeps getting the clicks
+            notice_window = CreateWindowExW(WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
+                                            overlay_class_name, L"", WS_POPUP, 0, 0, 1, 1, owner, nullptr,
+                                            GetModuleHandleW(nullptr), this);
+            if (notice_window == nullptr)
+            {
+                log::warning("notice: {}", make_win32_failure("CreateWindowExW(notice)", GetLastError()).describe());
+                return;
+            }
+        }
+        hide_notice();
+        float const notice_dpi = static_cast<float>(GetDpiForWindow(owner));
+        float const scale = notice_dpi / 96.0F;
+        RECT client{};
+        GetClientRect(owner, &client);
+        float const widest = std::max(static_cast<float>(client.right) / scale - 2.0F * side_margin, 80.0F);
+        float const width = std::min(text_width(text, label_format.Get()) + 2.0F * notice_padding, widest);
+        int const pixel_w = std::max(static_cast<int>(std::ceil(width * scale)), 1);
+        int const pixel_h = std::max(static_cast<int>(std::ceil(notice_height * scale)), 1);
+        BITMAPINFO info{};
+        info.bmiHeader.biSize = sizeof(info.bmiHeader);
+        info.bmiHeader.biWidth = pixel_w;
+        info.bmiHeader.biHeight = -pixel_h; // top-down
+        info.bmiHeader.biPlanes = 1;
+        info.bmiHeader.biBitCount = 32;
+        info.bmiHeader.biCompression = BI_RGB;
+        notice_dc = CreateCompatibleDC(nullptr);
+        void *bits = nullptr;
+        notice_bitmap =
+            notice_dc != nullptr ? CreateDIBSection(notice_dc, &info, DIB_RGB_COLORS, &bits, nullptr, 0) : nullptr;
+        if (notice_bitmap == nullptr)
+        {
+            log::warning("notice: {}", make_win32_failure("CreateDIBSection", GetLastError()).describe());
+            release_notice_surface();
+            return;
+        }
+        notice_previous_bitmap = SelectObject(notice_dc, notice_bitmap);
+        notice_pixel_width = pixel_w;
+        notice_pixel_height = pixel_h;
+
+        RECT const bounds{0, 0, pixel_w, pixel_h};
+        if (FAILED(target->BindDC(notice_dc, &bounds)))
+        {
+            release_notice_surface();
+            return;
+        }
+        target->SetDpi(notice_dpi, notice_dpi);
+        target->BeginDraw();
+        target->Clear(rgba(0.0F, 0.0F, 0.0F, 0.0F));
+        D2D1_RECT_F const pill{0.0F, 0.0F, width, notice_height};
+        brush->SetColor(rgba(0.07F, 0.07F, 0.07F, 0.86F));
+        target->FillRoundedRectangle(rounded(pill, notice_height / 2.0F), brush.Get());
+        draw_text(text, label_format.Get(),
+                  D2D1_RECT_F{notice_padding / 2.0F, 0.0F, width - notice_padding / 2.0F, notice_height}, white(0.96F),
+                  DWRITE_TEXT_ALIGNMENT_CENTER);
+        if (target->EndDraw() == D2DERR_RECREATE_TARGET)
+        {
+            if (status const recreated = create_target(); !recreated)
+            {
+                log::warning("notice: {}", recreated.error().describe());
+            }
+            release_notice_surface();
+            return;
+        }
+        notice_shown = true;
+        notice_alpha = 255;
+        place_notice();
+        ShowWindow(notice_window, SW_SHOWNOACTIVATE);
+        SetTimer(window, notice_hold_timer_id, notice_hold_ms, nullptr);
     }
 
     LRESULT CALLBACK video_overlay::state::procedure(HWND handle_window, UINT message, WPARAM wparam, LPARAM lparam)
@@ -803,7 +1005,9 @@ namespace uxplay
             SetWindowLongPtrW(handle_window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(creation->lpCreateParams));
         }
         auto *owner_state = reinterpret_cast<state *>(GetWindowLongPtrW(handle_window, GWLP_USERDATA));
-        if (owner_state == nullptr || owner_state->window == nullptr)
+        // (the notice is a window of this class too: it only shows, and its
+        // timers run on the bar's window)
+        if (owner_state == nullptr || owner_state->window == nullptr || handle_window != owner_state->window)
         {
             return DefWindowProcW(handle_window, message, wparam, lparam);
         }
@@ -880,10 +1084,17 @@ namespace uxplay
         {
             impl->hide_now();
         }
+        impl->place_notice(); // follows the owner, or goes with it
     }
 
     void video_overlay::hide()
     {
         impl->hide_now();
+        impl->hide_notice();
+    }
+
+    void video_overlay::notice(std::wstring text)
+    {
+        impl->show_notice(text);
     }
 }

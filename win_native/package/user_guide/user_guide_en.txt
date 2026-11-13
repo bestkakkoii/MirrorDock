@@ -158,6 +158,12 @@ the way described above is the wired mirroring that works with current iOS.
                automatic mode).
 - Always on top: press T, or choose "Always on top" in the menu. Mute:
   press M.
+- Screenshot: press F9, or choose "Screenshot" in the menu or the camera
+  button of the control bar. The picture is saved as a PNG file, at the size
+  the phone sends and not at the size of the window, in the folder
+  "MirrorDock" inside your Pictures folder (named by date and time), and
+  copied to the clipboard. A line on the picture says so. F9 works while the
+  iPhone is controlled, too.
 - While mirroring, the PC does not go to sleep or turn the screen off by
   itself.
 - The interface follows the Windows display language: English, Traditional
@@ -195,6 +201,13 @@ phone as a tap when the second one arrives: double-click a black bar when
 there is one, or press F11. The control bar stays away while control is on,
 because it would cover the bottom of the phone's screen: use the right
 mouse button.
+
+While control is on, the delay is shorter. An iPhone stamps its pictures and
+its sound a little later than the moment they arrive (the pictures by about
+85 ms over Wi-Fi), and normally the program waits for that time. With control
+on it plays both as early as they arrive in time, still in step with each
+other, so what a touch does shows up sooner. The change glides in and out
+over a few seconds, without a jump in the sound.
 
 What it takes:
 - An iPhone with iOS 27 or later on the USB cable, with this PC trusted
@@ -256,11 +269,14 @@ so).
 
 8. Updates and the About window
 -------------------------------
-- "Check for updates..." in the menu asks GitHub which release is the
-  newest and shows the answer in the About window. When there is a newer
-  one, "Download" opens its zip in your browser and "What's new" opens its
-  release notes: unzip the new package over the old folder. The program
-  installs nothing by itself.
+- "Check for updates..." in the menu asks GitHub which release is the newest
+  and shows the answer in the About window. When there is a newer one,
+  "Update now" fetches it, checks it and puts it in place of the running
+  program, which then starts again by itself. While a mirroring session runs,
+  that restart waits for its end, or for "Restart now". "Download" still
+  opens the zip in your browser, to unzip over the old folder yourself, and
+  "What's new" opens the release notes. Nothing is installed unless you ask
+  for it.
 - Once a day the program asks by itself, and a notification tells you when
   a newer release is out. To turn that off, switch off "Check for updates
   automatically" in the About window.
@@ -268,6 +284,10 @@ so).
   and the name "MirrorDock/<version>", and nothing about you or the PC. No
   automatic check is made over a connection Windows marks as metered, nor
   while the PC's internet runs through the iPhone.
+- Only genuine releases are installed: every release is signed with a key
+  that is kept off the internet, and the program carries its public half. A
+  package whose signature does not fit is not installed, wherever it came
+  from. If the program's folder cannot be written to, use "Download".
 - "About..." in the menu opens a window of its own with three pages:
     About        version and release date, the update check, links to the
                  project, to this guide and to the licence texts
@@ -283,6 +303,12 @@ so).
 - The score on "This PC" is the share of the rated rows that are in order,
   weighted by how much each matters to mirroring (hardware video decoding
   counts most). It says how well the PC is set up; it is not a benchmark.
+- A row of "This PC" that is not good has a button when the program can do
+  something about it itself: let the program through Windows Firewall, start
+  Apple's service, install Apple's USB support, or open the page of Windows'
+  Settings where the matter is settled. What needs administrator rights is
+  done by Windows' own tools, behind the usual consent prompt. When you come
+  back to the window, the page is checked again.
 - "Copy report" puts that page on the clipboard as plain text: paste it
   when you report a problem. Nothing on the page leaves the PC, and no
   serial number or device name is shown or stored.

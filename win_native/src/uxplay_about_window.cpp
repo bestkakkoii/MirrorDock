@@ -36,6 +36,8 @@ namespace uxplay
         constexpr UINT message_close = WM_APP + 3;
         constexpr UINT_PTR copied_timer_id = 1;
         constexpr UINT copied_feedback_ms = 1600;
+        // on the return to the window the PC is measured again when the last look is this old
+        constexpr ULONGLONG return_measure_ms = 3000;
 
         // layout in device-independent pixels (scaled by the monitor's DPI)
         constexpr float default_width = 760.0F;
@@ -118,7 +120,10 @@ namespace uxplay
             check_updates,
             automatic_updates,
             copy_report,
-            measure_again
+            measure_again,
+            repair,         // number: the report_action of a row of "This PC"
+            install_update, // fetch the newest release and put it in place
+            apply_update    // put the release that is ready in place now
         };
 
         // a place the pointer or the keyboard can use
@@ -267,14 +272,18 @@ namespace uxplay
         std::atomic<HWND> window{nullptr};
         std::mutex model_mutex;
         update_state pending_update;               // guarded by model_mutex
+        install_state pending_install;             // guarded by model_mutex
         std::optional<system_facts> pending_facts; // guarded by model_mutex
 
         // ---- the window's thread only
         update_state update;
+        install_state install;
         std::optional<system_facts> facts;
         std::optional<system_report> report;
         about_page page = about_page::overview;
         bool measuring = true; // facts were asked for and have not arrived
+        // when the window last asked for the PC to be measured (GetTickCount64)
+        ULONGLONG measured_at = 0;
         bool copied = false;   // "Copy report" just did
         bool dark = false;
         float dpi = 96.0F;
@@ -332,7 +341,7 @@ namespace uxplay
         int add_hot(D2D1_RECT_F rect, bool scrolls, action_kind action, int number = 0,
                     std::wstring target_of_link = {});
         void add_button(std::wstring_view label, float &x, float &y, float left, float right, action_kind action,
-                        bool stands_out, bool enabled, std::wstring target_of_link = {});
+                        bool stands_out, bool enabled, std::wstring target_of_link = {}, int number = 0);
         float add_link(std::wstring_view label, float x, float y, float width, action_kind action, int number,
                        std::wstring target_of_link);
         void add_line(float x, float y, float width);
@@ -346,6 +355,7 @@ namespace uxplay
 
         // ---- behaviour
         void take_model();
+        void measure_again();
         void set_page(about_page next);
         void scroll_to(float position);
         void reveal(hot_area const &area);
@@ -597,7 +607,7 @@ namespace uxplay
     // starts a new row.  Both are moved on.
     void about_window::state::add_button(std::wstring_view label, float &x, float &y, float left, float right,
                                          action_kind action, bool stands_out, bool enabled,
-                                         std::wstring target_of_link)
+                                         std::wstring target_of_link, int number)
     {
         float const text_width = measured(make_layout(label, text_style::body, 600.0F, false).Get()).width;
         float const width = std::max(text_width + 32.0F, 96.0F);
@@ -614,7 +624,7 @@ namespace uxplay
         item.enabled = enabled;
         if (enabled)
         {
-            item.hot = add_hot(item.rect, true, action, 0, std::move(target_of_link));
+            item.hot = add_hot(item.rect, true, action, number, std::move(target_of_link));
         }
         content.push_back(std::move(item));
         x += width + 8.0F;
@@ -763,6 +773,67 @@ namespace uxplay
                 mark = tone::problem;
                 break;
             }
+            // an installation that is under way, or how it ended, comes
+            // before what the check says
+            std::wstring const installing = widened(install.version.text());
+            std::array<std::wstring_view, 1> const installing_words{installing};
+            switch (install.phase)
+            {
+            case install_phase::idle:
+                break;
+            case install_phase::downloading:
+                status_text = ui_format(ui_text::update_downloading, installing_words);
+                detail = install.expected != 0
+                             ? std::format(L"{:.1f} / {:.1f} MB", static_cast<double>(install.received) / 1e6,
+                                           static_cast<double>(install.expected) / 1e6)
+                             : std::format(L"{:.1f} MB", static_cast<double>(install.received) / 1e6);
+                mark = tone::accent;
+                break;
+            case install_phase::checking:
+                status_text = ui_format(ui_text::update_unpacking, installing_words);
+                detail.clear();
+                mark = tone::accent;
+                break;
+            case install_phase::ready:
+                status_text = ui_format(ui_text::update_ready, installing_words);
+                detail = ui_string(ui_text::update_ready_text);
+                mark = tone::good;
+                break;
+            case install_phase::installed:
+                status_text = ui_string(ui_text::update_restarting);
+                detail.clear();
+                mark = tone::good;
+                break;
+            case install_phase::failed:
+                status_text = ui_string(ui_text::update_install_failed);
+                mark = tone::problem;
+                switch (install.problem)
+                {
+                case install_problem::no_signature:
+                    detail = ui_string(ui_text::update_problem_no_signature);
+                    break;
+                case install_problem::download:
+                    detail = ui_string(ui_text::update_problem_download);
+                    break;
+                case install_problem::not_genuine:
+                    detail = ui_string(ui_text::update_problem_not_genuine);
+                    break;
+                case install_problem::package:
+                    detail = ui_string(ui_text::update_problem_package);
+                    break;
+                case install_problem::folder:
+                    detail = ui_string(ui_text::update_problem_folder);
+                    break;
+                case install_problem::none:
+                case install_problem::other:
+                    detail = ui_string(ui_text::update_problem_other);
+                    break;
+                }
+                break;
+            }
+            bool const install_busy = install.phase == install_phase::downloading ||
+                                      install.phase == install_phase::checking ||
+                                      install.phase == install_phase::installed;
             visual dot;
             dot.kind = visual_kind::dot;
             dot.rect = D2D1_RECT_F{inner_x, line + 5.0F, inner_x + dot_size, line + 5.0F + dot_size};
@@ -785,15 +856,31 @@ namespace uxplay
             line += 14.0F;
             float button_x = text_x;
             float const buttons_right = inner_x + inner_width;
+            if (install.phase == install_phase::ready)
+            {
+                add_button(ui_string(ui_text::update_restart_now), button_x, line, text_x, buttons_right,
+                           action_kind::apply_update, true, true);
+            }
             if (update.phase == update_phase::newer_available && update.newest)
             {
+                // one click installs it; the package itself stays on offer for
+                // whoever would rather unpack it by hand (and for when the
+                // program cannot install it)
+                if (install.phase != install_phase::ready)
+                {
+                    add_button(ui_string(install.phase == install_phase::failed ? ui_text::update_retry
+                                                                                : ui_text::update_install),
+                               button_x, line, text_x, buttons_right, action_kind::install_update,
+                               install.phase != install_phase::failed, !install_busy);
+                }
                 add_button(ui_string(ui_text::update_download), button_x, line, text_x, buttons_right,
-                           action_kind::link, true, true, widened(update.newest->package_url));
+                           action_kind::link, install.phase == install_phase::failed, true,
+                           widened(update.newest->package_url));
                 add_button(ui_string(ui_text::update_whats_new), button_x, line, text_x, buttons_right,
                            action_kind::link, false, true, widened(update.newest->page_url));
             }
             add_button(ui_string(ui_text::update_check_now), button_x, line, text_x, buttons_right,
-                       action_kind::check_updates, false, update.phase != update_phase::checking);
+                       action_kind::check_updates, false, update.phase != update_phase::checking && !install_busy);
             line += button_height + 16.0F;
             add_line(inner_x, line, inner_width);
             line += 14.0F;
@@ -1049,6 +1136,16 @@ namespace uxplay
                                                                                         : tone::secondary,
                                              value_x, line + value_height, value_width);
                 }
+                if (entry.action != report_action::none && !entry.action_label.empty())
+                {
+                    // what the program can do about it (not while the PC is
+                    // being measured: the row may be about to change)
+                    float button_x = value_x;
+                    float button_y = line + value_height + 8.0F;
+                    add_button(entry.action_label, button_x, button_y, value_x, value_x + value_width,
+                               action_kind::repair, false, !measuring, {}, static_cast<int>(entry.action));
+                    value_height = button_y + button_height - line;
+                }
                 line += std::max(label_height, value_height) + row_padding;
             }
             line += 4.0F;
@@ -1279,6 +1376,7 @@ namespace uxplay
         {
             std::scoped_lock lock{model_mutex};
             update = pending_update;
+            install = pending_install;
             arrived = std::exchange(pending_facts, std::nullopt);
         }
         if (arrived)
@@ -1286,6 +1384,18 @@ namespace uxplay
             facts = std::move(arrived);
             report = build_report(*facts, current_ui_language());
             measuring = false;
+        }
+        relayout();
+    }
+
+    // The PC is looked at again (the button, the return to the window).
+    void about_window::state::measure_again()
+    {
+        measuring = true;
+        measured_at = GetTickCount64();
+        if (events.on_measure_again)
+        {
+            events.on_measure_again();
         }
         relayout();
     }
@@ -1439,12 +1549,31 @@ namespace uxplay
             copy_report();
             break;
         case action_kind::measure_again:
-            measuring = true;
-            if (events.on_measure_again)
+            measure_again();
+            break;
+        case action_kind::repair:
+            // the owner makes the repair and has the PC measured again; the
+            // buttons wait for that
+            if (events.on_report_action && area.number > static_cast<int>(report_action::none) &&
+                area.number <= static_cast<int>(report_action::install_update))
             {
-                events.on_measure_again();
+                measuring = true;
+                measured_at = GetTickCount64();
+                events.on_report_action(static_cast<report_action>(area.number));
+                relayout();
             }
-            relayout();
+            break;
+        case action_kind::install_update:
+            if (events.on_install_update)
+            {
+                events.on_install_update();
+            }
+            break;
+        case action_kind::apply_update:
+            if (events.on_apply_update)
+            {
+                events.on_apply_update();
+            }
             break;
         case action_kind::none:
             break;
@@ -1820,6 +1949,17 @@ namespace uxplay
             limits->ptMinTrackSize.y = smallest.bottom - smallest.top;
             return 0;
         }
+        case WM_ACTIVATE:
+            // Back from somewhere else with the page "This PC" open: from the
+            // Settings page a button opened, perhaps, where something was
+            // changed.  The PC is measured again (not more often than every
+            // few seconds, and not while it is being measured).
+            if (LOWORD(wparam) != WA_INACTIVE && page == about_page::this_pc && !measuring && facts &&
+                GetTickCount64() - measured_at >= return_measure_ms)
+            {
+                measure_again();
+            }
+            break;
         case WM_SETTINGCHANGE:
             // "ImmersiveColorSet": the user switched Windows between light and dark
             if (bool const now_dark = windows_uses_dark_apps(); now_dark != dark)
@@ -2164,6 +2304,18 @@ namespace uxplay
         {
             std::scoped_lock lock{impl->model_mutex};
             impl->pending_update = state_of_check;
+        }
+        if (HWND const shown = impl->window.load(); shown != nullptr)
+        {
+            PostMessageW(shown, message_model, 0, 0);
+        }
+    }
+
+    void about_window::set_install(install_state const &state_of_install)
+    {
+        {
+            std::scoped_lock lock{impl->model_mutex};
+            impl->pending_install = state_of_install;
         }
         if (HWND const shown = impl->window.load(); shown != nullptr)
         {

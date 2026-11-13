@@ -177,6 +177,13 @@ filaire qui fonctionne avec les versions actuelles d’iOS.
                   nouveau sur C en mode automatique).
 - Toujours au premier plan : appuyez sur T, ou choisissez « Toujours au
   premier plan » dans le menu. Couper le son : appuyez sur M.
+- Capture d’écran : appuyez sur F9, ou choisissez « Capture d’écran » dans le
+  menu ou le bouton en forme d’appareil photo de la barre de contrôle.
+  L’image est enregistrée dans un fichier PNG, à la taille qu’envoie le
+  téléphone et non à celle de la fenêtre, dans le dossier « MirrorDock » de
+  votre dossier Images (avec la date et l’heure pour nom), et copiée dans le
+  presse-papiers. Une ligne sur l’image le confirme. F9 fonctionne aussi
+  pendant le contrôle de l’iPhone.
 - Pendant la recopie, le PC ne se met pas en veille et n’éteint pas l’écran
   de lui-même.
 - L’interface suit la langue d’affichage de Windows : anglais, chinois
@@ -222,6 +229,14 @@ double-cliquez sur une bande noire s’il y en a une, ou appuyez sur F11. La
 barre de contrôle ne s’affiche pas tant que le contrôle est actif, car elle
 masquerait le bas de l’écran du téléphone : utilisez le bouton droit de la
 souris.
+
+Quand le contrôle est actif, le retard est plus court. L’iPhone horodate ses
+images et son audio un peu après le moment où ils arrivent (d’environ 85 ms
+pour les images en Wi-Fi), et le programme attend normalement ces instants.
+Quand le contrôle est actif, il restitue les deux dès qu’ils arrivent à
+temps, toujours synchronisés entre eux : l’effet d’un toucher apparaît donc
+plus tôt. Le passage se fait en douceur, en quelques secondes, sans saut dans
+le son.
 
 Ce qu’il faut :
 - Un iPhone sous iOS 27 ou version ultérieure, relié par le câble USB et qui
@@ -292,10 +307,14 @@ effet qu’à la connexion suivante (le programme le signale).
 ---------------------------------------
 - « Rechercher des mises à jour… » dans le menu demande à GitHub quelle est
   la dernière version et affiche la réponse dans la fenêtre « À propos ».
-  S’il en existe une plus récente, « Télécharger » ouvre son zip dans votre
-  navigateur et « Nouveautés » ouvre ses notes de version : décompressez le
-  nouveau paquet par-dessus l’ancien dossier. Le programme n’installe rien
-  de lui-même.
+  S’il en existe une plus récente, « Mettre à jour maintenant » la
+  télécharge, la vérifie et la met à la place du programme en cours
+  d’exécution, qui redémarre ensuite de lui-même. Si une recopie est en
+  cours, ce redémarrage attend qu’elle se termine, ou que vous choisissiez «
+  Redémarrer maintenant ». « Télécharger » ouvre toujours le zip dans votre
+  navigateur, pour le décompresser vous-même par-dessus l’ancien dossier, et
+  « Nouveautés » ouvre les notes de version. Rien n’est installé sans que
+  vous le demandiez.
 - Une fois par jour, le programme pose la question de lui-même, et une
   notification vous prévient quand une nouvelle version sort. Pour l’éviter,
   désactivez « Rechercher automatiquement les mises à jour » dans la fenêtre
@@ -305,6 +324,11 @@ effet qu’à la connexion suivante (le programme le signale).
   sujet du PC. Aucune recherche automatique n’a lieu sur une connexion que
   Windows signale comme limitée, ni tant que l’accès à Internet du PC passe
   par l’iPhone.
+- Seules des versions authentiques sont installées : chaque version est
+  signée avec une clé qui n’est pas conservée sur Internet, et le programme
+  en contient la moitié publique. Un paquet dont la signature ne correspond
+  pas n’est pas installé, d’où qu’il vienne. S’il est impossible d’écrire
+  dans le dossier du programme, utilisez « Télécharger ».
 - « À propos… » dans le menu ouvre une fenêtre à part, avec trois pages :
     À propos    version et date de publication, la recherche de mises à
                 jour, et des liens vers le projet, ce guide et les textes
@@ -324,6 +348,13 @@ effet qu’à la connexion suivante (le programme le signale).
   pondérée selon l’importance de chacune pour la recopie de l’écran (le
   décodage vidéo matériel compte le plus). Il indique à quel point le PC est
   bien préparé ; ce n’est pas un test de performances.
+- Une ligne de « Ce PC » qui n’est pas bonne comporte un bouton quand le
+  programme peut agir lui-même : autoriser le programme dans le Pare-feu
+  Windows, démarrer le service d’Apple, installer la prise en charge USB
+  d’Apple ou ouvrir la page des Paramètres Windows où la question se règle.
+  Ce qui exige des droits d’administrateur est effectué par les outils de
+  Windows eux-mêmes, après la demande de consentement habituelle. Quand vous
+  revenez à la fenêtre, la page est vérifiée de nouveau.
 - « Copier le rapport » place cette page dans le presse-papiers sous forme de
   texte brut : collez-le quand vous signalez un problème. Rien de cette page
   ne quitte le PC, et aucun numéro de série ni nom d’appareil n’est affiché

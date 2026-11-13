@@ -278,6 +278,10 @@ namespace uxplay
             {
                 break;
             }
+            if (request.received)
+            {
+                request.received(answer.body.size());
+            }
         }
         return answer;
     }

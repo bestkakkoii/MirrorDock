@@ -26,9 +26,9 @@
 #define UXPLAY_LEGACY_PRODUCT_NAME "UxPlay"
 
 #define UXPLAY_VERSION_MAJOR 1
-#define UXPLAY_VERSION_MINOR 11
+#define UXPLAY_VERSION_MINOR 12
 #define UXPLAY_VERSION_PATCH 0
-#define UXPLAY_VERSION_TEXT "1.11.0"
+#define UXPLAY_VERSION_TEXT "1.12.0"
 /* the day this version was published (ISO 8601), shown in "About" */
 #define UXPLAY_RELEASE_DATE "2026-11-13"
 #define UXPLAY_CORE_VERSION "1.74"

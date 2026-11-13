@@ -3,13 +3,17 @@
 // it neither waits for the video window nor holds it up.
 //
 // Three pages:
-//   About       version and release date, the update check (ask now, the
-//               newest release, automatic checks on / off), the score of this
-//               PC, links (opened with the default browser or the program
-//               Windows has for the file)
+//   About       version and release date, the update (ask now, the newest
+//               release, install it, automatic checks on / off), the score of
+//               this PC, links (opened with the default browser or the
+//               program Windows has for the file)
 //   This PC     what of the system, hardware, drivers and software matters
 //               to the program, row by row with a rating, and the scores
-//               (uxplay_system_report); "Copy report" puts it on the clipboard
+//               (uxplay_system_report); a row that is not in order has a
+//               button for what the program can do about it; "Copy report"
+//               puts it all on the clipboard.  The page is measured anew when
+//               the user comes back to the window from somewhere else (from
+//               the Settings page a button opened, say).
 //   Components  what the program is built from, with versions, dates and
 //               licences, and when each version of the program was published
 //               (uxplay_build_info)
@@ -30,6 +34,7 @@ export module uxplay_about_window;
 import std;
 import uxplay_status;
 import uxplay_update_check;
+import uxplay_update_install;
 import uxplay_system_report;
 
 export namespace uxplay
@@ -59,8 +64,15 @@ export namespace uxplay
     {
         std::function<void()> on_check_for_updates;
         std::function<void(bool enabled)> on_automatic_updates;
-        // "Check again" on the page "This PC"
+        // "Check again" on the page "This PC", and the return to the window
         std::function<void()> on_measure_again;
+        // the button beside a row of "This PC": the owner does it, and has the
+        // PC measured again afterwards
+        std::function<void(report_action action)> on_report_action;
+        // "Update now": fetch the newest release and put it in place
+        std::function<void()> on_install_update;
+        // "Restart now": a release is ready and waited for the stream to end
+        std::function<void()> on_apply_update;
     };
 
     class about_window
@@ -87,6 +99,7 @@ export namespace uxplay
         void close();
 
         void set_update(update_state const &state);
+        void set_install(install_state const &state);
         // the page "This PC" shows "checking" until the first facts arrive
         void set_facts(system_facts facts);
 

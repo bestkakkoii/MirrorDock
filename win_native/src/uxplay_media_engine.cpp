@@ -23,6 +23,7 @@ import uxplay_system_tuning;
 import uxplay_ui_text;
 import uxplay_crop_detector;
 import uxplay_remote_control;
+import uxplay_screenshot;
 
 namespace uxplay
 {
@@ -33,6 +34,18 @@ namespace uxplay
         constexpr std::int64_t maximum_delay_ns = 220 * clock::ns_per_ms;
         constexpr std::int64_t decay_interval_ns = 100 * clock::ns_per_ms;
         constexpr std::int64_t decay_min_step_ns = clock::ns_per_ms;
+        // Following the sender's lead (presentation_timeline::follow_lead):
+        // the delay may go this far below zero, and it glides by this much
+        // per decay interval - 10 ms a second, which the audio output follows
+        // by playing a little faster or slower (uxplay_audio_output), without
+        // a skip.  Too few pictures in the window say nothing about their
+        // late tail; the sound counts once this many packets were seen, with
+        // this allowance for the scatter of their arrival.
+        constexpr std::int64_t longest_lead_ns = 150 * clock::ns_per_ms;
+        constexpr std::int64_t glide_step_ns = clock::ns_per_ms;
+        constexpr std::size_t fewest_tail_pictures = 20;
+        constexpr std::size_t fewest_sound_packets = 40;
+        constexpr std::int64_t sound_scatter_ns = 30 * clock::ns_per_ms;
         // play-on-arrival audio is scheduled this long after it arrived, and
         // never closer than what the endpoint keeps queued plus this margin
         constexpr std::int64_t unsynced_audio_buffer_ns = 40 * clock::ns_per_ms;
@@ -71,20 +84,39 @@ namespace uxplay
         // after the phone went away in mid-use (then the user is told instead)
         constexpr int longest_reconnect_streak = 3;
 
-        // Sliding-window 95th percentile of observed lateness values.
+        // Sliding-window percentiles of observed lateness values: what was
+        // observed in the last window_ns.  With `kept`, that many of the
+        // newest values stay for up to `oldest_ns`, so that a stream that
+        // sends a picture only now and then still has a tail to speak of.
         class lateness_window
         {
         public:
+            lateness_window() = default;
+
+            lateness_window(std::size_t kept_values, std::int64_t oldest)
+                : kept{kept_values},
+                  oldest_ns{oldest}
+            {
+            }
+
             void add(std::int64_t now_ns, std::int64_t lateness_ns)
             {
                 samples.emplace_back(now_ns, lateness_ns);
-                while (!samples.empty() && samples.front().first < now_ns - window_ns)
+                while (!samples.empty() &&
+                       (samples.front().first < now_ns - oldest_ns ||
+                        (samples.size() > kept && samples.front().first < now_ns - window_ns)))
                 {
                     samples.pop_front();
                 }
             }
 
-            [[nodiscard]] std::optional<std::int64_t> percentile_95() const
+            [[nodiscard]] std::size_t size() const
+            {
+                return samples.size();
+            }
+
+            // the value below which `percent` of them lie (95: the late tail)
+            [[nodiscard]] std::optional<std::int64_t> percentile(std::size_t percent) const
             {
                 if (samples.empty())
                 {
@@ -96,7 +128,7 @@ namespace uxplay
                 {
                     values.push_back(sample.second);
                 }
-                std::size_t const rank = (values.size() * 95) / 100;
+                std::size_t const rank = std::min((values.size() * percent) / 100, values.size() - 1);
                 std::nth_element(values.begin(), values.begin() + static_cast<std::ptrdiff_t>(rank), values.end());
                 return values[rank];
             }
@@ -108,10 +140,22 @@ namespace uxplay
 
         private:
             std::deque<std::pair<std::int64_t, std::int64_t>> samples;
+            std::size_t kept = 0;
+            std::int64_t oldest_ns = window_ns;
         };
 
-        // present_time = media_time + delay; delay rises at once when frames
-        // or audio would be late, and decays by 1 ms per 250 ms otherwise.
+        // present_time = media_time + delay.  The delay rises at once when
+        // pictures would be late and eases down again afterwards; where its
+        // floor moves (another mode, another sound endpoint, the sender's lead
+        // followed or not) it glides there, 10 ms a second.
+        //
+        // The sender's lead: an iPhone stamps what it sends ahead of the moment
+        // it arrives - pictures by about 85 ms, sound by about 180 ms (measured
+        // over Wi-Fi) - and at the resting delay all of that is waited for.
+        // While the phone is operated from here (follow_lead) the delay may go
+        // below zero: pictures and sound are presented, still together, as
+        // early as the late tail of the pictures allows.  That takes some 60
+        // to 70 ms off the time between a touch and what it does on the screen.
         class presentation_timeline
         {
         public:
@@ -127,11 +171,20 @@ namespace uxplay
                 }
             }
 
+            // any thread; the delay glides to where it belongs from the next
+            // picture or packet on
+            void follow_lead(bool wanted)
+            {
+                std::scoped_lock lock{mutex};
+                following = wanted;
+            }
+
             void observe_video(std::int64_t now_ns, std::int64_t lateness_ns)
             {
                 std::scoped_lock lock{mutex};
                 observed = true;
                 video.add(now_ns, lateness_ns);
+                history.add(now_ns, lateness_ns);
                 update(now_ns);
             }
 
@@ -153,6 +206,7 @@ namespace uxplay
                 std::scoped_lock lock{mutex};
                 video.clear();
                 audio.clear();
+                history.clear();
                 observed = false;
                 current_delay.store(start_delay(), std::memory_order_relaxed);
                 last_change_ns = 0;
@@ -177,33 +231,75 @@ namespace uxplay
                 // scheduled against this same delay and the audio output
                 // re-anchors its own queue; a fixed floor keeps buffering
                 // headroom for it.
-                std::int64_t target = audio_floor_ns;
-                if (auto const video_tail = video.percentile_95(); video_tail)
+                std::int64_t lowest = minimum_delay_ns;
+                std::int64_t floor = audio_floor_ns;
+                std::optional<std::int64_t> tail = video.percentile(95);
+                if (following)
                 {
-                    target = std::max(target, *video_tail + video_margin_ns);
+                    if (history.size() < fewest_tail_pictures)
+                    {
+                        return; // the tail of the pictures is not known yet: the delay stays
+                    }
+                    tail = history.percentile(95);
+                    lowest = -longest_lead_ns;
+                    floor = lowest;
+                    if (audio.size() >= fewest_sound_packets)
+                    {
+                        // The sound has to reach the endpoint in time as well:
+                        // counted from when it usually arrives, with its
+                        // scatter.  Never more than the resting floor asks for.
+                        floor = std::max(floor, std::min(audio_floor_ns, audio.percentile(50).value_or(0) +
+                                                                             sound_scatter_ns + audio_floor_ns));
+                    }
                 }
-                target = std::clamp(target, minimum_delay_ns, delay_limit_ns);
+                // what the pictures need (nothing while none was seen)
+                std::int64_t const pictures_need =
+                    tail ? std::min(*tail + video_margin_ns, delay_limit_ns) : std::numeric_limits<std::int64_t>::min();
+                std::int64_t const target = std::clamp(std::max(floor, pictures_need), lowest, delay_limit_ns);
                 std::int64_t const delay_now = current_delay.load(std::memory_order_relaxed);
-                if (target >= delay_now)
+                if (pictures_need > delay_now)
                 {
-                    current_delay.store(target, std::memory_order_relaxed);
+                    // pictures come late: at once
+                    current_delay.store(pictures_need, std::memory_order_relaxed);
                     last_change_ns = now_ns;
+                    return;
                 }
-                else if (now_ns - last_change_ns >= decay_interval_ns)
+                if (target == delay_now || now_ns - last_change_ns < decay_interval_ns)
+                {
+                    return;
+                }
+                std::int64_t step = 0;
+                if (target > delay_now)
+                {
+                    // the floor moved up: glide there
+                    step = std::min(target - delay_now, glide_step_ns);
+                }
+                else if (following)
+                {
+                    // towards the sender's lead: glide there
+                    step = -std::min(delay_now - target, glide_step_ns);
+                }
+                else
                 {
                     // ease a fraction of the gap each interval, so a transient
                     // spike recovers in ~1-2 s instead of minutes
                     std::int64_t const gap = delay_now - target;
-                    std::int64_t const step = std::min(gap, std::max(decay_min_step_ns, gap / 8));
-                    current_delay.store(delay_now - step, std::memory_order_relaxed);
-                    last_change_ns = now_ns;
+                    step = -std::min(gap, std::max(decay_min_step_ns, gap / 8));
                 }
+                current_delay.store(delay_now + step, std::memory_order_relaxed);
+                last_change_ns = now_ns;
             }
 
             static constexpr std::int64_t initial_delay_ns = 50 * clock::ns_per_ms;
+            // the pictures of the last half minute, at least the newest 90 of
+            // them: a phone that is operated sends them in short bursts
+            static constexpr std::size_t history_pictures = 90;
+            static constexpr std::int64_t history_span_ns = 30 * clock::ns_per_second;
             std::mutex mutex;
             lateness_window video;
             lateness_window audio;
+            lateness_window history{history_pictures, history_span_ns};
+            bool following = false; // the sender's lead is followed (follow_lead)
             std::int64_t delay_limit_ns = maximum_delay_ns;
             bool observed = false; // a picture or a packet arrived since the last reset
             std::int64_t video_margin_ns = 12 * clock::ns_per_ms;
@@ -368,7 +464,14 @@ namespace uxplay
         int control_reconnects = 0;      // restarts in a row after the phone went away
         std::thread control_thread;
 
+        // Screenshots are made on a thread of their own, one at a time: the
+        // copy waits for the render thread, and the PNG takes a moment.
+        std::thread screenshot_thread;
+        std::atomic<bool> screenshot_busy{false};
+
+        void take_screenshot();
         void control_loop();
+        bool set_control_ready(bool ready);
         void control_changed(bool retry);
         void control_status(remote_control_status const &reported);
         void control_failed(remote_control_problem problem, std::string_view detail);
@@ -441,6 +544,69 @@ namespace uxplay
         }
     }
 
+    // The picture on screen, as it is shown, as a PNG file and on the
+    // clipboard (UI thread: starts the work and returns).  The user is told
+    // on the picture how it went.
+    void media_engine::state::take_screenshot()
+    {
+        if (!presenter || displayed_source.load() < 0)
+        {
+            return; // nothing is shown
+        }
+        if (screenshot_busy.exchange(true))
+        {
+            return; // the one before is still being written
+        }
+        if (screenshot_thread.joinable())
+        {
+            screenshot_thread.join(); // it is done: only its end is awaited
+        }
+        screenshot_thread = std::thread{[this]
+        {
+            auto captured = presenter->capture(std::chrono::seconds{2});
+            outcome<saved_screenshot> saved =
+                captured ? save_screenshot(captured->width, captured->height, captured->pixels, window->native_handle())
+                         : std::unexpected(captured.error());
+            if (saved)
+            {
+                std::u8string const file = saved->file.u8string();
+                log::info("screenshot: {} x {} pixels saved as {}{}", captured->width, captured->height,
+                          std::string_view{reinterpret_cast<char const *>(file.data()), file.size()},
+                          saved->on_clipboard ? std::string{" and put on the clipboard"}
+                                              : std::format("; not on the clipboard ({})", saved->clipboard_problem));
+                window->notice(std::wstring{ui_string(saved->on_clipboard ? ui_text::screenshot_saved_copied
+                                                                           : ui_text::screenshot_saved)});
+            }
+            else
+            {
+                log::warning("screenshot: {}", saved.error().describe());
+                window->notice(std::wstring{ui_string(ui_text::screenshot_failed)});
+            }
+            screenshot_busy.store(false);
+        }};
+    }
+
+    // Input reaches the phone, or no longer does; returns what was so before.
+    // While it does, pictures and sound follow the sender's lead
+    // (presentation_timeline): what a touch does shows up some 60 to 70 ms
+    // sooner.  The delay glides there and back within some seconds.
+    bool media_engine::state::set_control_ready(bool ready)
+    {
+        bool const before = control_ready.exchange(ready);
+        if (before != ready)
+        {
+            for (presentation_timeline &timeline : timelines)
+            {
+                timeline.follow_lead(ready);
+            }
+            log::info("remote control: pictures and sound {} (the delay was {:.1f} ms)",
+                      ready ? "are presented as early as they arrive in time from now on"
+                            : "wait for their timestamps again",
+                      static_cast<double>(timelines[source_index(media_source::airplay)].delay()) / 1e6);
+        }
+        return before;
+    }
+
     // Something the control thread decides on has changed.  `retry`: there is
     // a reason to try again after a failure (the user chose it again, a stream
     // appeared, a device was plugged in).
@@ -461,7 +627,7 @@ namespace uxplay
     // Control cannot be had: the user is told why, the log gets the detail.
     void media_engine::state::control_failed(remote_control_problem problem, std::string_view detail)
     {
-        control_ready.store(false);
+        set_control_ready(false);
         control_connecting.store(false);
         window->set_remote_control(control_wanted.load(), false);
         log::warning("remote control: {} ({})", remote_control_problem_name(problem), detail);
@@ -512,7 +678,7 @@ namespace uxplay
             return;
         case remote_control_state::ready:
         {
-            control_ready.store(true);
+            set_control_ready(true);
             control_connecting.store(false);
             window->set_remote_control(control_wanted.load(), true);
             log::info("remote control: ready ({})", reported.detail);
@@ -562,7 +728,7 @@ namespace uxplay
             control_failed(problem, reported.detail);
             return;
         }
-        control_ready.store(false);
+        set_control_ready(false);
         control_connecting.store(true);
         window->set_remote_control(control_wanted.load(), false);
         log::info("remote control: the connection to the phone was lost ({}); connecting again", reported.detail);
@@ -603,7 +769,7 @@ namespace uxplay
                     lock.lock();
                 }
                 bool const was_connecting = control_connecting.exchange(false);
-                if (control_ready.exchange(false) || was_connecting)
+                if (set_control_ready(false) || was_connecting)
                 {
                     lock.unlock();
                     window->set_remote_control(control_wanted.load(), false);
@@ -1430,6 +1596,11 @@ namespace uxplay
         {
             impl->window->detach_callbacks();
         }
+        // a screenshot that is being written uses the presenter and the window
+        if (impl->screenshot_thread.joinable())
+        {
+            impl->screenshot_thread.join();
+        }
         // the control session ends with its thread (its reports use the window)
         {
             std::scoped_lock lock{impl->control_mutex};
@@ -1557,6 +1728,11 @@ namespace uxplay
                 engine->audio->set_muted(now_muted);
                 engine->window->set_muted(now_muted);
                 log::info("audio output {} here (the phone's volume is not touched)", now_muted ? "muted" : "unmuted");
+                return;
+            }
+            if (command == tray_command::save_screenshot)
+            {
+                engine->take_screenshot(); // an engine concern too (it owns the presenter)
                 return;
             }
             if (engine->callbacks.on_tray_command)
@@ -1912,7 +2088,8 @@ namespace uxplay
         if (pipeline.timestamp_sync)
         {
             presentation_timeline &timeline = impl->timelines[source_index(source)];
-            timeline.observe_audio(arrival_time_ns, arrival_time_ns - media_time_ns);
+            // (counted from when the packet is to be played: the user's offset included)
+            timeline.observe_audio(arrival_time_ns, arrival_time_ns - (media_time_ns + pipeline.offset_ns));
             impl->audio->set_delay(source, timeline.delay());
             impl->audio->enqueue(source, media_time_ns + pipeline.offset_ns - decoded->resampler_delay_ns,
                                  decoded->stereo_samples, pipeline.decoder->output_rate(), true);

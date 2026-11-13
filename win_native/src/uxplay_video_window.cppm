@@ -30,8 +30,8 @@
 // key, except with Space: Control + Space is the phone's "next input
 // source").  Page Down / Page Up and Alt + arrow keys are not sent as keys:
 // they flick the screen (next / previous page or video), which works in
-// every app.  The window's own commands come first: it keeps F8, F11,
-// Alt+Enter, Alt+F4, Esc in fullscreen (the press, its auto-repeat and its
+// every app.  The window's own commands come first: it keeps F8, F9
+// (screenshot), F11, Alt+Enter, Alt+F4, Esc in fullscreen (the press, its auto-repeat and its
 // release), the double-click (fullscreen on / off; the first click of the pair
 // has reached the phone as a tap by then, the second does not; with Alt held
 // the pair is the phone's, a double tap) and the right button (the menu).
@@ -64,6 +64,7 @@ export namespace uxplay
         crop_automatic, // cut black bars off automatically
         crop_select,    // frame the part to show with the mouse; handled by the window itself
         toggle_remote_control, // operate the phone with mouse and keyboard on / off
+        save_screenshot,  // the picture as it is shown: to a file and to the clipboard (key F9)
         toggle_autostart, // start with Windows
         open_log,
         check_for_updates, // ask now whether a newer release exists (shown in the About window)
@@ -184,6 +185,9 @@ export namespace uxplay
         void set_stream_active(bool active);
         // on_click: command run when the user clicks the balloon
         void notify(std::wstring title, std::wstring text, std::optional<tray_command> on_click = std::nullopt);
+        // a line of text on the picture that goes away by itself after a
+        // moment (the answer to something the user just did in the window)
+        void notice(std::wstring text);
 
         [[nodiscard]] bool visible() const;
         [[nodiscard]] bool fullscreen() const;

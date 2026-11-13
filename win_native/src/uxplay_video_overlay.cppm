@@ -25,6 +25,7 @@ export namespace uxplay
         toggle_mute,
         apply_data_guard,
         enable_link_adapter,
+        save_screenshot,
         open_menu
     };
 
@@ -63,6 +64,11 @@ export namespace uxplay
 
         // hide at once (owner hidden or minimized)
         void hide();
+
+        // A line of text at the top of the picture that goes away by itself
+        // after a moment ("Screenshot saved").  It is a window of its own
+        // that lets the mouse through, and shows whether the bar does or not.
+        void notice(std::wstring text);
 
     private:
         struct state;

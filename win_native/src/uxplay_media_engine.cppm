@@ -90,6 +90,8 @@ export namespace uxplay
         // Whether the selected GPU decodes H.264 in hardware (without it every
         // stream is decoded on the CPU, which a lighter stream helps).
         [[nodiscard]] bool h264_hardware() const;
+        // the graphics card the engine decodes and shows with, as it was found at the start
+        [[nodiscard]] gpu_adapter_info adapter() const;
 
         void video_configure(media_source source, video_codec codec, int width, int height);
         // Annex-B access unit; media_time_ns is on the local clock.

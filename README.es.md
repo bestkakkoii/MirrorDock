@@ -36,6 +36,8 @@ Se basa en el núcleo del protocolo AirPlay de [UxPlay](https://github.com/FDH2/
 | 🖱️ **Control del iPhone** | Haga clic, arrastre, desplácese y escriba sobre la imagen, y el teléfono hace lo mismo. Viene integrado: sin programas auxiliares y sin jailbreak (iOS 27, cable USB, modo de desarrollador). |
 | 🪟 **Una ventana como debe ser** | Se abre con un tamaño razonable, mantiene la relación de aspecto al redimensionarla, recuerda el tamaño y la posición, pasa a pantalla completa con una tecla y puede quedar siempre visible. |
 | 🌐 **Once idiomas** | La interfaz sigue el idioma para mostrar de Windows. |
+| 🩺 **Conoce su equipo** | La ventana «Acerca de» comprueba lo que importa para la duplicación (GPU, controladores, red, firewall, la compatibilidad USB de Apple), lo puntúa y le dice qué arreglar. |
+| 🔄 **Búsqueda de actualizaciones** | Le avisa cuando sale una versión nueva: una consulta a GitHub al día, que se desactiva con un clic. |
 | 🧳 **Un solo archivo** | Un único ejecutable de unos 12 MB que solo necesita el propio Windows. |
 
 ## 🚀 Inicio rápido
@@ -84,6 +86,7 @@ Presione **F8** (o elija **Controlar el iPhone con mouse y teclado** en el menú
 | Botón izquierdo: hacer clic, mantener presionado, arrastrar | Un dedo: tocar, mantener presionado, deslizar |
 | Rueda del mouse (con **Shift**: en horizontal) | Desplaza lo que está bajo el puntero |
 | Botón central | Ir a la pantalla de inicio |
+| Doble clic | Activa o desactiva la pantalla completa, como siempre; con **Alt** pulsada: dos toques seguidos en el iPhone |
 | Teclado | Escribe en el teléfono como un teclado conectado a él; **Ctrl** equivale a ⌘ y **Ctrl+Espacio** cambia el idioma del teclado del teléfono |
 | **Page Down** / **Page Up**, **Alt** + teclas de flecha | Pasa a la página o al video siguiente o anterior con un deslizamiento rápido |
 | Botón derecho | El menú de MirrorDock, como siempre |
@@ -97,7 +100,7 @@ Qué se necesita:
 > [!NOTE]
 > AirPlay no puede transmitir la entrada del mouse ni del teclado, así que el control va por otro camino: los servicios para desarrolladores de iOS, los mismos que Xcode usa para manejar un dispositivo real. Para instalarlos, MirrorDock descarga la imagen de Apple desde el repositorio [DeveloperDiskImage](https://github.com/doronz88/DeveloperDiskImage) y pide al servicio de firma de Apple (`gs.apple.com`) que la firme para su teléfono, con lo que Apple recibe los números de identificación de su chip, exactamente igual que con Xcode. A partir de ahí, el control no se comunica con nadie.
 
-Mientras el control está activado, **F8**, **F11**, **Alt+Enter** y **Alt+F4** siguen reservadas a la ventana, y la barra de control no aparece, porque taparía la parte inferior de la pantalla del teléfono.
+Mientras el control está activado, los comandos propios de la ventana tienen prioridad: **F8**, **F11**, **Alt+Enter**, **Alt+F4**, **Esc** en pantalla completa y el doble clic siguen reservados a la ventana. En un doble clic, el primer clic ya ha llegado al teléfono como un toque cuando llega el segundo, así que haga doble clic en una barra negra si la hay, o pulse **F11**. La barra de control no aparece, porque taparía la parte inferior de la pantalla del teléfono.
 
 ## ⌨️ Teclado y mouse
 
@@ -113,6 +116,26 @@ Mientras el control está activado, **F8**, **F11**, **Alt+Enter** y **Alt+F4** 
 | Menú | Haga clic con el botón derecho en cualquier punto de la imagen |
 
 Mientras se controla el iPhone, las teclas de letras escriben en el teléfono; **F8** se las devuelve a la ventana.
+
+## 🔄 Actualizaciones
+
+**Buscar actualizaciones…** en el menú pregunta a GitHub cuál es la versión más reciente y muestra la respuesta en la ventana «Acerca de». Cuando hay una más nueva, **Descargar** abre su zip en el navegador y **Novedades** abre sus notas de la versión. MirrorDock no instala nada por su cuenta.
+
+- **Búsqueda automática.** Una vez al día, con una notificación cuando sale una versión nueva. Un interruptor en la ventana «Acerca de» la desactiva.
+- **Qué se envía.** Una sola petición a `api.github.com`. GitHub ve su dirección IP y el nombre de cliente `MirrorDock/<version>`, y nada sobre usted ni sobre su equipo.
+- **Sin gastar sus datos móviles.** No se hace ninguna búsqueda automática con una conexión que Windows marque como de uso medido, ni mientras la conexión a Internet del equipo pase por el iPhone.
+
+## 🩺 «Acerca de» y Este equipo
+
+**Acerca de…** en el menú abre una ventana propia, con tres páginas:
+
+| Página | Qué muestra |
+|---|---|
+| **Acerca de** | Versión y fecha de publicación, la búsqueda de actualizaciones y enlaces al proyecto, a la guía del usuario y a los textos de las licencias |
+| **Este equipo** | Lo que importa a MirrorDock en su equipo, fila por fila: Windows, pantalla, alimentación, red, firewall, procesador, memoria, GPU y su decodificación de video, sonido, controlador gráfico, la compatibilidad USB de Apple y el iPhone conectado por cable |
+| **Componentes** | Todas las bibliotecas y herramientas con las que está hecho MirrorDock, con versión, fecha y licencia, y cuándo se publicó cada versión de MirrorDock |
+
+Cada fila de *Este equipo* se califica como correcta, con aviso o con problema, y una fila que no está bien dice qué hacer al respecto. La puntuación es la parte de las filas calificadas que están en orden, ponderada según lo que cada una importa para la duplicación (la decodificación de video por hardware es la que más cuenta). Indica lo bien preparado que está el equipo; no es una prueba de rendimiento. **Copiar informe** copia la página al portapapeles como texto sin formato, para un informe de errores. Nada de esta página sale de su equipo, y no se muestra ni se guarda ningún número de serie ni nombre de dispositivo.
 
 ## ⚙️ Opciones
 
@@ -169,7 +192,7 @@ La duplicación por Wi-Fi y por USB se verificó con un iPhone 16 Pro Max (iOS 2
 ## ❓ Preguntas frecuentes
 
 **El iPhone no muestra mi equipo en la lista.**
-Ambos deben estar en la misma red, y el Firewall de Windows debe permitir `mirror_dock.exe`. Desactivar y volver a activar el Wi-Fi del iPhone actualiza la lista.
+Ambos deben estar en la misma red, y el Firewall de Windows debe permitir `mirror_dock.exe`. La página *Este equipo* de la ventana «Acerca de» indica si lo que estorba es el firewall o una red configurada como *pública*. Desactivar y volver a activar el Wi-Fi del iPhone actualiza la lista.
 
 **El cable está conectado, pero la duplicación sigue usando Wi-Fi.**
 Punto de acceso personal debe estar activado, y la conexión elegida debe ser *Preferir USB*. La segunda línea del menú muestra el estado de la conexión USB.
@@ -186,12 +209,15 @@ El mensaje indica el motivo: el cable no está conectado o el iPhone no confía 
 **¿Es seguro dejar activado el modo de desarrollador?**
 Es una opción de la propia Apple, pensada para quienes crean apps. Permite que un equipo de confianza instale y depure apps y acceda a los servicios para desarrolladores; no le hace jailbreak al teléfono, y puede volver a desactivarla en el mismo lugar.
 
+**¿MirrorDock usa Internet?**
+La duplicación es local. MirrorDock solo se conecta a Internet para dos cosas: la búsqueda de actualizaciones (GitHub, una vez al día, y se puede desactivar) y, la primera vez que controla un iPhone, la imagen de disco de desarrollador de Apple y la firma de Apple para ella.
+
 **¿Dónde está el registro?**
 `%LOCALAPPDATA%\MirrorDock\mirror_dock.log`, o **Abrir archivo de registro** en el menú.
 
 ## 🛠️ Compilar desde el código fuente
 
-MSYS2 CLANG64 (clang 23, libc++ con el módulo de la biblioteca estándar de C++26, CMake 4.4, Ninja) y el compilador de sombreadores del SDK de Windows. FFmpeg, OpenSSL y libplist se compilan como bibliotecas estáticas a partir de commits fijados.
+MSYS2 CLANG64 (clang 23, libc++ con el módulo de la biblioteca estándar de C++26, CMake 4.4, Ninja) y el compilador de sombreadores del SDK de Windows. FFmpeg, OpenSSL y libplist se compilan como bibliotecas estáticas a partir de commits fijados; esos commits están en `win_native/build_scripts/build_inputs.tsv`, la lista que muestra la ventana «Acerca de».
 
 ```sh
 bash win_native/build_scripts/fetch_deps.sh <src_root>

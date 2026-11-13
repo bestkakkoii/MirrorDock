@@ -26,10 +26,18 @@
 #define UXPLAY_LEGACY_PRODUCT_NAME "UxPlay"
 
 #define UXPLAY_VERSION_MAJOR 1
-#define UXPLAY_VERSION_MINOR 10
+#define UXPLAY_VERSION_MINOR 11
 #define UXPLAY_VERSION_PATCH 0
-#define UXPLAY_VERSION_TEXT "1.10.0"
+#define UXPLAY_VERSION_TEXT "1.11.0"
+/* the day this version was published (ISO 8601), shown in "About" */
+#define UXPLAY_RELEASE_DATE "2026-11-13"
 #define UXPLAY_CORE_VERSION "1.74"
 #define UXPLAY_PROJECT_URL "https://github.com/bestkakkoii/MirrorDock"
+/* Where the update check asks for the newest published release (GitHub's
+   REST API, JSON), the form of the tags releases carry ("win-native-1.10",
+   "win-native-1.9.1") and the name of the package among a release's files. */
+#define UXPLAY_RELEASE_FEED_URL "https://api.github.com/repos/bestkakkoii/MirrorDock/releases/latest"
+#define UXPLAY_RELEASE_TAG_PREFIX "win-native-"
+#define UXPLAY_RELEASE_PACKAGE_NAME "mirror_dock_win64.zip"
 
 #endif

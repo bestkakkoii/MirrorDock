@@ -181,7 +181,7 @@ con las versiones actuales de iOS.
 - La interfaz sigue el idioma para mostrar de Windows: inglés, chino
   tradicional, chino simplificado, japonés, coreano, español, alemán,
   francés, vietnamita, tailandés y ruso; con cualquier otro idioma se
-  muestra en inglés. Para fijar uno, use la opción -ui (sección 8).
+  muestra en inglés. Para fijar uno, use la opción -ui (sección 9).
 
 
 5. Controlar el iPhone con mouse y teclado
@@ -197,6 +197,10 @@ ventana indica «control activo»; F8 lo desactiva. La elección se recuerda.
   Rueda del mouse            desplaza lo que está bajo el puntero (con
                              Shift: en horizontal)
   Botón central              ir a la pantalla de inicio
+  Doble clic                 activa o desactiva la pantalla completa, como
+                             siempre (es un comando de la propia ventana).
+                             Con Alt pulsada: dos toques seguidos en el
+                             teléfono
   Teclado                    escribe en el teléfono, como un teclado
                              conectado a él. Ctrl equivale a la tecla
                              Comando; Ctrl+Espacio cambia el idioma del
@@ -207,10 +211,13 @@ ventana indica «control activo»; F8 lo desactiva. La elección se recuerda.
                              las apps que no responden al teclado)
   Botón derecho del mouse    el menú de MirrorDock, como siempre
 
-F8, F11, Alt+Enter, Alt+F4 y, en pantalla completa, Esc siguen actuando
-sobre la ventana. La barra de control no aparece mientras el control está
-activado, porque taparía la parte inferior de la pantalla del teléfono: use
-el botón derecho del mouse.
+Mientras el control está activado, los comandos propios de la ventana tienen
+prioridad: F8, F11, Alt+Enter, Alt+F4, Esc en pantalla completa y el doble
+clic siguen actuando sobre la ventana. En un doble clic, el primer clic ya ha
+llegado al teléfono como un toque cuando llega el segundo: haga doble clic en
+una barra negra si la hay, o pulse F11. La barra de control no aparece
+mientras el control está activado, porque taparía la parte inferior de la
+pantalla del teléfono: use el botón derecho del mouse.
 
 Qué se necesita:
 - Un iPhone con iOS 27 o posterior, conectado por el cable USB y que confíe
@@ -276,7 +283,47 @@ búfer más amplio de «Calidad») surte pleno efecto en la siguiente conexión
   se muestra allí.
 
 
-8. Opciones avanzadas
+8. Actualizaciones y la ventana «Acerca de»
+-------------------------------------------
+- «Buscar actualizaciones…» en el menú pregunta a GitHub cuál es la versión
+  más reciente y muestra la respuesta en la ventana «Acerca de». Cuando hay
+  una más nueva, «Descargar» abre su zip en el navegador y «Novedades» abre
+  sus notas de la versión: descomprima el paquete nuevo sobre la carpeta
+  anterior. El programa no instala nada por su cuenta.
+- Una vez al día el programa pregunta por sí solo, y una notificación le
+  avisa cuando sale una versión nueva. Para evitarlo, desactive «Buscar
+  actualizaciones automáticamente» en la ventana «Acerca de».
+- Qué se envía: una sola petición a api.github.com. GitHub ve su dirección IP
+  y el nombre «MirrorDock/<versión>», y nada sobre usted ni sobre el equipo.
+  No se hace ninguna búsqueda automática con una conexión que Windows marque
+  como de uso medido, ni mientras la conexión a Internet del equipo pase por
+  el iPhone.
+- «Acerca de…» en el menú abre una ventana propia con tres páginas:
+    Acerca de    versión y fecha de publicación, la búsqueda de
+                 actualizaciones y enlaces al proyecto, a esta guía y a los
+                 textos de las licencias
+    Este equipo  lo que importa al programa en este equipo, fila por fila:
+                 Windows, pantalla, alimentación, red, firewall, procesador,
+                 memoria, GPU y su decodificación de video, sonido,
+                 controlador gráfico, la compatibilidad USB de Apple y el
+                 iPhone conectado por cable. Cada fila se califica como
+                 correcta, con aviso o con problema, y una fila que no está
+                 bien dice qué hacer al respecto
+    Componentes  todas las bibliotecas y herramientas con las que está hecho
+                 el programa, con versión, fecha y licencia, y cuándo se
+                 publicó cada versión del programa
+- La puntuación de «Este equipo» es la parte de las filas calificadas que
+  están en orden, ponderada según lo que cada una importa para la duplicación
+  (la decodificación de video por hardware es la que más cuenta). Indica lo
+  bien preparado que está el equipo; no es una prueba de rendimiento.
+- «Copiar informe» copia esa página al portapapeles como texto sin formato:
+  péguela cuando informe de un problema. Nada de la página sale del equipo, y
+  no se muestra ni se guarda ningún número de serie ni nombre de dispositivo.
+- Teclas en la ventana «Acerca de»: Tab pasa de un enlace o botón al
+  siguiente, Enter lo usa, Ctrl+Tab cambia de página y Esc cierra la ventana.
+
+
+9. Opciones avanzadas
 ---------------------
 Cree un acceso directo a mirror_dock.exe y agregue las opciones después del
 «Destino», o escriba una opción por línea (sin el signo menos) en
@@ -322,8 +369,8 @@ configuración antiguo contiene esas opciones, el registro anota que se
 ignoraron y el programa se inicia con normalidad.
 
 
-9. Cifras de referencia
------------------------
+10. Cifras de referencia
+------------------------
 Medidas en un equipo portátil de 2016 (Core i7-6700HQ, la gráfica integrada
 Intel HD Graphics 530 controla el monitor, Windows 11). Son solo
 orientativas y varían de un equipo a otro:
@@ -336,7 +383,7 @@ orientativas y varían de un equipo a otro:
   DXGI de modelo flip; ambos comparten una misma línea de tiempo.
 
 
-10. Recomendaciones
+11. Recomendaciones
 -------------------
 - Cuando dos monitores duplican el escritorio con frecuencias de
   actualización distintas (60 Hz y 50 Hz, por ejemplo), Windows solo sigue a
@@ -346,11 +393,13 @@ orientativas y varían de un equipo a otro:
 - Un equipo portátil rinde mejor conectado a la corriente.
 
 
-11. Solución de problemas
+12. Solución de problemas
 -------------------------
 - El iPhone no muestra el equipo en la lista: ambos deben estar en la misma
-  red Wi-Fi y el firewall debe permitir el programa (sección 1); desactive
-  el Wi-Fi del iPhone y vuelva a activarlo.
+  red Wi-Fi y el firewall debe permitir el programa (sección 1); la página
+  «Este equipo» de la ventana «Acerca de» (sección 8) indica si lo que
+  estorba es el firewall o una red configurada como «pública». Desactive el
+  Wi-Fi del iPhone y vuelva a activarlo.
 - El cable está conectado pero no se usa USB: mire el estado de USB en la
   segunda línea del menú. «Active Punto de acceso personal»: actívelo en el
   iPhone. «Adaptador de red deshabilitado»: elija «Habilitar adaptador de
@@ -377,7 +426,7 @@ orientativas y varían de un equipo a otro:
   instalar la imagen de disco de desarrollador, el equipo necesita Internet.
   Los detalles están en el registro.
 - La imagen se entrecorta: pruebe primero el modo «Rendimiento»; con
-  monitores duplicados, consulte la sección 10.
+  monitores duplicados, consulte la sección 11.
 - La imagen se queda en negro y el programa se reinicia solo: el controlador
   gráfico se restableció o se actualizó. El programa se reinicia una vez;
   vuelva a elegir el equipo en el iPhone. Si ocurre varias veces en poco
@@ -385,7 +434,7 @@ orientativas y varían de un equipo a otro:
   gráfico.
 
 
-12. Actualizar desde UxPlay for Windows (1.6 o anterior)
+13. Actualizar desde UxPlay for Windows (1.6 o anterior)
 --------------------------------------------------------
 - El programa se llama ahora MirrorDock y su ejecutable es mirror_dock.exe.
   Cierre el antiguo uxplay.exe antes de iniciar el nuevo; el ejecutable

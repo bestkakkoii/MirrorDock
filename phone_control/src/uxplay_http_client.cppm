@@ -1,8 +1,9 @@
 ﻿// SPDX-License-Identifier: GPL-3.0-or-later
 // One HTTP request and its answer, through the system's own HTTP stack
 // (WinHTTP: the proxy and the certificates Windows is set up with).  For the
-// two things remote control fetches from the internet: the Developer Disk
-// Image and Apple's signature for it.
+// things the program fetches from the internet: the Developer Disk Image and
+// Apple's signature for it (remote control), and the newest release it asks
+// GitHub about (the update check of the media engine).
 export module uxplay_http_client;
 
 import std;
@@ -13,11 +14,13 @@ export namespace uxplay
     struct http_request
     {
         std::string url; // http:// or https://
-        // sent as it is (no name of this program or of its user)
+        // sent as it is; the default names neither this program nor its user
         std::string user_agent = "http-client";
         // with a body the request is a POST of this type
         std::string content_type;
         std::span<std::uint8_t const> body;
+        // further header lines, each "Name: value" without a line end
+        std::vector<std::string> headers;
         // an answer with a longer body is refused
         std::size_t longest_answer = 64 * 1024 * 1024;
         // for each step: resolving the name, connecting, sending, every piece that is received

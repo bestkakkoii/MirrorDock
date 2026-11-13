@@ -43,6 +43,8 @@ export namespace uxplay
         unsigned int device_id = 0;
         std::uint64_t dedicated_video_memory = 0;
         unsigned int output_count = 0;
+        // no graphics card with a working driver: Windows' software renderer draws
+        bool software = false;
         bool h264_decode = false;
         bool hevc_main_decode = false;
         bool hevc_main10_decode = false;
@@ -51,6 +53,8 @@ export namespace uxplay
     struct display_target_info
     {
         std::string monitor_name;
+        // false: the monitor gives no name, and monitor_name is a description for the log
+        bool name_known = false;
         bool internal_panel = false;
         double refresh_hz = 0.0;
     };

@@ -31,6 +31,9 @@ import uxplay_video_window;
 import uxplay_ui_text;
 import uxplay_settings;
 import uxplay_crash_report;
+import uxplay_update_check;
+import uxplay_system_report;
+import uxplay_about_window;
 
 namespace
 {
@@ -52,6 +55,11 @@ namespace
     constexpr wchar_t developer_image_folder[] = L"developer_disk_image";
     constexpr std::wstring_view setting_ready_hint_shown = L"ready_hint_shown";
     constexpr std::wstring_view setting_close_hint_shown = L"close_hint_shown";
+    // the newest release the user was told about (major * 1 000 000 + minor * 1000 + patch)
+    constexpr std::wstring_view setting_update_notified = L"update_notified_version";
+    // beside the executable when the program runs from its package
+    constexpr wchar_t user_guide_folder[] = L"user_guide";
+    constexpr wchar_t licences_folder[] = L"licenses";
     // how long Windows' shutdown waits for the network goodbye
     constexpr DWORD session_end_wait_ms = 2000;
 
@@ -105,6 +113,19 @@ namespace
         std::unique_ptr<uxplay::usb_link_monitor> usb_link_owner;
         std::atomic<uxplay::media_engine *> engine{nullptr};
         std::atomic<uxplay::usb_link_monitor *> usb_link{nullptr};
+        // "About": its window, the update check and the look at this PC.
+        // Created with the engine; native_media_stop says in which order they go.
+        std::unique_ptr<uxplay::about_window> about_owner;
+        std::unique_ptr<uxplay::update_checker> updates_owner;
+        std::unique_ptr<uxplay::report_collector> collector_owner;
+        std::atomic<uxplay::about_window *> about{nullptr};
+        std::atomic<uxplay::update_checker *> updates{nullptr};
+        std::atomic<uxplay::report_collector *> collector{nullptr};
+        // the AirPlay stream as it was configured, for "This PC" (width 0: none)
+        std::atomic<int> stream_codec{0}; // 0 = H.264, 1 = H.265
+        std::atomic<int> stream_width{0};
+        std::atomic<int> stream_height{0};
+        std::atomic<bool> stream_over_usb{false};
         // USB link monitor thread only
         std::optional<uxplay::usb_link_state> last_usb_link;
         bool hotspot_hint_shown = false;
@@ -121,9 +142,6 @@ namespace
         std::wstring log_path;
         // set once in native_media_start, read-only afterwards
         std::wstring receiver_name;
-        std::wstring product_version;
-        std::wstring core_version;
-        std::wstring project_url;
         HANDLE network_stopped_event = nullptr;
         // why the engine did not start (written before start_finished)
         std::string failure_text;
@@ -253,28 +271,34 @@ namespace
         return prefer_usb_link && link.link_adapter_disabled;
     }
 
-    std::wstring usb_link_line(uxplay::usb_link_state const &link, bool prefer_usb_link)
+    // which of the USB status texts describes the link (usb_ready_at is followed by the PC's address on it)
+    uxplay::ui_text usb_link_text(uxplay::usb_link_state const &link, bool prefer_usb_link)
     {
         if (!prefer_usb_link)
         {
             // "Wi-Fi only": whatever is plugged in, the cable only charges
-            return ui_text_string(link.iphone_attached || link.link_up ? uxplay::ui_text::usb_charging_only_status
-                                                                       : uxplay::ui_text::usb_not_connected);
+            return link.iphone_attached || link.link_up ? uxplay::ui_text::usb_charging_only_status
+                                                        : uxplay::ui_text::usb_not_connected;
         }
         if (link.link_adapter_disabled)
         {
-            return ui_text_string(uxplay::ui_text::usb_adapter_disabled);
+            return uxplay::ui_text::usb_adapter_disabled;
         }
         if (link.link_up)
         {
-            return std::format(L"{} {}", uxplay::ui_string(uxplay::ui_text::usb_ready_at),
-                               uxplay::utf8_to_utf16(link.local_address));
+            return uxplay::ui_text::usb_ready_at;
         }
-        if (link.iphone_attached)
+        return link.iphone_attached ? uxplay::ui_text::usb_turn_on_hotspot : uxplay::ui_text::usb_not_connected;
+    }
+
+    std::wstring usb_link_line(uxplay::usb_link_state const &link, bool prefer_usb_link)
+    {
+        uxplay::ui_text const text = usb_link_text(link, prefer_usb_link);
+        if (text == uxplay::ui_text::usb_ready_at)
         {
-            return ui_text_string(uxplay::ui_text::usb_turn_on_hotspot);
+            return std::format(L"{} {}", uxplay::ui_string(text), uxplay::utf8_to_utf16(link.local_address));
         }
-        return ui_text_string(uxplay::ui_text::usb_not_connected);
+        return ui_text_string(text);
     }
 
     void refresh_usb_link_line()
@@ -505,16 +529,252 @@ namespace
         }
     }
 
-    void show_about()
+    // ---- "About": its window, the update check, the look at this PC ----------
+
+    // What only the running program knows about itself, for "This PC".
+    uxplay::program_facts gather_program_facts()
     {
         bridge_state &state = bridge();
-        uxplay::media_engine *const ready = state.engine.load(std::memory_order_acquire);
-        std::wstring const text = ui_text_with(uxplay::ui_text::about_text,
-                                               {state.product_version, state.core_version, state.project_url});
-        HWND const owner = ready != nullptr && ready->showing_video() ? static_cast<HWND>(ready->window_handle())
-                                                                      : nullptr;
-        MessageBoxW(owner, text.c_str(), L"" UXPLAY_PRODUCT_NAME,
-                    MB_OK | MB_ICONINFORMATION | (owner == nullptr ? MB_SETFOREGROUND | MB_TOPMOST : 0U));
+        uxplay::program_facts program;
+        program.version = L"" UXPLAY_VERSION_TEXT;
+        if (uxplay::media_engine *const ready = state.engine.load(std::memory_order_acquire); ready != nullptr)
+        {
+            uxplay::gpu_adapter_info const adapter = ready->adapter();
+            program.adapter_name = uxplay::utf8_to_utf16(adapter.description);
+            program.software_renderer = adapter.software;
+            program.h264_hardware = adapter.h264_decode;
+            program.hevc_hardware = adapter.hevc_main_decode;
+            if (int const width = state.stream_width.load(); ready->showing_video() && width > 0)
+            {
+                program.stream_active = true;
+                program.stream_link = state.stream_over_usb.load() ? L"USB" : L"Wi-Fi";
+                program.stream_codec = state.stream_codec.load() == 1 ? L"H.265" : L"H.264";
+                program.stream_width = width;
+                program.stream_height = state.stream_height.load();
+                program.stream_hardware_decoding = ready->statistics(media_source::airplay).hardware_decode;
+            }
+        }
+        if (uxplay::usb_link_monitor *const link = state.usb_link.load(std::memory_order_acquire); link != nullptr)
+        {
+            uxplay::usb_link_state const current = link->current();
+            bool const prefer = state.prefer_usb_link.load();
+            program.usb_link = usb_link_text(current, prefer);
+            if (program.usb_link == uxplay::ui_text::usb_ready_at)
+            {
+                program.usb_link_address = uxplay::utf8_to_utf16(current.local_address);
+            }
+            program.usb_adapter_disabled = offer_enable_adapter(current, prefer);
+        }
+        if (uxplay::update_checker *const updates = state.updates.load(std::memory_order_acquire); updates != nullptr)
+        {
+            if (uxplay::update_state const update = updates->current(); update.newest)
+            {
+                program.update = update.newest->version > uxplay::running_version()
+                                     ? uxplay::update_knowledge::newer_available
+                                     : uxplay::update_knowledge::up_to_date;
+                program.newest_version = uxplay::utf8_to_utf16(update.newest->version.text());
+            }
+        }
+        return program;
+    }
+
+    // Looks at this PC anew for the About window (any thread).
+    void request_report()
+    {
+        if (uxplay::report_collector *const collector = bridge().collector.load(std::memory_order_acquire);
+            collector != nullptr)
+        {
+            collector->request(gather_program_facts());
+        }
+    }
+
+    // Opens the About window, or brings it to the front (UI thread of the
+    // video window: a menu command or a click on a notification).
+    void show_about(uxplay::about_page page)
+    {
+        bridge_state &state = bridge();
+        uxplay::about_window *const about = state.about.load(std::memory_order_acquire);
+        if (about == nullptr)
+        {
+            return;
+        }
+        // above a video window that is "always on top"
+        bool topmost = false;
+        if (uxplay::media_engine *const ready = state.engine.load(std::memory_order_acquire); ready != nullptr)
+        {
+            HWND const video = static_cast<HWND>(ready->window_handle());
+            topmost = video != nullptr && IsWindowVisible(video) != FALSE &&
+                      (GetWindowLongPtrW(video, GWL_EXSTYLE) & WS_EX_TOPMOST) != 0;
+        }
+        if (uxplay::update_checker *const updates = state.updates.load(std::memory_order_acquire); updates != nullptr)
+        {
+            about->set_update(updates->current());
+        }
+        bool const was_open = about->is_open();
+        if (uxplay::status const shown = about->show(page, topmost); !shown)
+        {
+            // the least it has to say, in a plain box
+            uxplay::log::warning("About window: {}", shown.error().describe());
+            std::wstring const text =
+                std::format(L"" UXPLAY_PRODUCT_NAME L" " UXPLAY_VERSION_TEXT L" (" UXPLAY_RELEASE_DATE L")\n{}",
+                            L"" UXPLAY_PROJECT_URL);
+            MessageBoxW(nullptr, text.c_str(), L"" UXPLAY_PRODUCT_NAME,
+                        MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND | MB_TOPMOST);
+            return;
+        }
+        if (!was_open)
+        {
+            request_report();
+        }
+    }
+
+    // The update check has something new to show (its thread, or the thread
+    // of whoever switched "automatic").
+    void on_update_change(uxplay::update_state const &update, bool by_request)
+    {
+        bridge_state &state = bridge();
+        bool const settled = update.phase == uxplay::update_phase::up_to_date ||
+                             update.phase == uxplay::update_phase::newer_available;
+        if (uxplay::about_window *const about = state.about.load(std::memory_order_acquire); about != nullptr)
+        {
+            about->set_update(update);
+            if (settled && about->is_open())
+            {
+                request_report(); // the row about this program says whether it is the newest
+            }
+        }
+        // A newer release that a check nobody asked for has found: said once
+        // per release.  (A check the user asked for shows in the About window.)
+        if (by_request || update.phase != uxplay::update_phase::newer_available || !update.newest)
+        {
+            return;
+        }
+        uxplay::release_version const &newest = update.newest->version;
+        std::uint32_t const number = newest.major * 1'000'000U + newest.minor * 1000U + newest.patch;
+        if (uxplay::settings::stored_number(setting_update_notified).value_or(0) == number)
+        {
+            return;
+        }
+        uxplay::settings::store_number(setting_update_notified, number);
+        if (uxplay::media_engine *const ready = state.engine.load(std::memory_order_acquire); ready != nullptr)
+        {
+            ready->notify(ui_text_with(uxplay::ui_text::update_available, {uxplay::utf8_to_utf16(newest.text())}),
+                          ui_text_with(uxplay::ui_text::update_available_text, {L"" UXPLAY_VERSION_TEXT}),
+                          uxplay::tray_command::about);
+        }
+    }
+
+    // the user guide of the interface language, by the names of win_native/package/user_guide
+    std::wstring_view user_guide_code()
+    {
+        switch (uxplay::current_ui_language())
+        {
+        case uxplay::ui_language::traditional_chinese:
+            return L"zh_tw";
+        case uxplay::ui_language::simplified_chinese:
+            return L"zh_cn";
+        case uxplay::ui_language::japanese:
+            return L"ja";
+        case uxplay::ui_language::korean:
+            return L"ko";
+        case uxplay::ui_language::spanish:
+            return L"es";
+        case uxplay::ui_language::german:
+            return L"de";
+        case uxplay::ui_language::french:
+            return L"fr";
+        case uxplay::ui_language::vietnamese:
+            return L"vi";
+        case uxplay::ui_language::thai:
+            return L"th";
+        case uxplay::ui_language::russian:
+            return L"ru";
+        case uxplay::ui_language::english:
+        case uxplay::ui_language::count:
+            break;
+        }
+        return L"en";
+    }
+
+    // Creates the About window (not shown yet), the update check and the
+    // collector of the facts about this PC.  After the engine: they use it.
+    void create_about(bridge_state &state)
+    {
+        uxplay::about_identity identity;
+        identity.version = L"" UXPLAY_VERSION_TEXT;
+        identity.release_date = L"" UXPLAY_RELEASE_DATE;
+        identity.core_version = L"" UXPLAY_CORE_VERSION;
+        identity.project_url = L"" UXPLAY_PROJECT_URL;
+        identity.log_file = state.log_path;
+        // what lies beside the program when it runs from its package
+        wchar_t module_path[1024]{};
+        if (DWORD const length = GetModuleFileNameW(nullptr, module_path, 1024); length > 0 && length < 1024)
+        {
+            std::filesystem::path const folder = std::filesystem::path{module_path}.parent_path();
+            std::error_code ignored;
+            std::filesystem::path const guide =
+                folder / user_guide_folder / std::format(L"user_guide_{}.txt", user_guide_code());
+            if (std::filesystem::is_regular_file(guide, ignored))
+            {
+                identity.user_guide = guide;
+            }
+            if (std::filesystem::path const licences = folder / licences_folder;
+                std::filesystem::is_directory(licences, ignored))
+            {
+                identity.licences = licences;
+            }
+        }
+        uxplay::about_events about_events;
+        about_events.on_check_for_updates = []
+        {
+            if (uxplay::update_checker *const updates = bridge().updates.load(std::memory_order_acquire);
+                updates != nullptr)
+            {
+                updates->check_now();
+            }
+        };
+        about_events.on_automatic_updates = [](bool enabled)
+        {
+            if (uxplay::update_checker *const updates = bridge().updates.load(std::memory_order_acquire);
+                updates != nullptr)
+            {
+                updates->set_automatic(enabled);
+            }
+        };
+        about_events.on_measure_again = []
+        {
+            request_report();
+        };
+        state.about_owner = uxplay::about_window::create(std::move(identity), std::move(about_events));
+        state.about.store(state.about_owner.get(), std::memory_order_release);
+
+        state.collector_owner = uxplay::report_collector::create([](uxplay::system_facts const &facts)
+        {
+            if (uxplay::about_window *const about = bridge().about.load(std::memory_order_acquire); about != nullptr)
+            {
+                about->set_facts(facts);
+            }
+        });
+        state.collector.store(state.collector_owner.get(), std::memory_order_release);
+
+        uxplay::update_events update_events;
+        update_events.on_change = [](uxplay::update_state const &update, bool by_request)
+        {
+            on_update_change(update, by_request);
+        };
+        update_events.automatic_allowed = []
+        {
+            // not while the PC's internet goes through the iPhone: that is its mobile data
+            uxplay::usb_link_monitor *const link = bridge().usb_link.load(std::memory_order_acquire);
+            if (link == nullptr)
+            {
+                return true;
+            }
+            uxplay::usb_link_state const current = link->current();
+            return !current.ipv4_internet_via_link && !current.ipv6_internet_via_link;
+        };
+        state.updates_owner = uxplay::update_checker::create(std::move(update_events));
+        state.updates.store(state.updates_owner.get(), std::memory_order_release);
     }
 
     uxplay::audio_codec audio_codec_for(unsigned char compression_type)
@@ -663,8 +923,17 @@ namespace
             case uxplay::tray_command::toggle_autostart:
                 toggle_autostart();
                 break;
+            case uxplay::tray_command::check_for_updates:
+                // the answer shows in the About window
+                show_about(uxplay::about_page::overview);
+                if (uxplay::update_checker *const updates = current.updates.load(std::memory_order_acquire);
+                    updates != nullptr)
+                {
+                    updates->check_now();
+                }
+                break;
             case uxplay::tray_command::about:
-                show_about();
+                show_about(uxplay::about_page::overview);
                 break;
             case uxplay::tray_command::toggle_fullscreen:
             case uxplay::tray_command::toggle_always_on_top:
@@ -688,6 +957,7 @@ namespace
             state.engine_owner = std::move(*created);
             state.engine.store(state.engine_owner.get(), std::memory_order_release);
             state.engine_owner->set_log_available(!state.log_path.empty());
+            create_about(state);
             if (auto registered = uxplay::settings::autostart_command(); !registered)
             {
                 uxplay::log::warning("start with Windows: {}", registered.error().describe());
@@ -782,14 +1052,8 @@ extern "C" int native_media_start(const native_media_settings *settings)
             : mode_from_number(static_cast<int>(uxplay::settings::stored_number(setting_performance_mode)
                                                     .value_or(NATIVE_MEDIA_MODE_BALANCED)));
     state.mode.store(static_cast<int>(mode));
-    auto const text_or_empty = [](const char *text)
-    {
-        return text != nullptr ? uxplay::utf8_to_utf16(text) : std::wstring{};
-    };
-    state.receiver_name = text_or_empty(settings->window_title);
-    state.product_version = text_or_empty(settings->product_version);
-    state.core_version = text_or_empty(settings->core_version);
-    state.project_url = text_or_empty(settings->project_url);
+    state.receiver_name = settings->window_title != nullptr ? uxplay::utf8_to_utf16(settings->window_title)
+                                                            : std::wstring{};
     if (state.network_stopped_event == nullptr)
     {
         state.network_stopped_event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
@@ -865,6 +1129,20 @@ extern "C" void native_media_stop(void)
     {
         state.engine_owner->stop_window_callbacks();
     }
+    // "About".  Its window first: its buttons ask the update check and the
+    // collector.  Then those two: their threads hand what they find to the
+    // About object (which is still there, only without a window) and use the
+    // link monitor and the engine.  The object last.
+    if (state.about_owner)
+    {
+        state.about_owner->close();
+    }
+    state.updates.store(nullptr);
+    state.updates_owner.reset();
+    state.collector.store(nullptr);
+    state.collector_owner.reset();
+    state.about.store(nullptr);
+    state.about_owner.reset();
     state.usb_link.store(nullptr);
     state.usb_link_owner.reset();
     state.engine.store(nullptr);
@@ -1026,6 +1304,10 @@ extern "C" void native_media_install_crash_report(const char *directory)
 
 extern "C" void native_media_airplay_video_configure(int codec, int width, int height)
 {
+    bridge_state &state = bridge();
+    state.stream_codec.store(codec == 1 ? 1 : 0);
+    state.stream_height.store(height);
+    state.stream_width.store(width);
     if (uxplay::media_engine *const ready = engine(); ready != nullptr)
     {
         ready->video_configure(media_source::airplay, codec == 1 ? uxplay::video_codec::h265 : uxplay::video_codec::h264,
@@ -1079,6 +1361,7 @@ extern "C" void native_media_airplay_video_stop(void)
     {
         ready->video_stop(media_source::airplay);
     }
+    state.stream_width.store(0);
     std::scoped_lock lock{state.mapping_mutex};
     state.remote_to_local_offset.reset();
 }
@@ -1130,6 +1413,7 @@ extern "C" int native_media_set_airplay_local_address(const char *local_address)
     // by the adapter that owns the address: a PC on the iPhone hotspot over
     // Wi-Fi also has 172.20.10.x, but that is Wi-Fi, not the cable
     bool const over_usb = local_address != nullptr && uxplay::is_usb_link_address(local_address);
+    bridge().stream_over_usb.store(over_usb);
     if (uxplay::media_engine *const ready = engine(); ready != nullptr)
     {
         ready->set_airplay_over_usb(over_usb);

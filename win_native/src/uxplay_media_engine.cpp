@@ -1711,6 +1711,11 @@ namespace uxplay
         return impl->gpu && impl->gpu->adapter_info().h264_decode;
     }
 
+    gpu_adapter_info media_engine::adapter() const
+    {
+        return impl->gpu ? impl->gpu->adapter_info() : gpu_adapter_info{};
+    }
+
     void media_engine::set_performance_mode(performance_mode mode)
     {
         impl->mode.store(mode);

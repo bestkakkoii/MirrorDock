@@ -3181,9 +3181,6 @@ int main (int argc, char *argv[]) {
     native_settings.performance_mode = mode_choice;
     native_settings.crop_mode = crop_choice;
     native_settings.tray_icon = true;
-    native_settings.product_version = UXPLAY_VERSION_TEXT;
-    native_settings.core_version = VERSION;
-    native_settings.project_url = UXPLAY_PROJECT_URL;
     native_settings.log_path = native_log_path.empty() ? NULL : native_log_path.c_str();
     native_settings.log_callback = native_log_callback;
     native_settings.event_callback = native_event_callback;

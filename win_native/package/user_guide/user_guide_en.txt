@@ -163,7 +163,7 @@ the way described above is the wired mirroring that works with current iOS.
 - The interface follows the Windows display language: English, Traditional
   Chinese, Simplified Chinese, Japanese, Korean, Spanish, German, French,
   Vietnamese, Thai and Russian; any other language gets English. To fix
-  one, use the -ui option (section 8).
+  one, use the -ui option (section 9).
 
 
 5. Controlling the iPhone with mouse and keyboard
@@ -178,6 +178,8 @@ switches it off again. The choice is remembered.
   Mouse wheel         scrolls what is under the pointer (with Shift:
                       sideways)
   Middle button       Home
+  Double-click        full screen on / off, as always (the window's own
+                      command). With Alt held: a double tap on the phone
   Keyboard            types on the phone, like a keyboard plugged into it.
                       Ctrl is the Command key; Ctrl+Space switches the
                       phone's input language
@@ -186,9 +188,13 @@ switches it off again. The choice is remembered.
                       apps that take no keys)
   Right mouse button  the menu of MirrorDock, as always
 
-F8, F11, Alt+Enter, Alt+F4 and, in full screen, Esc keep working on the
-window. The control bar stays away while control is on, because it would
-cover the bottom of the phone's screen: use the right mouse button.
+The window's own commands come first while control is on: F8, F11,
+Alt+Enter, Alt+F4, Esc in full screen and the double-click keep working on
+the window. Of a double-click, the first click has already reached the
+phone as a tap when the second one arrives: double-click a black bar when
+there is one, or press F11. The control bar stays away while control is on,
+because it would cover the bottom of the phone's screen: use the right
+mouse button.
 
 What it takes:
 - An iPhone with iOS 27 or later on the USB cable, with this PC trusted
@@ -248,7 +254,43 @@ so).
   there.
 
 
-8. Advanced options
+8. Updates and the About window
+-------------------------------
+- "Check for updates..." in the menu asks GitHub which release is the
+  newest and shows the answer in the About window. When there is a newer
+  one, "Download" opens its zip in your browser and "What's new" opens its
+  release notes: unzip the new package over the old folder. The program
+  installs nothing by itself.
+- Once a day the program asks by itself, and a notification tells you when
+  a newer release is out. To turn that off, switch off "Check for updates
+  automatically" in the About window.
+- What is sent: one request to api.github.com. GitHub sees your IP address
+  and the name "MirrorDock/<version>", and nothing about you or the PC. No
+  automatic check is made over a connection Windows marks as metered, nor
+  while the PC's internet runs through the iPhone.
+- "About..." in the menu opens a window of its own with three pages:
+    About        version and release date, the update check, links to the
+                 project, to this guide and to the licence texts
+    This PC      what matters to the program on this PC, row by row:
+                 Windows, display, power, network, firewall, processor,
+                 memory, graphics card and its video decoding, sound,
+                 graphics driver, Apple's USB support, the iPhone on the
+                 cable. Every row is rated good, attention or problem, and
+                 a row that is not good says what to do about it
+    Components   every library and tool the program is built from, with
+                 version, date and licence, and when each version of the
+                 program was published
+- The score on "This PC" is the share of the rated rows that are in order,
+  weighted by how much each matters to mirroring (hardware video decoding
+  counts most). It says how well the PC is set up; it is not a benchmark.
+- "Copy report" puts that page on the clipboard as plain text: paste it
+  when you report a problem. Nothing on the page leaves the PC, and no
+  serial number or device name is shown or stored.
+- Keys in the About window: Tab moves between its links and buttons, Enter
+  uses one, Ctrl+Tab changes the page, Esc closes it.
+
+
+9. Advanced options
 -------------------
 Create a shortcut to mirror_dock.exe and add options after the "Target", or
 write one option per line (without the minus sign) into
@@ -289,8 +331,8 @@ old settings file contains such options, the log notes that they were
 ignored and the program starts normally.
 
 
-9. Reference figures
---------------------
+10. Reference figures
+---------------------
 Measured on one laptop from 2016 (Core i7-6700HQ, the integrated Intel HD
 Graphics 530 drives the monitor, Windows 11). They are for orientation only
 and differ from PC to PC:
@@ -303,7 +345,7 @@ and differ from PC to PC:
   chain, and both share one timeline.
 
 
-10. Recommendations
+11. Recommendations
 -------------------
 - When two monitors duplicate the desktop with different refresh rates
   (60 Hz and 50 Hz, for example), Windows follows only one of them and
@@ -312,11 +354,12 @@ and differ from PC to PC:
 - A laptop works best on mains power.
 
 
-11. Troubleshooting
+12. Troubleshooting
 -------------------
 - The iPhone does not list the PC: both must be on the same Wi-Fi network
-  and the firewall must allow the program (section 1); turn the iPhone's
-  Wi-Fi off and on again.
+  and the firewall must allow the program (section 1); the page "This PC"
+  of the About window (section 8) says whether the firewall or a network
+  set to "public" is in the way. Turn the iPhone's Wi-Fi off and on again.
 - The cable is plugged in but USB is not used: look at the USB state in the
   second line of the menu. "Turn on Personal Hotspot": turn it on on the
   iPhone. "Network adapter disabled": choose "Enable USB network
@@ -340,14 +383,14 @@ and differ from PC to PC:
   (section 5); the iPhone needs iOS 27 or later; installing the Developer
   Disk Image needs the internet on the PC. The log has the details.
 - The picture stutters: try "Performance" mode first; with duplicated
-  monitors see section 10.
+  monitors see section 11.
 - The picture goes black and the program restarts by itself: the graphics
   driver was reset or updated. The program restarts once; choose the PC
   again on the iPhone. If it happens repeatedly within a short time the
   program stops and shows the reason: check the graphics driver.
 
 
-12. Upgrading from UxPlay for Windows (1.6 or earlier)
+13. Upgrading from UxPlay for Windows (1.6 or earlier)
 ------------------------------------------------------
 - The program is now called MirrorDock and its executable is
   mirror_dock.exe. Exit the old uxplay.exe before starting the new one; the

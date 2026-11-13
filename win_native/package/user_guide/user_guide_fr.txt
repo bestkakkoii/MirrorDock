@@ -183,7 +183,7 @@ filaire qui fonctionne avec les versions actuelles d’iOS.
   traditionnel, chinois simplifié, japonais, coréen, espagnol, allemand,
   français, vietnamien, thaï et russe ; dans toute autre langue,
   l’interface est en anglais. Pour en imposer une, utilisez l’option -ui
-  (section 8).
+  (section 9).
 
 
 5. Contrôler l’iPhone à la souris et au clavier
@@ -200,6 +200,10 @@ Le choix est mémorisé.
   Molette de la souris        fait défiler ce qui se trouve sous le pointeur
                               (avec Shift : horizontalement)
   Bouton central              retour à l’écran d’accueil
+  Double-clic                 active ou quitte le plein écran, comme
+                              toujours (c’est une commande de la fenêtre).
+                              Avec Alt enfoncée : toucher deux fois sur le
+                              téléphone
   Clavier                     écrit sur le téléphone, comme un clavier qui y
                               serait branché. Ctrl correspond à la touche
                               Commande ; Ctrl+Espace change la langue de
@@ -210,10 +214,14 @@ Le choix est mémorisé.
                               qui ne réagissent pas au clavier)
   Bouton droit de la souris   le menu de MirrorDock, comme toujours
 
-F8, F11, Alt+Enter, Alt+F4 et, en plein écran, Esc continuent d’agir sur la
-fenêtre. La barre de contrôle ne s’affiche pas tant que le contrôle est
-actif, car elle masquerait le bas de l’écran du téléphone : utilisez le
-bouton droit de la souris.
+Tant que le contrôle est actif, les commandes propres à la fenêtre passent en
+premier : F8, F11, Alt+Enter, Alt+F4, Esc en plein écran et le double-clic
+continuent d’agir sur la fenêtre. Lors d’un double-clic, le premier clic a
+déjà atteint le téléphone sous forme de toucher quand le second arrive :
+double-cliquez sur une bande noire s’il y en a une, ou appuyez sur F11. La
+barre de contrôle ne s’affiche pas tant que le contrôle est actif, car elle
+masquerait le bas de l’écran du téléphone : utilisez le bouton droit de la
+souris.
 
 Ce qu’il faut :
 - Un iPhone sous iOS 27 ou version ultérieure, relié par le câble USB et qui
@@ -280,7 +288,52 @@ effet qu’à la connexion suivante (le programme le signale).
   s’y affiche.
 
 
-8. Options avancées
+8. Mises à jour et fenêtre « À propos »
+---------------------------------------
+- « Rechercher des mises à jour… » dans le menu demande à GitHub quelle est
+  la dernière version et affiche la réponse dans la fenêtre « À propos ».
+  S’il en existe une plus récente, « Télécharger » ouvre son zip dans votre
+  navigateur et « Nouveautés » ouvre ses notes de version : décompressez le
+  nouveau paquet par-dessus l’ancien dossier. Le programme n’installe rien
+  de lui-même.
+- Une fois par jour, le programme pose la question de lui-même, et une
+  notification vous prévient quand une nouvelle version sort. Pour l’éviter,
+  désactivez « Rechercher automatiquement les mises à jour » dans la fenêtre
+  « À propos ».
+- Ce qui est envoyé : une seule requête à api.github.com. GitHub voit votre
+  adresse IP et le nom « MirrorDock/<version> », et rien à votre sujet ni au
+  sujet du PC. Aucune recherche automatique n’a lieu sur une connexion que
+  Windows signale comme limitée, ni tant que l’accès à Internet du PC passe
+  par l’iPhone.
+- « À propos… » dans le menu ouvre une fenêtre à part, avec trois pages :
+    À propos    version et date de publication, la recherche de mises à
+                jour, et des liens vers le projet, ce guide et les textes
+                des licences
+    Ce PC       ce qui compte pour le programme sur ce PC, ligne par ligne :
+                Windows, écran, alimentation, réseau, pare-feu, processeur,
+                mémoire, GPU et son décodage vidéo, son, pilote graphique,
+                prise en charge USB d’Apple, iPhone relié par le câble.
+                Chaque ligne est notée « bon », « à surveiller » ou
+                « problème », et une ligne qui n’est pas bonne indique quoi
+                faire
+    Composants  chaque bibliothèque et chaque outil avec lesquels le
+                programme est construit, avec version, date et licence,
+                ainsi que la date de publication de chaque version du
+                programme
+- Le score de « Ce PC » est la part des lignes notées qui sont en ordre,
+  pondérée selon l’importance de chacune pour la recopie de l’écran (le
+  décodage vidéo matériel compte le plus). Il indique à quel point le PC est
+  bien préparé ; ce n’est pas un test de performances.
+- « Copier le rapport » place cette page dans le presse-papiers sous forme de
+  texte brut : collez-le quand vous signalez un problème. Rien de cette page
+  ne quitte le PC, et aucun numéro de série ni nom d’appareil n’est affiché
+  ou conservé.
+- Touches dans la fenêtre « À propos » : Tab passe d’un lien ou d’un bouton
+  au suivant, Enter l’actionne, Ctrl+Tab change de page, Esc ferme la
+  fenêtre.
+
+
+9. Options avancées
 -------------------
 Créez un raccourci vers mirror_dock.exe et ajoutez les options à la suite de
 la « Cible », ou écrivez une option par ligne (sans le signe moins) dans
@@ -328,8 +381,8 @@ le journal note qu’elles ont été ignorées et le programme démarre
 normalement.
 
 
-9. Chiffres de référence
-------------------------
+10. Chiffres de référence
+-------------------------
 Mesurés sur un portable de 2016 (Core i7-6700HQ, la puce graphique intégrée
 Intel HD Graphics 530 pilote l’écran, Windows 11). Ils ne sont donnés qu’à
 titre indicatif et varient d’un PC à l’autre :
@@ -342,7 +395,7 @@ titre indicatif et varient d’un PC à l’autre :
   en mode flip, et les deux partagent une même ligne de temps.
 
 
-10. Recommandations
+11. Recommandations
 -------------------
 - Quand deux écrans dupliquent le bureau avec des fréquences d’actualisation
   différentes (60 Hz et 50 Hz, par exemple), Windows n’en suit qu’un et le
@@ -352,11 +405,13 @@ titre indicatif et varient d’un PC à l’autre :
 - Un portable donne le meilleur de lui-même sur secteur.
 
 
-11. Dépannage
+12. Dépannage
 -------------
 - L’iPhone n’affiche pas le PC dans la liste : les deux doivent être sur le
   même réseau Wi-Fi et le pare-feu doit autoriser le programme (section 1) ;
-  désactivez puis réactivez le Wi-Fi de l’iPhone.
+  la page « Ce PC » de la fenêtre « À propos » (section 8) indique si c’est
+  le pare-feu ou un réseau défini comme « public » qui fait obstacle.
+  Désactivez puis réactivez le Wi-Fi de l’iPhone.
 - Le câble est branché mais l’USB n’est pas utilisé : regardez l’état de
   l’USB sur la deuxième ligne du menu. « Activez le partage de connexion » :
   activez-le sur l’iPhone. « Carte réseau désactivée » : choisissez
@@ -385,7 +440,7 @@ titre indicatif et varient d’un PC à l’autre :
   ultérieure ; l’installation de l’image disque développeur nécessite
   Internet sur le PC. Le journal contient les détails.
 - L’image saccade : essayez d’abord le mode « Performances » ; avec des
-  écrans dupliqués, voir la section 10.
+  écrans dupliqués, voir la section 11.
 - L’image devient noire et le programme redémarre de lui-même : le pilote
   graphique a été réinitialisé ou mis à jour. Le programme redémarre une
   fois ; choisissez de nouveau le PC sur l’iPhone. Si cela se répète à bref
@@ -393,7 +448,7 @@ titre indicatif et varient d’un PC à l’autre :
   pilote graphique.
 
 
-12. Mise à niveau depuis UxPlay for Windows (1.6 ou antérieur)
+13. Mise à niveau depuis UxPlay for Windows (1.6 ou antérieur)
 --------------------------------------------------------------
 - Le programme s’appelle désormais MirrorDock et son exécutable est
   mirror_dock.exe. Quittez l’ancien uxplay.exe avant de lancer le nouveau ;

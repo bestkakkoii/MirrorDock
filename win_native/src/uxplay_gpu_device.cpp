@@ -244,6 +244,7 @@ namespace uxplay
         else
         {
             created->info.description = "Microsoft Basic Render Driver (WARP software)";
+            created->info.software = true;
         }
 
         // FFmpeg's D3D11VA decoder and the presenter run on different threads.
@@ -387,7 +388,8 @@ namespace uxplay
                         paths[index].targetInfo.outputTechnology == DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INTERNAL;
                     target.refresh_hz = rate.Denominator != 0 ? static_cast<double>(rate.Numerator) / rate.Denominator
                                                               : 0.0;
-                    if (target.monitor_name.empty())
+                    target.name_known = !target.monitor_name.empty();
+                    if (!target.name_known)
                     {
                         target.monitor_name = target.internal_panel ? "built-in panel" : "monitor";
                     }

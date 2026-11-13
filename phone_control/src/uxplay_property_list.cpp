@@ -182,6 +182,17 @@ namespace uxplay
         return property_list{parsed};
     }
 
+    outcome<property_list> property_list::parse_json(std::string_view text)
+    {
+        plist_t parsed = nullptr;
+        plist_err_t const result = plist_from_json(text.data(), static_cast<std::uint32_t>(text.size()), &parsed);
+        if (result != PLIST_ERR_SUCCESS || parsed == nullptr)
+        {
+            return std::unexpected(make_failure("plist_from_json", result, "the text is not a JSON object or array"));
+        }
+        return property_list{parsed};
+    }
+
     property_node property_list::root() const
     {
         return property_node{top};

@@ -10,7 +10,7 @@ architecture, invariants, build inputs and verification state.
 single Windows-native program for the iPhone → Windows AirPlay use case. The tree
 builds **only** this program (MSYS2 CLANG64; the top-level CMakeLists stops
 on other hosts). The program has its own name and version (`win_native/include/
-uxplay_version.h`, currently MirrorDock 1.10.0: the one place they are written
+uxplay_version.h`, currently MirrorDock 1.11.0 (with `UXPLAY_RELEASE_DATE`, the day it was published): the one place they are written
 — log, "About", the version resource and the settings/log locations read it;
 only `uxplay.manifest`, `package_zip.py` and the CMake `OUTPUT_NAME` repeat
 them); `UXPLAY_CORE_VERSION` there is the upstream UxPlay release the
@@ -202,7 +202,7 @@ Engine modules (`win_native/src`, C++26 named modules, `import std;`):
 | `uxplay_status`, `uxplay_log`, `uxplay_clock` | explicit failure outcomes, log sink, QPC-ns timeline |
 | `uxplay_system_tuning` | EcoQoS/power-throttling opt-out, MMCSS, priority, DPI |
 | `uxplay_gpu_device` | D3D11 device on the GPU that physically scans out the monitor (QueryDisplayConfig LUID), DWM composition clock |
-| `uxplay_video_window` | Win32 window + UI thread: placement per orientation, aspect-locked resizing, borderless fullscreen toggle (double-click/F/F11/Alt+Enter, Esc), always on top (T), dark title bar, keep-awake while a stream plays, tray icon/menu (modes, link, mute, start with Windows, log, about), the same menu on a right click anywhere on the picture (`WM_CONTEXTMENU`; a right click that cancels a frame opens none), second-launch and session-end messages |
+| `uxplay_video_window` | Win32 window + UI thread: placement per orientation, aspect-locked resizing, borderless fullscreen toggle (double-click/F/F11/Alt+Enter, Esc), always on top (T), dark title bar, keep-awake while a stream plays, tray icon/menu (modes, link, mute, start with Windows, log, update check, about), the same menu on a right click anywhere on the picture (`WM_CONTEXTMENU`; a right click that cancels a frame opens none), second-launch and session-end messages |
 | `uxplay_settings` | per-user settings in `HKCU\Software\MirrorDock` (read/write with explicit outcomes) and the "start with Windows" Run entry |
 | `uxplay_crash_report` | unhandled-exception / terminate record and minidump next to the log |
 | `uxplay_video_overlay` | player-style control bar: layered, non-activating popup owned by the video window, Direct2D/DirectWrite (software rasterizer), Segoe Fluent/MDL2 icon glyphs; fades in on real pointer movement, out after 3 s idle (stays while hovered); link switch, mute, menu, fullscreen, alert chips |
@@ -214,6 +214,10 @@ Engine modules (`win_native/src`, C++26 named modules, `import std;`):
 | `uxplay_media_types` | media source identity (AirPlay), `performance_mode` |
 | `uxplay_ui_text` | interface text table in eleven languages (completeness and `{}` placeholder counts checked at compile time), Windows display-language detection, DirectWrite locale |
 | `uxplay_usb_link` | iPhone USB network link (AirPlay over the Personal Hotspot cable): attach/link detection, tray status and hints, link classification for the window label, cellular-data guard |
+| `uxplay_update_check` | asks GitHub for the newest release (one request, see "About window" below) and compares it with the running version; `update_checker` checks on request and once a day on a thread of its own |
+| `uxplay_build_info` | data only: the inputs of the build with the versions it really used, and the program's own versions with their dates; both written by `win_native/CMakeLists.txt` when the build is configured |
+| `uxplay_system_report` | "This PC": measures what matters to the program (facts), judges it into rated rows with a score, words the rows in an interface language, and gives the plain-text report; `report_collector` measures on a thread of its own |
+| `uxplay_about_window` | the About window: a window and a thread of its own, three pages drawn with Direct2D/DirectWrite (software rasterizer), light or dark as Windows is set, per-monitor DPI, scrolling, mouse and keyboard; it shows what it is handed and reports what the user wants |
 | `native_media_bridge.cpp` | C API (`win_native/include/native_media.h`) used by `uxplay.cpp` |
 
 ## Invariants
@@ -667,6 +671,103 @@ Developer Mode, phones with more than one screen (the touch surface would
 have to be chosen by display), restarting the screen stream when another
 client stopped it.
 
+## The About window, the update check and "This PC" (since 1.11)
+
+**Who owns what.** `native_media_bridge.cpp` creates three objects once the
+engine exists (`create_about`): the `about_window` (no window yet), the
+`update_checker` and the `report_collector`. The window only shows and asks:
+`set_update` / `set_facts` hand it what to show, `about_events` reports the
+three things a user can want (check now, automatic on/off, measure again).
+`show_about` runs on the video window's thread (menu command, click on the
+notification): it opens the window or brings it to the front, above a video
+window that is "always on top", and requests the facts when the window was
+not open. If the window cannot be created, a plain message box says version
+and project address.
+
+`native_media_stop` ends them in this order: the About **window** first
+(`about_window::close`: its buttons call the other two), then the checker and
+the collector (their threads hand results to the About object, which still
+exists, and read the link monitor and the engine), then the About object,
+then the link monitor and the engine. Neither the checker nor the collector
+makes the end of the program wait for the network or the phone: the HTTP
+request and the question to the iPhone run on helper threads that own
+nothing but a shared block, and a stop abandons them (they log nothing).
+
+**What leaves the PC.** Only the update request: `GET
+https://api.github.com/repos/<owner>/<project>/releases/latest` with
+`User-Agent: MirrorDock/<version>` and `Accept: application/vnd.github+json`
+(`uxplay_version.h` names the address, the tag prefix and the package name).
+Nothing is downloaded or installed. The answer is parsed with libplist's
+JSON reader (`property_list::parse_json`); of the addresses in it only those
+below `UXPLAY_PROJECT_URL` are kept, anything else is replaced by the fixed
+`/releases/latest` addresses, and the About window hands the shell nothing
+but `https://` addresses and files of this PC. "This PC" sends nothing, and
+no serial number, device name or network address gets into its facts: the
+iPhone's identifier is used to open the lockdown session it is asked
+through, and device instance identifiers (they contain that identifier) to
+find Apple's drivers; neither is kept, shown or logged.
+
+**When it checks.** At once when asked (menu "Check for updates…" or the
+button). By itself once a day while "automatic" is on: 30 s after the start
+at the earliest, 24 h after the last check that got an answer (kept across
+runs), again after 1 h when a check was skipped or failed. An automatic check
+is skipped while Windows calls the connection metered
+(`INetworkCostManager`) or while the PC's internet goes through the iPhone
+(`usb_link_state`); a failed automatic check changes nothing the user sees.
+A newer release found by an automatic check is announced once per release
+with a notification (clicking it opens the About window). Settings in
+`HKCU\Software\MirrorDock`: `update_check_automatic` (default 1),
+`update_checked_at` (seconds since 1970), `update_newest_version` (packed),
+`update_notified_version`.
+
+**How "This PC" judges.** `measure_system` and `measure_phone` only collect
+facts (`system_facts`); `build_report` turns them into rows for one
+interface language. A row is rated good, attention or problem and has a
+weight, or it is information only. Score = share of the weight reached (good
+counts in full, attention half, problem nothing), per group and overall;
+rows without a rating do not count. The weights and thresholds are the
+constants at the top of `uxplay_system_report.cpp`:
+
+| row | weight | good | attention | problem |
+|---|---|---|---|---|
+| Windows | 6 | build 17763 (1809) or newer | older | |
+| Display | 10 | every monitor that shows the desktop at 59 Hz or more | slower, or the desktop duplicated on monitors with different rates | |
+| Power | 4 | mains, or battery without energy saver | energy saver on | |
+| Network | 10 | wired or Wi-Fi with a gateway, 50 Mbit/s or more, not "public" | none, public, or slower | |
+| Windows Firewall | 10 | off, or an allow rule for this executable | no rule for it | a block rule, or "block all" |
+| Processor | 12 | 4 threads or more | 2 or 3 | 1 |
+| Memory | 8 | 7.5 GiB or more | 3.5 GiB or more | less |
+| Graphics card | 10 | a hardware adapter | | Windows' software renderer |
+| Video decoding | 25 | H.265 in hardware | H.264 only | none |
+| Sound output | 5 | a default output device | | none |
+| Graphics driver (card in use) | 15 | found | | |
+| Apple USB support | 10 | its service answers | installed, no answer; or not installed | |
+| USB link | 5 | | adapter disabled while USB is preferred | |
+| This program | 8 | newest release | a newer one exists | |
+
+Information only: a second graphics card and its driver, Apple's two device
+drivers, the stream on screen, the USB link otherwise, and the iPhone (it is
+no part of this PC; what control still needs of it is said beside it). The
+firewall verdict comes from the rules of Windows Firewall for exactly this
+executable in the active profiles; another firewall product is not seen.
+"Copy report" is `report_text`: the same rows in English.
+
+**The lists on "Components".** `win_native/build_scripts/build_inputs.tsv`
+is the one list of the inputs: `fetch_deps.sh` clones from it, and
+`uxplay_generate_build_info` (in `win_native/CMakeLists.txt`) turns it into
+`uxplay_build_inputs.inc`. For a row with a "check" key the version this
+configuration really uses wins (pkg-config for the three libraries, the
+compiler, CMake, Ninja, the fxc path, `llhttp.h`, `uxplay_version.h`); when
+it differs from the recorded one, CMake warns and the recorded date and
+revision are left out. The program's own versions come from the `## <version>
+— <date>` headings of `CHANGELOG.md` (`uxplay_release_history.inc`); a
+heading without both stops the configuration. When an input changes, edit
+the list (version, revision, date) together with README_AI's table.
+
+**Interface.** The window is drawn by the program itself, so every text is
+in `uxplay_ui_text` and nothing is taken from a dialog template. Its window
+procedure handles `WM_PRINTCLIENT`, so a capture tool gets its picture.
+
 ## Build (MSYS2 CLANG64)
 
 ```sh
@@ -700,7 +801,10 @@ upstream socket code keeps Windows `SOCKET` handles in `int`). The only
 remaining build warnings come from the toolchain's own `std.cppm` /
 `std.compat.cppm` (`-Wreserved-module-identifier`).
 
-Pinned inputs (observed 2026-11-12, each the newest of its source on that day):
+Pinned inputs (observed 2026-11-12, each the newest of its source on that
+day). The list the build and the program read is
+`win_native/build_scripts/build_inputs.tsv` (it also carries the dates and
+licences); this table explains it:
 
 | input | source | branch | commit / version |
 |---|---|---|---|
@@ -774,6 +878,7 @@ Recorded exceptions, each observed with the consuming tool on 2026-11-11:
 | `*.hlsl` | UTF-8, CRLF, no BOM | fxc 10.0.28000: `error X3000: Illegal character in shader file` at (1,1) with a BOM; CRLF is accepted |
 | `*.cmd` | ASCII, CRLF, no BOM | they run on the user's cmd.exe: this Windows 11 build skipped a BOM, but cmd.exe of other Windows 10/11 builds is reported to read it as part of the first command, and that cannot be tested here |
 | `lib/llhttp/`, `lib/playfair/` | as published | vendored third-party code, not edited |
+| `win_native/build_scripts/build_inputs.tsv` | UTF-8, LF, no BOM | `fetch_deps.sh` reads it line by line (a CR would end up in the last field, a BOM in the first), and CMake reads it as a list of lines |
 
 The user guides (`win_native/package/user_guide/user_guide_*.txt`) ship with
 BOM and CRLF so that every Windows editor shows them correctly. The READMEs
@@ -1061,3 +1166,81 @@ the lock or when it no longer needs it). The Russian texts on screen; they
 and the Russian documents were written by a language model with Apple's and
 Microsoft's Russian pages as the source for the terms, not by a native
 speaker. Everything listed as not observed for 1.9 and 1.9.1 still applies.
+
+## State of 1.11 (2026-11-13)
+
+1.11 adds the About window (About, This PC, Components), the update check
+and the one list of build inputs, and gives the window's own commands
+priority while the phone is controlled (see "The About window, the update
+check and "This PC"" above and the header of `uxplay_video_window.cppm`).
+
+**How the interface was tested without touching the owner's desktop.** The
+owner worked at this PC, mirroring to and controlling the phone with the
+released 1.10, while 1.11 was written: no test window may appear on his
+desktop, and no key or click may be injected there. A script outside the
+tree starts a test instance (`-n MirrorDockAboutCapture -p 38400`, output
+redirected to a file, so the log folder is not touched) on a second desktop
+of the window station (`CreateDesktopW`, `STARTUPINFO.lpDesktop`), which is
+never shown; opens the About window through the program's own menu with
+posted messages (the tray callback message, then arrow keys and Enter to the
+menu); clicks, scrolls and changes pages with posted messages; takes
+pictures with PrintWindow; and ends the instance with "Exit". For "Copy report" it uses a window station of its own, which has a
+clipboard of its own. It also puts the "start with Windows" entry back: an
+instance that starts while the entry exists points it at itself (existing
+behaviour), so a test instance from the build folder would leave the user's
+entry pointing at the build.
+
+**Observed (2026-11-13, this PC, the owner's iPhone 16 Pro Max on the
+cable):**
+- eight builds, warnings as errors, none with a diagnostic;
+- the three pages in dark and in light colours, and in Traditional Chinese,
+  English, Russian, German, Japanese, Thai and French: nothing overlaps or
+  runs out of its card, long labels wrap;
+- with the mouse: the second tab, the switch of the automatic check (off and
+  on again; the checker logged both), "Check now" (the status "checking",
+  then the answer);
+- the update check against GitHub: 1.10.0 with its package of 5,636,637
+  bytes; "up to date" as 1.11.0; "newer available" with "Download" and
+  "What's new" for a build numbered 1.9.9; in an idle run the automatic
+  check 30.5 s after the start;
+- "This PC" for this PC: 96 of 100. The one row marked was the display (the
+  monitor ran at 50 Hz; earlier that day, with the desktop duplicated on the
+  built-in panel at 60 Hz and that monitor at 50 Hz, the row named both and
+  gave the advice for duplicated monitors). Firewall off, Apple Mobile
+  Device Support 19.4.0.10 with its service, both graphics drivers with
+  their dates, the iPhone as "iPhone17,2 · iOS 27.2.1 · Developer Mode on";
+- "Copy report": 30 lines of plain English;
+- the full-screen commands on the engine test's window (no phone, so not in
+  control mode): double-click on, Esc off, the auto-repeat and the release of
+  that Esc without effect, double-click on and off again;
+- every test instance ended with exit code 0; ready 0.57 s after launch on
+  the second start of a binary (4.5 to 5.5 s on the first start of a newly
+  built one while it is scanned, as before);
+- the ten translated READMEs match the master's structure (0 differences
+  each); the eleven user guides have thirteen sections, BOM and CRLF.
+
+**Not observed:**
+- control mode itself with the new priority: a double-click and Esc while F8
+  is on, and Alt + double-click as a double tap. It needs a mirroring
+  session with the phone; the branch differs from the tested one in
+  `controlling()` only;
+- the notification of a newer release found by the automatic check, and the
+  click on it;
+- a link opening in the browser, and the links to the user guide and to the
+  licence folder (the tests ran from the build folder, which has neither;
+  a clicked link would have opened a tab in the owner's browser);
+- a firewall that is on (this PC's is off for its network), a PC without
+  Apple's USB support, without hardware decoding, on battery, with a second
+  instance of another receiver name;
+- Simplified Chinese, Korean, Spanish and Vietnamese on screen.
+
+**Translations.** All by a language model. Five translation workers were
+started for the nine non-master languages and stopped half-way at the
+owner's request: they had written the interface texts of ja, ko, de, vi, th
+and ru, the READMEs of zh-CN, ja, ko, de, vi, th and ru, and the user guides
+of ja, de and ru. The rest (interface texts and READMEs of es and fr; user
+guides of zh-CN, ko, es, fr, vi and th) was written directly, with the
+finished READMEs as the source of each language's wording. Every heading
+underline of the guides was set to the heading's width on screen.
+
+Everything listed as not observed for 1.9, 1.9.1 and 1.10 still applies.

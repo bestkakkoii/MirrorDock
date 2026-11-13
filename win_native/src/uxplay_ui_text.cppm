@@ -1,9 +1,9 @@
 ﻿// SPDX-License-Identifier: MIT
-// User-interface text (tray menu, control bar, window status, notifications)
-// in the Windows display language: Traditional Chinese (zh-TW, zh-HK, zh-MO,
+// User-interface text (tray menu, control bar, window status, notifications,
+// the About window) in the Windows display language: Traditional Chinese (zh-TW, zh-HK, zh-MO,
 // zh-Hant), Simplified Chinese (zh-CN, zh-SG, zh-Hans, zh), Japanese, Korean,
-// Spanish, German, French, Vietnamese, Thai, or English (also for every other
-// language).  The language is chosen once, before the engine creates its
+// Spanish, German, French, Vietnamese, Thai, Russian, or English (also for
+// every other language).  The language is chosen once, before the engine creates its
 // window (native_media_start); log messages stay English.
 export module uxplay_ui_text;
 
@@ -98,7 +98,6 @@ export namespace uxplay
         start_failed_text, // {}: reason, {}: log file path
         autostart_failed,
         pairing_pin_title,
-        about_text, // {}: version, {}: UxPlay core version, {}: project page
         // cropping
         crop_off,
         crop_automatic,
@@ -120,6 +119,138 @@ export namespace uxplay
         control_needs_ios,
         control_failed_text,
         controlled, // {}: what the window shows (link and size)
+        // update check: menu and notification
+        check_for_updates,
+        update_available,      // {}: the newer version
+        update_available_text, // {}: the version that runs
+        // About window: frame and first page
+        about_title,
+        about_tab_overview,
+        about_tab_this_pc,
+        about_tab_components,
+        about_tagline,
+        about_version, // {}: version, {}: release date
+        about_licence, // {}: UxPlay core version
+        about_trademarks,
+        about_updates,
+        update_not_checked,
+        update_checking,
+        update_up_to_date,
+        update_released,  // {}: release date of the newer version, {}: the version that runs
+        update_newest_is, // {}: version (and date) of the newest release
+        update_failed,
+        update_failed_text,
+        update_last_checked, // {}: date and time
+        update_check_now,
+        update_download,
+        update_whats_new,
+        update_automatic,
+        update_automatic_note,
+        about_links,
+        link_project,
+        link_releases,
+        link_report_problem,
+        link_user_guide,
+        link_licences,
+        // About window: "This PC" (uxplay_system_report)
+        score_title,
+        score_details,
+        score_measuring,
+        score_excellent,
+        score_good,
+        score_fair,
+        score_poor,
+        report_copy,
+        report_copied,
+        report_again,
+        group_system,
+        group_hardware,
+        group_drivers,
+        group_software,
+        row_windows,
+        row_display,
+        row_power,
+        row_network,
+        row_firewall,
+        row_processor,
+        row_memory,
+        row_graphics,
+        row_other_graphics,
+        row_decoding,
+        row_sound,
+        row_graphics_driver,
+        row_apple_support,
+        row_apple_usb_driver,
+        row_apple_network_driver,
+        row_usb_link,
+        row_program,
+        row_stream,
+        row_iphone,
+        value_display, // {}: width, {}: height, {}: scale in per cent
+        value_built_in_display,
+        value_external_display,
+        value_plugged_in,
+        value_on_battery,   // {}: charge in per cent
+        value_energy_saver, // {}: charge in per cent
+        value_no_battery,
+        value_not_connected,
+        value_private_network,
+        value_public_network,
+        value_domain_network,
+        value_metered,
+        value_firewall_allows,
+        value_firewall_blocks,
+        value_firewall_no_rule,
+        value_firewall_off,
+        value_processor, // {}: cores, {}: threads
+        value_memory,    // {}: installed, {}: free (GB)
+        value_in_use,
+        value_decoding, // {}: how H.265 is decoded, {}: how H.264 is (value_hardware / value_software)
+        value_hardware,
+        value_software,
+        value_none,
+        value_service_running,
+        value_service_stopped,
+        value_not_installed,
+        value_up_to_date,
+        value_newer, // {}: the newer version
+        value_hardware_decoding,
+        value_software_decoding,
+        value_checking,
+        value_no_iphone,
+        value_not_trusted,
+        value_developer_mode_on,
+        value_developer_mode_off,
+        advice_windows,
+        advice_display,
+        advice_display_duplicate,
+        advice_energy_saver,
+        advice_no_network,
+        advice_public_network,
+        advice_slow_network,
+        advice_firewall,
+        advice_processor,
+        advice_memory,
+        advice_software_renderer,
+        advice_h264_only,
+        advice_no_hardware_decoding,
+        advice_no_sound,
+        advice_apple_support,
+        advice_apple_service,
+        advice_usb_adapter,
+        advice_update,
+        // About window: "Components"
+        components_libraries,
+        components_tools,
+        components_run_time,
+        components_system,
+        components_credits,
+        components_releases,
+        components_dates_note,
+        column_component,
+        column_version,
+        column_date,
+        column_licence,
         count
     };
 
@@ -145,9 +276,13 @@ export namespace uxplay
 
     // text of the current language (static storage)
     [[nodiscard]] std::wstring_view ui_string(ui_text id);
+    // text of one language, whatever the current one is (a report in English)
+    [[nodiscard]] std::wstring_view ui_string(ui_text id, ui_language language);
 
     // text with its "{}" placeholders filled in, in order
     [[nodiscard]] std::wstring ui_format(ui_text id, std::span<std::wstring_view const> arguments);
+    [[nodiscard]] std::wstring ui_format(ui_text id, ui_language language,
+                                         std::span<std::wstring_view const> arguments);
 
     // locale for DirectWrite text formats (selects the matching CJK fallback font)
     [[nodiscard]] std::wstring_view ui_locale_name();

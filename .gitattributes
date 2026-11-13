@@ -15,6 +15,8 @@ CMakeLists.txt text eol=crlf
 # recorded exception: bash reads CR as part of a word (a backslash line
 # continuation then ends the command) and a BOM breaks "#!"
 *.sh    text eol=lf
+# data that such a script reads line by line (build_inputs.tsv): LF, no BOM
+*.tsv   text eol=lf
 
 # vendored third-party code: stored and checked out exactly as published
 lib/llhttp/**   -text

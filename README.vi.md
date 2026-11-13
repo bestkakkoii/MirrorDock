@@ -36,6 +36,8 @@ Chương trình được xây dựng trên lõi giao thức AirPlay của [UxPla
 | 🖱️ **Điều khiển iPhone** | Bấm, kéo, cuộn và gõ phím ngay trên hình ảnh, điện thoại sẽ làm theo. Tích hợp sẵn: không cần chương trình hỗ trợ, không cần jailbreak (cần iOS 27, cáp USB và Chế độ nhà phát triển). |
 | 🪟 **Một cửa sổ đúng nghĩa** | Mở ra với kích thước hợp lý, giữ nguyên tỉ lệ khung hình khi bạn đổi kích thước, ghi nhớ kích thước và vị trí, vào toàn màn hình bằng một phím, luôn ở trên cùng. |
 | 🌐 **Mười một ngôn ngữ** | Giao diện đi theo ngôn ngữ hiển thị Windows của bạn. |
+| 🩺 **Hiểu rõ máy tính của bạn** | Cửa sổ Giới thiệu kiểm tra những gì quan trọng đối với việc phản chiếu (card đồ họa, trình điều khiển, mạng, tường lửa, phần hỗ trợ USB của Apple), đánh giá từng mục và cho biết cần khắc phục điều gì. |
+| 🔄 **Kiểm tra bản cập nhật** | Báo cho bạn khi có bản phát hành mới hơn: mỗi ngày chỉ hỏi GitHub một lần, tắt được bằng một cú bấm. |
 | 🧳 **Một tệp duy nhất** | Chỉ một tệp thực thi khoảng 12 MB, không cần gì ngoài chính Windows. |
 
 ## 🚀 Bắt đầu nhanh
@@ -84,6 +86,7 @@ Nhấn **F8** (hoặc chọn **Điều khiển iPhone bằng chuột và bàn ph
 | Nút chuột trái: bấm, giữ, kéo | Một ngón tay: chạm, nhấn giữ, vuốt |
 | Con lăn chuột (giữ **Shift**: cuộn ngang) | Cuộn nội dung nằm dưới con trỏ |
 | Nút chuột giữa | Về Màn hình chính |
+| Bấm đúp | Vẫn bật / tắt toàn màn hình như mọi khi; khi giữ **Alt**: chạm hai lần trên iPhone |
 | Bàn phím | Gõ chữ trên điện thoại như thể có bàn phím cắm vào máy; **Ctrl** tương ứng với ⌘, **Ctrl+Phím cách** chuyển ngôn ngữ nhập của điện thoại |
 | **Page Down** / **Page Up**, **Alt** + phím mũi tên | Vuốt nhanh sang trang hoặc video tiếp theo hay trước đó |
 | Nút chuột phải | Vẫn là menu của MirrorDock như mọi khi |
@@ -97,7 +100,7 @@ Nhấn **F8** (hoặc chọn **Điều khiển iPhone bằng chuột và bàn ph
 > [!NOTE]
 > AirPlay không truyền được thao tác nhập, nên việc điều khiển đi theo một đường khác: qua các dịch vụ dành cho nhà phát triển của iOS, chính là những dịch vụ Xcode dùng để điều khiển thiết bị thật. Để cài các dịch vụ này, MirrorDock tải ảnh đĩa của Apple từ kho [DeveloperDiskImage](https://github.com/doronz88/DeveloperDiskImage) rồi yêu cầu dịch vụ ký của Apple (`gs.apple.com`) ký ảnh đĩa đó cho điện thoại của bạn; việc này cho Apple biết các mã số chip của điện thoại, hệt như Xcode vẫn làm. Sau đó, việc điều khiển không liên lạc với bất kỳ ai nữa.
 
-Trong lúc đang điều khiển iPhone, **F8**, **F11**, **Alt+Enter** và **Alt+F4** vẫn thuộc về cửa sổ, còn thanh điều khiển thì không hiện ra, vì nó sẽ che mất phần dưới cùng của màn hình điện thoại.
+Trong lúc đang điều khiển iPhone, các lệnh của chính cửa sổ được ưu tiên: **F8**, **F11**, **Alt+Enter**, **Alt+F4**, **Esc** khi ở chế độ toàn màn hình và thao tác bấm đúp vẫn thuộc về cửa sổ. Khi bạn bấm đúp, lần bấm đầu tiên đã đến điện thoại dưới dạng một lần chạm trước khi lần bấm thứ hai tới, vì vậy hãy bấm đúp vào viền đen nếu có, hoặc nhấn **F11**. Thanh điều khiển không hiện ra, vì nó sẽ che mất phần dưới cùng của màn hình điện thoại.
 
 ## ⌨️ Bàn phím và chuột
 
@@ -113,6 +116,26 @@ Trong lúc đang điều khiển iPhone, **F8**, **F11**, **Alt+Enter** và **Al
 | Menu | Bấm chuột phải vào bất kỳ đâu trên hình ảnh |
 
 Trong lúc đang điều khiển iPhone, các phím chữ cái được gõ vào điện thoại; **F8** trả chúng lại cho cửa sổ.
+
+## 🔄 Cập nhật
+
+**Kiểm tra bản cập nhật…** trong menu sẽ hỏi GitHub về bản phát hành mới nhất rồi hiện câu trả lời trong cửa sổ Giới thiệu. Khi có bản mới hơn, **Tải xuống** mở tệp zip của bản đó trong trình duyệt, còn **Có gì mới** mở ghi chú phát hành của nó. MirrorDock không tự cài đặt bất cứ thứ gì.
+
+- **Tự động kiểm tra.** Mỗi ngày một lần, kèm một thông báo khi có bản phát hành mới hơn. Chỉ cần gạt một công tắc trong cửa sổ Giới thiệu là tắt được.
+- **Những gì được gửi đi.** Một yêu cầu duy nhất đến `api.github.com`. GitHub thấy địa chỉ IP của bạn và tên ứng dụng khách `MirrorDock/<version>`, ngoài ra không có thông tin nào về bạn hay máy tính của bạn.
+- **Không dùng dữ liệu di động của bạn.** Chương trình không tự động kiểm tra qua kết nối mà Windows đánh dấu là kết nối bằng gói dữ liệu theo lưu lượng sử dụng, cũng như khi máy tính đang truy cập Internet qua iPhone.
+
+## 🩺 “Giới thiệu” và “Máy tính này”
+
+**Giới thiệu…** trong menu mở ra một cửa sổ riêng, gồm ba trang:
+
+| Trang | Nội dung hiển thị |
+|---|---|
+| **Giới thiệu** | Phiên bản và ngày phát hành, phần kiểm tra bản cập nhật, các liên kết đến dự án, hướng dẫn sử dụng và văn bản giấy phép |
+| **Máy tính này** | Những gì quan trọng đối với MirrorDock trên máy tính của bạn, mỗi mục một dòng: Windows, màn hình, nguồn điện, mạng, tường lửa, bộ xử lý, bộ nhớ, card đồ họa và khả năng giải mã video của nó, âm thanh, trình điều khiển đồ họa, phần hỗ trợ USB của Apple, iPhone đang cắm cáp |
+| **Thành phần** | Mọi thư viện và công cụ dùng để tạo nên MirrorDock, kèm phiên bản, ngày và giấy phép, cùng ngày phát hành của từng phiên bản MirrorDock |
+
+Mỗi dòng của *Máy tính này* được đánh giá là tốt, cần lưu ý hoặc có vấn đề, và dòng nào chưa tốt sẽ cho biết cần làm gì. Điểm số là tỉ lệ các dòng đạt yêu cầu trong số những dòng được đánh giá, có tính trọng số theo mức độ quan trọng của từng dòng đối với việc phản chiếu (giải mã video bằng phần cứng có trọng số lớn nhất). Điểm số cho biết máy tính được thiết lập tốt đến đâu; đây không phải là điểm benchmark. **Sao chép báo cáo** đưa nội dung trang vào bảng tạm dưới dạng văn bản thuần, tiện cho việc báo lỗi. Không có gì trên trang này rời khỏi máy tính của bạn, và không có số sê-ri hay tên thiết bị nào được hiển thị hoặc lưu lại.
 
 ## ⚙️ Tùy chọn
 
@@ -169,7 +192,7 @@ Việc phản chiếu qua Wi-Fi và qua USB đã được kiểm chứng với i
 ## ❓ Câu hỏi thường gặp
 
 **iPhone không liệt kê máy tính của tôi.**
-Cả hai phải ở trên cùng một mạng, và Tường lửa Windows phải cho phép `mirror_dock.exe`. Tắt rồi bật lại Wi-Fi trên iPhone sẽ làm mới danh sách.
+Cả hai phải ở trên cùng một mạng, và Tường lửa Windows phải cho phép `mirror_dock.exe`. Trang *Máy tính này* của cửa sổ Giới thiệu cho biết tường lửa hay một mạng đang đặt là *công cộng* có đang cản trở hay không. Tắt rồi bật lại Wi-Fi trên iPhone sẽ làm mới danh sách.
 
 **Đã cắm cáp nhưng việc phản chiếu vẫn dùng Wi-Fi.**
 Điểm truy cập cá nhân phải đang bật, và kiểu kết nối được chọn phải là *Ưu tiên USB*. Dòng thứ hai của menu cho biết trạng thái của kết nối USB.
@@ -186,12 +209,15 @@ Thông báo có nêu lý do: chưa cắm cáp hoặc iPhone chưa tin cậy máy
 **Cứ để Chế độ nhà phát triển bật thì có an toàn không?**
 Đây là công tắc do chính Apple làm ra cho những người phát triển ứng dụng. Nó cho phép một máy tính đã được tin cậy cài đặt và gỡ lỗi ứng dụng, đồng thời truy cập các dịch vụ dành cho nhà phát triển; nó không jailbreak điện thoại, và bạn có thể tắt nó đi ở chính chỗ đó.
 
+**MirrorDock có dùng Internet không?**
+Việc phản chiếu chỉ diễn ra cục bộ. MirrorDock chỉ kết nối Internet cho hai việc: kiểm tra bản cập nhật (GitHub, mỗi ngày một lần, và bạn có thể tắt), và, ở lần đầu tiên bạn điều khiển iPhone, tải Developer Disk Image của Apple cùng chữ ký của Apple cho ảnh đĩa đó.
+
 **Nhật ký nằm ở đâu?**
 `%LOCALAPPDATA%\MirrorDock\mirror_dock.log`, hoặc chọn **Mở tệp nhật ký** trong menu.
 
 ## 🛠️ Biên dịch từ mã nguồn
 
-MSYS2 CLANG64 (clang 23, libc++ kèm mô-đun thư viện chuẩn C++26, CMake 4.4, Ninja) và trình biên dịch shader của Windows SDK. FFmpeg, OpenSSL và libplist được biên dịch từ các commit đã ghim thành thư viện tĩnh.
+MSYS2 CLANG64 (clang 23, libc++ kèm mô-đun thư viện chuẩn C++26, CMake 4.4, Ninja) và trình biên dịch shader của Windows SDK. FFmpeg, OpenSSL và libplist được biên dịch từ các commit đã ghim thành thư viện tĩnh; các commit được ghim ghi trong `win_native/build_scripts/build_inputs.tsv`, cũng là danh sách mà cửa sổ Giới thiệu hiển thị.
 
 ```sh
 bash win_native/build_scripts/fetch_deps.sh <src_root>

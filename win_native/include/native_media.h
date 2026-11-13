@@ -69,9 +69,6 @@ typedef struct native_media_settings {
                                           automatically, -1 = the choice saved by the user (0 when
                                           none is saved) */
     bool tray_icon;                    /* notification-area icon with status and menu */
-    const char *product_version;       /* UTF-8, shown in "About" (may be NULL) */
-    const char *core_version;          /* UTF-8, UxPlay protocol core version (may be NULL) */
-    const char *project_url;           /* UTF-8, shown in "About" (may be NULL) */
     const char *log_path;              /* UTF-8 path opened by "Open log" (may be NULL) */
     native_media_log_callback log_callback;
     native_media_event_callback event_callback;

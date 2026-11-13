@@ -36,6 +36,8 @@ Es baut auf dem AirPlay-Protokollkern von [UxPlay](https://github.com/FDH2/UxPla
 | 🖱️ **iPhone steuern** | Klicken, ziehen, scrollen und schreiben Sie im Bild, und das Smartphone führt es aus. Fest eingebaut: kein Hilfsprogramm, kein Jailbreak (setzt iOS 27, das USB-Kabel und den Entwicklermodus voraus). |
 | 🪟 **Ein richtiges Fenster** | Öffnet sich in sinnvoller Größe, behält beim Ändern der Größe das Seitenverhältnis bei, merkt sich Größe und Position, Vollbild per Tastendruck, immer im Vordergrund. |
 | 🌐 **Elf Sprachen** | Die Oberfläche richtet sich nach Ihrer Windows-Anzeigesprache. |
+| 🩺 **Kennt Ihren PC** | Das Info-Fenster prüft, worauf es bei der Spiegelung ankommt (Grafikkarte, Treiber, Netzwerk, Firewall, Apples USB-Unterstützung), bewertet es und sagt, was zu beheben ist. |
+| 🔄 **Update-Prüfung** | Meldet, wenn eine neuere Version erschienen ist: eine Anfrage an GitHub pro Tag, mit einem Klick abschaltbar. |
 | 🧳 **Eine einzige Datei** | Eine einzelne ausführbare Datei von rund 12 MB, die nichts außer Windows selbst benötigt. |
 
 ## 🚀 Schnellstart
@@ -84,6 +86,7 @@ Drücken Sie **F8** (oder wählen Sie im Menü **iPhone mit Maus und Tastatur st
 | Linke Maustaste: klicken, halten, ziehen | Ein Finger: tippen, lange drücken, wischen |
 | Mausrad (mit **Shift**: seitwärts) | Scrollt den Inhalt unter dem Mauszeiger |
 | Mittlere Maustaste | Zum Home-Bildschirm |
+| Doppelklick | Wie gewohnt Vollbild ein / aus; mit gedrückter **Alt**-Taste: Doppeltippen auf dem iPhone |
 | Tastatur | Schreibt auf dem Smartphone, als wäre eine Tastatur daran angeschlossen; **Ctrl** entspricht ⌘, **Ctrl+Leertaste** wechselt die Eingabesprache des Smartphones |
 | **Page Down** / **Page Up**, **Alt** + Pfeiltasten | Schneller Wisch zur nächsten oder vorherigen Seite bzw. zum nächsten oder vorherigen Video |
 | Rechte Maustaste | Wie gewohnt das Menü von MirrorDock |
@@ -97,7 +100,7 @@ Was Sie dafür brauchen:
 > [!NOTE]
 > AirPlay kann keine Eingaben übertragen, also nimmt die Steuerung einen anderen Weg: über die Entwicklerdienste von iOS – dieselben, mit denen Xcode ein echtes Gerät bedient. Um sie zu installieren, lädt MirrorDock das Image von Apple aus dem Repository [DeveloperDiskImage](https://github.com/doronz88/DeveloperDiskImage) herunter und lässt es von Apples Signierdienst (`gs.apple.com`) für Ihr Smartphone signieren. Dabei erfährt Apple die Chipnummern des Smartphones – genau wie bei Xcode. Danach nimmt die Steuerung zu niemandem mehr Kontakt auf.
 
-Solange die Steuerung eingeschaltet ist, gehören **F8**, **F11**, **Alt+Enter** und **Alt+F4** weiterhin dem Fenster, und die Steuerleiste bleibt ausgeblendet, weil sie den unteren Rand des Smartphone-Bildschirms verdecken würde.
+Solange die Steuerung eingeschaltet ist, haben die eigenen Befehle des Fensters Vorrang: **F8**, **F11**, **Alt+Enter**, **Alt+F4**, **Esc** im Vollbild und der Doppelklick gehören weiterhin dem Fenster. Bei einem Doppelklick ist der erste Klick bereits als Tippen beim Smartphone angekommen, wenn der zweite folgt; doppelklicken Sie deshalb auf einen schwarzen Balken, sofern es einen gibt, oder drücken Sie **F11**. Die Steuerleiste bleibt ausgeblendet, weil sie den unteren Rand des Smartphone-Bildschirms verdecken würde.
 
 ## ⌨️ Tastatur und Maus
 
@@ -113,6 +116,26 @@ Solange die Steuerung eingeschaltet ist, gehören **F8**, **F11**, **Alt+Enter**
 | Menü | Rechtsklick an beliebiger Stelle im Bild |
 
 Solange das iPhone gesteuert wird, gehen die Buchstabentasten an das Smartphone; **F8** gibt sie dem Fenster zurück.
+
+## 🔄 Updates
+
+**Nach Updates suchen…** im Menü fragt bei GitHub nach der neuesten Version und zeigt die Antwort im Info-Fenster an. Gibt es eine neuere, öffnet **Herunterladen** deren ZIP-Archiv in Ihrem Browser und **Neuerungen** die zugehörigen Versionshinweise. MirrorDock installiert von sich aus nichts.
+
+- **Automatische Prüfung.** Einmal täglich, mit einer Benachrichtigung, sobald eine neuere Version erschienen ist. Ein Schalter im Info-Fenster stellt sie ab.
+- **Was übertragen wird.** Eine einzige Anfrage an `api.github.com`. GitHub sieht Ihre IP-Adresse und den Client-Namen `MirrorDock/<version>`, sonst nichts über Sie oder Ihren PC.
+- **Nicht über Ihre mobilen Daten.** Über eine Verbindung, die Windows als getaktet kennzeichnet, wird nicht automatisch nach Updates gesucht – ebenso wenig, solange der PC über das iPhone ins Internet geht.
+
+## 🩺 „Info“ und „Dieser PC“
+
+**Info…** im Menü öffnet ein eigenes Fenster mit drei Seiten:
+
+| Seite | Was sie zeigt |
+|---|---|
+| **Info** | Version und Veröffentlichungsdatum, die Update-Prüfung, Links zum Projekt, zum Benutzerhandbuch und zu den Lizenztexten |
+| **Dieser PC** | Zeile für Zeile alles, worauf es für MirrorDock auf Ihrem PC ankommt: Windows, Bildschirm, Stromversorgung, Netzwerk, Firewall, Prozessor, Arbeitsspeicher, Grafikkarte und deren Videodekodierung, Ton, Grafiktreiber, Apples USB-Unterstützung, das iPhone am Kabel |
+| **Komponenten** | Alle Bibliotheken und Werkzeuge, aus denen MirrorDock gebaut ist, mit Version, Datum und Lizenz – und wann welche Version von MirrorDock veröffentlicht wurde |
+
+Jede Zeile von *Dieser PC* wird mit „gut“, „Achtung“ oder „Problem“ bewertet, und eine Zeile, die nicht gut ist, sagt, was zu tun ist. Die Punktzahl ist der Anteil der bewerteten Zeilen, die in Ordnung sind, gewichtet danach, wie wichtig jede für die Spiegelung ist (die Hardware-Videodekodierung zählt am meisten). Sie sagt aus, wie gut der PC eingerichtet ist; ein Benchmark ist sie nicht. **Bericht kopieren** legt die Seite als reinen Text in die Zwischenablage, etwa für einen Fehlerbericht. Nichts von dieser Seite verlässt Ihren PC, und es wird weder eine Seriennummer noch ein Gerätename angezeigt oder gespeichert.
 
 ## ⚙️ Optionen
 
@@ -169,7 +192,7 @@ Die Spiegelung über Wi-Fi und über USB wurde bis Version 1.5 mit einem iPhone 
 ## ❓ Häufige Fragen
 
 **Das iPhone zeigt meinen PC nicht an.**
-Beide Geräte müssen sich im selben Netzwerk befinden, und die Windows-Firewall muss `mirror_dock.exe` zulassen. Wenn Sie Wi-Fi am iPhone aus- und wieder einschalten, wird die Liste aktualisiert.
+Beide Geräte müssen sich im selben Netzwerk befinden, und die Windows-Firewall muss `mirror_dock.exe` zulassen. Die Seite *Dieser PC* des Info-Fensters zeigt, ob die Firewall oder ein als *öffentlich* eingestuftes Netzwerk im Weg steht. Wenn Sie Wi-Fi am iPhone aus- und wieder einschalten, wird die Liste aktualisiert.
 
 **Das Kabel ist angeschlossen, aber die Spiegelung läuft weiterhin über Wi-Fi.**
 Der persönliche Hotspot muss aktiviert sein, und als Verbindung muss *USB bevorzugen* gewählt sein. Die zweite Zeile des Menüs zeigt den Zustand der USB-Verbindung.
@@ -186,12 +209,15 @@ Die Meldung nennt den Grund: Das Kabel ist nicht angeschlossen oder das iPhone v
 **Ist es sicher, den Entwicklermodus eingeschaltet zu lassen?**
 Er ist Apples eigener Schalter für alle, die Apps entwickeln. Mit ihm darf ein Computer, dem das iPhone vertraut, Apps installieren und debuggen und auf die Entwicklerdienste zugreifen; ein Jailbreak ist das nicht, und an derselben Stelle lässt er sich wieder ausschalten.
 
+**Nutzt MirrorDock das Internet?**
+Die Spiegelung läuft lokal. Online geht MirrorDock nur für zwei Dinge: für die Update-Prüfung (GitHub, einmal täglich, abschaltbar) und, wenn Sie zum ersten Mal ein iPhone steuern, für Apples Developer Disk Image und Apples Signatur dafür.
+
 **Wo finde ich das Protokoll?**
 Unter `%LOCALAPPDATA%\MirrorDock\mirror_dock.log` oder über **Protokolldatei öffnen** im Menü.
 
 ## 🛠️ Aus dem Quellcode bauen
 
-MSYS2 CLANG64 (clang 23, libc++ mit dem Modul der C++26-Standardbibliothek, CMake 4.4, Ninja) und der Shader-Compiler des Windows SDK. FFmpeg, OpenSSL und libplist werden aus gepinnten Commits als statische Bibliotheken gebaut.
+MSYS2 CLANG64 (clang 23, libc++ mit dem Modul der C++26-Standardbibliothek, CMake 4.4, Ninja) und der Shader-Compiler des Windows SDK. FFmpeg, OpenSSL und libplist werden aus gepinnten Commits als statische Bibliotheken gebaut; die Pins stehen in `win_native/build_scripts/build_inputs.tsv` – der Liste, die das Info-Fenster anzeigt.
 
 ```sh
 bash win_native/build_scripts/fetch_deps.sh <src_root>

@@ -14,7 +14,7 @@ charset = utf-8-bom
 end_of_line = crlf
 
 # recorded exceptions (the consuming tool rejects a BOM and/or CRLF)
-[*.sh]
+[*.{sh,tsv}]
 charset = utf-8
 end_of_line = lf
 

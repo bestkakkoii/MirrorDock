@@ -192,7 +192,7 @@ kabelgebundene Spiegelung, die mit aktuellem iOS funktioniert.
   traditionelles Chinesisch, vereinfachtes Chinesisch, Japanisch,
   Koreanisch, Spanisch, Deutsch, Französisch, Vietnamesisch, Thai und
   Russisch; bei jeder anderen Sprache erscheint sie auf Englisch. Um eine
-  Sprache fest vorzugeben, verwenden Sie die Option -ui (Abschnitt 8).
+  Sprache fest vorzugeben, verwenden Sie die Option -ui (Abschnitt 9).
 
 
 5. Das iPhone mit Maus und Tastatur steuern
@@ -207,6 +207,9 @@ steuern“. Solange die Steuerung eingeschaltet ist, steht im Fenstertitel
   Mausrad             scrollt den Inhalt unter dem Mauszeiger (mit Shift:
                       seitwärts)
   Mittlere Maustaste  zum Home-Bildschirm
+  Doppelklick         wie gewohnt Vollbild ein / aus (der eigene Befehl des
+                      Fensters). Mit gedrückter Alt-Taste: Doppeltippen auf
+                      dem Smartphone
   Tastatur            schreibt auf dem Smartphone, als wäre eine Tastatur
                       daran angeschlossen. Ctrl entspricht der Befehlstaste;
                       Ctrl+Leertaste wechselt die Eingabesprache des
@@ -217,8 +220,12 @@ steuern“. Solange die Steuerung eingeschaltet ist, steht im Fenstertitel
                       die auf Tasten nicht reagieren)
   Rechte Maustaste    wie gewohnt das Menü von MirrorDock
 
-F8, F11, Alt+Enter, Alt+F4 und im Vollbild auch Esc wirken weiterhin auf das
-Fenster. Solange die Steuerung eingeschaltet ist, bleibt die Steuerleiste
+Bei eingeschalteter Steuerung haben die eigenen Befehle des Fensters Vorrang:
+F8, F11, Alt+Enter, Alt+F4, Esc im Vollbild und der Doppelklick wirken
+weiterhin auf das Fenster. Bei einem Doppelklick ist der erste Klick bereits
+als Tippen beim Smartphone angekommen, wenn der zweite folgt: Doppelklicken
+Sie deshalb auf einen schwarzen Balken, sofern es einen gibt, oder drücken
+Sie F11. Solange die Steuerung eingeschaltet ist, bleibt die Steuerleiste
 ausgeblendet, weil sie den unteren Rand des Smartphone-Bildschirms verdecken
 würde: Verwenden Sie stattdessen die rechte Maustaste.
 
@@ -286,7 +293,48 @@ hin).
   Protokoll dort ausgegeben.
 
 
-8. Erweiterte Optionen
+8. Updates und das Info-Fenster
+-------------------------------
+- „Nach Updates suchen…“ im Menü fragt bei GitHub nach der neuesten Version
+  und zeigt die Antwort im Info-Fenster an. Gibt es eine neuere, öffnet
+  „Herunterladen“ deren ZIP-Archiv in Ihrem Browser und „Neuerungen“ die
+  zugehörigen Versionshinweise: Entpacken Sie das neue Paket über den alten
+  Ordner. Das Programm installiert von sich aus nichts.
+- Einmal täglich fragt das Programm von selbst nach, und eine Benachrichtigung
+  meldet, wenn eine neuere Version erschienen ist. Um das abzustellen,
+  schalten Sie im Info-Fenster „Automatisch nach Updates suchen“ aus.
+- Was übertragen wird: eine einzige Anfrage an api.github.com. GitHub sieht
+  Ihre IP-Adresse und den Namen „MirrorDock/<Version>“, sonst nichts über
+  Sie oder den PC. Über eine Verbindung, die Windows als getaktet
+  kennzeichnet, wird nicht automatisch nach Updates gesucht – ebenso wenig,
+  solange der PC über das iPhone ins Internet geht.
+- „Info…“ im Menü öffnet ein eigenes Fenster mit drei Seiten:
+    Info         Version und Veröffentlichungsdatum, die Update-Prüfung,
+                 Links zum Projekt, zu diesem Handbuch und zu den Lizenztexten
+    Dieser PC    Zeile für Zeile alles, worauf es für das Programm auf diesem
+                 PC ankommt: Windows, Bildschirm, Stromversorgung, Netzwerk,
+                 Firewall, Prozessor, Arbeitsspeicher, Grafikkarte und
+                 deren Videodekodierung, Ton, Grafiktreiber, Apples
+                 USB-Unterstützung, das iPhone am Kabel. Jede Zeile wird mit
+                 „gut“, „Achtung“ oder „Problem“ bewertet, und eine Zeile, die
+                 nicht gut ist, sagt, was zu tun ist
+    Komponenten  alle Bibliotheken und Werkzeuge, aus denen das Programm
+                 gebaut ist, mit Version, Datum und Lizenz – und wann welche
+                 Version des Programms veröffentlicht wurde
+- Die Punktzahl auf „Dieser PC“ ist der Anteil der bewerteten Zeilen, die
+  in Ordnung sind, gewichtet danach, wie wichtig jede für die Spiegelung
+  ist (die Hardware-Videodekodierung zählt am meisten). Sie sagt aus, wie
+  gut der PC eingerichtet ist; ein Benchmark ist sie nicht.
+- „Bericht kopieren“ legt diese Seite als reinen Text in die Zwischenablage:
+  Fügen Sie ihn ein, wenn Sie ein Problem melden. Nichts von dieser Seite
+  verlässt den PC, und es wird weder eine Seriennummer noch ein Gerätename
+  angezeigt oder gespeichert.
+- Tasten im Info-Fenster: Tab wechselt zwischen den Links und Schaltflächen,
+  Enter betätigt das gewählte Element, Ctrl+Tab wechselt die Seite, Esc
+  schließt das Fenster.
+
+
+9. Erweiterte Optionen
 ----------------------
 Erstellen Sie eine Verknüpfung mit mirror_dock.exe und hängen Sie die
 Optionen hinter dem „Ziel“ an, oder schreiben Sie eine Option pro Zeile
@@ -334,8 +382,8 @@ vermerkt das Protokoll, dass sie ignoriert wurden, und das Programm startet
 normal.
 
 
-9. Richtwerte
--------------
+10. Richtwerte
+--------------
 Gemessen auf einem Notebook von 2016 (Core i7-6700HQ, die integrierte Intel
 HD Graphics 530 steuert den Monitor an, Windows 11). Die Werte dienen nur
 der Orientierung und fallen von PC zu PC unterschiedlich aus:
@@ -348,7 +396,7 @@ der Orientierung und fallen von PC zu PC unterschiedlich aus:
   DXGI-Swapchain im Flip-Modell; beide teilen sich eine Zeitachse.
 
 
-10. Empfehlungen
+11. Empfehlungen
 ----------------
 - Duplizieren zwei Monitore den Desktop mit unterschiedlichen
   Bildwiederholfrequenzen (etwa 60 Hz und 50 Hz), richtet sich Windows nur
@@ -359,11 +407,13 @@ der Orientierung und fallen von PC zu PC unterschiedlich aus:
 - Ein Notebook arbeitet am besten im Netzbetrieb.
 
 
-11. Problembehandlung
+12. Problembehandlung
 ---------------------
 - Das iPhone zeigt den PC nicht an: Beide Geräte müssen sich im selben
   Wi-Fi-Netzwerk befinden, und die Firewall muss das Programm zulassen
-  (Abschnitt 1); schalten Sie Wi-Fi am iPhone aus und wieder ein.
+  (Abschnitt 1); die Seite „Dieser PC“ des Info-Fensters (Abschnitt 8)
+  zeigt, ob die Firewall oder ein als „öffentlich“ eingestuftes Netzwerk im
+  Weg steht. Schalten Sie Wi-Fi am iPhone aus und wieder ein.
 - Das Kabel ist angeschlossen, aber USB wird nicht genutzt: Sehen Sie sich
   den USB-Zustand in der zweiten Zeile des Menüs an. „Persönlichen Hotspot
   aktivieren“: Aktivieren Sie ihn auf dem iPhone. „Netzwerkadapter
@@ -394,7 +444,7 @@ der Orientierung und fallen von PC zu PC unterschiedlich aus:
   des Developer Disk Image braucht der PC Internet. Die Einzelheiten stehen
   im Protokoll.
 - Das Bild ruckelt: Probieren Sie zuerst den Modus „Leistung“; bei
-  duplizierten Monitoren siehe Abschnitt 10.
+  duplizierten Monitoren siehe Abschnitt 11.
 - Das Bild wird schwarz, und das Programm startet von selbst neu: Der
   Grafiktreiber wurde zurückgesetzt oder aktualisiert. Das Programm startet
   einmal neu; wählen Sie den PC auf dem iPhone erneut aus. Passiert das
@@ -402,7 +452,7 @@ der Orientierung und fallen von PC zu PC unterschiedlich aus:
   an: Überprüfen Sie den Grafiktreiber.
 
 
-12. Umstieg von UxPlay for Windows (1.6 oder älter)
+13. Umstieg von UxPlay for Windows (1.6 oder älter)
 ---------------------------------------------------
 - Das Programm heißt jetzt MirrorDock, und seine ausführbare Datei ist
   mirror_dock.exe. Beenden Sie die alte uxplay.exe, bevor Sie die neue

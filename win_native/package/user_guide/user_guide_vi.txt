@@ -169,7 +169,7 @@ mô tả ở trên là cách phản chiếu qua dây hoạt động được v�
   phồn thể, tiếng Trung giản thể, tiếng Nhật, tiếng Hàn, tiếng Tây Ban Nha,
   tiếng Đức, tiếng Pháp, tiếng Việt, tiếng Thái và tiếng Nga; mọi ngôn ngữ
   khác sẽ dùng tiếng Anh. Để cố định một ngôn ngữ, hãy dùng tùy chọn -ui
-  (mục 8).
+  (mục 9).
 
 
 5. Điều khiển iPhone bằng chuột và bàn phím
@@ -182,6 +182,8 @@ phím” trong menu. Trong lúc tính năng này bật, tiêu đề cửa sổ c
   Nút chuột trái  một ngón tay: bấm là chạm, giữ nút là nhấn giữ, kéo là vuốt
   Con lăn chuột   cuộn nội dung nằm dưới con trỏ (giữ Shift: cuộn ngang)
   Nút chuột giữa  về Màn hình chính
+  Bấm đúp         vẫn bật / tắt toàn màn hình như mọi khi (lệnh của chính
+                  cửa sổ). Khi giữ Alt: chạm hai lần trên điện thoại
   Bàn phím        gõ chữ trên điện thoại, như thể có bàn phím cắm vào máy.
                   Ctrl là phím Command; Ctrl+Phím cách chuyển ngôn ngữ nhập
                   của điện thoại
@@ -190,8 +192,11 @@ phím” trong menu. Trong lúc tính năng này bật, tiêu đề cửa sổ c
                   (dành cho các ứng dụng không nhận phím)
   Nút chuột phải  menu của MirrorDock, như mọi khi
 
-F8, F11, Alt+Enter, Alt+F4 và, khi ở chế độ toàn màn hình, cả Esc vẫn do
-cửa sổ xử lý. Thanh điều khiển không hiện ra trong lúc đang điều khiển
+Trong lúc đang điều khiển iPhone, các lệnh của chính cửa sổ được ưu tiên: F8,
+F11, Alt+Enter, Alt+F4, Esc khi ở chế độ toàn màn hình và thao tác bấm đúp
+vẫn do cửa sổ xử lý. Khi bạn bấm đúp, lần bấm đầu tiên đã đến điện thoại dưới
+dạng một lần chạm trước khi lần bấm thứ hai tới: hãy bấm đúp vào viền đen nếu
+có, hoặc nhấn F11. Thanh điều khiển không hiện ra trong lúc đang điều khiển
 iPhone, vì nó sẽ che mất phần dưới cùng của màn hình điện thoại: hãy dùng nút
 chuột phải.
 
@@ -257,7 +262,47 @@ báo điều này).
   tại đó.
 
 
-8. Tùy chọn nâng cao
+8. Cập nhật và cửa sổ Giới thiệu
+--------------------------------
+- “Kiểm tra bản cập nhật…” trong menu sẽ hỏi GitHub về bản phát hành mới nhất
+  rồi hiện câu trả lời trong cửa sổ Giới thiệu. Khi có bản mới hơn, “Tải
+  xuống” mở tệp zip của bản đó trong trình duyệt, còn “Có gì mới” mở ghi chú
+  phát hành của nó: hãy giải nén gói mới đè lên thư mục cũ. Chương trình
+  không tự cài đặt bất cứ thứ gì.
+- Mỗi ngày một lần, chương trình tự hỏi, và một thông báo sẽ cho bạn biết khi
+  có bản phát hành mới hơn. Để tắt, hãy tắt “Tự động kiểm tra bản cập nhật”
+  trong cửa sổ Giới thiệu.
+- Những gì được gửi đi: một yêu cầu duy nhất đến api.github.com. GitHub thấy
+  địa chỉ IP của bạn và tên “MirrorDock/<phiên bản>”, ngoài ra không có thông
+  tin nào về bạn hay máy tính. Chương trình không tự động kiểm tra qua kết
+  nối mà Windows đánh dấu là kết nối bằng gói dữ liệu theo lưu lượng sử dụng,
+  cũng như khi máy tính đang truy cập Internet qua iPhone.
+- “Giới thiệu…” trong menu mở ra một cửa sổ riêng, gồm ba trang:
+    Giới thiệu     phiên bản và ngày phát hành, phần kiểm tra bản cập nhật,
+                   các liên kết đến dự án, hướng dẫn này và văn bản giấy phép
+    Máy tính này   những gì quan trọng đối với chương trình trên máy tính
+                   này, mỗi mục một dòng: Windows, màn hình, nguồn điện,
+                   mạng, tường lửa, bộ xử lý, bộ nhớ, card đồ họa và khả
+                   năng giải mã video của nó, âm thanh, trình điều khiển đồ
+                   họa, phần hỗ trợ USB của Apple, iPhone đang cắm cáp. Mỗi
+                   dòng được đánh giá là tốt, cần lưu ý hoặc có vấn đề, và
+                   dòng nào chưa tốt sẽ cho biết cần làm gì
+    Thành phần     mọi thư viện và công cụ dùng để tạo nên chương trình, kèm
+                   phiên bản, ngày và giấy phép, cùng ngày phát hành của
+                   từng phiên bản chương trình
+- Điểm số trên trang “Máy tính này” là tỉ lệ các dòng đạt yêu cầu trong số
+  những dòng được đánh giá, có tính trọng số theo mức độ quan trọng của từng
+  dòng đối với việc phản chiếu (giải mã video bằng phần cứng có trọng số lớn
+  nhất). Điểm số cho biết máy tính được thiết lập tốt đến đâu; đây không
+  phải là điểm benchmark.
+- “Sao chép báo cáo” đưa nội dung trang đó vào bảng tạm dưới dạng văn bản
+  thuần: hãy dán vào khi bạn báo lỗi. Không có gì trên trang này rời khỏi máy
+  tính, và không có số sê-ri hay tên thiết bị nào được hiển thị hoặc lưu lại.
+- Các phím trong cửa sổ Giới thiệu: Tab chuyển giữa các liên kết và nút,
+  Enter dùng mục đang chọn, Ctrl+Tab đổi trang, Esc đóng cửa sổ.
+
+
+9. Tùy chọn nâng cao
 --------------------
 Tạo một lối tắt đến mirror_dock.exe rồi thêm tùy chọn vào sau ô “Đích”,
 hoặc ghi mỗi tùy chọn một dòng (không có dấu trừ) vào
@@ -299,8 +344,8 @@ như vậy, nhật ký sẽ ghi rằng chúng đã bị bỏ qua và chương tr
 động bình thường.
 
 
-9. Số liệu tham khảo
---------------------
+10. Số liệu tham khảo
+---------------------
 Đo trên một laptop đời 2016 (Core i7-6700HQ, card tích hợp Intel HD
 Graphics 530 xuất hình ra màn hình, Windows 11). Các số liệu chỉ để tham
 khảo và sẽ khác nhau tùy từng máy tính:
@@ -313,7 +358,7 @@ khảo và sẽ khác nhau tùy từng máy tính:
   kiểu flip-model, và cả hai dùng chung một trục thời gian.
 
 
-10. Khuyến nghị
+11. Khuyến nghị
 ---------------
 - Khi hai màn hình cùng nhân đôi màn hình nền với tần số quét khác nhau (ví
   dụ 60 Hz và 50 Hz), Windows chỉ đồng bộ theo một trong hai, và chuyển
@@ -323,11 +368,12 @@ khảo và sẽ khác nhau tùy từng máy tính:
 - Laptop hoạt động tốt nhất khi cắm điện.
 
 
-11. Khắc phục sự cố
+12. Khắc phục sự cố
 -------------------
 - iPhone không liệt kê máy tính: cả hai phải ở trên cùng một mạng Wi-Fi và
-  tường lửa phải cho phép chương trình (mục 1); hãy tắt rồi bật lại Wi-Fi
-  trên iPhone.
+  tường lửa phải cho phép chương trình (mục 1); trang “Máy tính này” của cửa
+  sổ Giới thiệu (mục 8) cho biết tường lửa hay một mạng được đặt là “công
+  cộng” có đang cản trở hay không. Hãy tắt rồi bật lại Wi-Fi trên iPhone.
 - Đã cắm cáp nhưng USB không được dùng: hãy xem trạng thái USB ở dòng thứ
   hai của menu. “Hãy bật Điểm truy cập cá nhân”: bật mục này trên iPhone.
   “Bộ điều hợp mạng đã bị tắt”: chọn “Bật bộ điều hợp mạng USB…”. Hãy chắc
@@ -352,7 +398,7 @@ khảo và sẽ khác nhau tùy từng máy tính:
   iPhone cần iOS 27 trở lên; việc cài Developer Disk Image cần máy tính có
   Internet. Chi tiết có trong nhật ký.
 - Hình ảnh bị giật: trước tiên hãy thử chế độ “Hiệu năng”; nếu đang nhân
-  đôi màn hình, xem mục 10.
+  đôi màn hình, xem mục 11.
 - Hình ảnh chuyển sang màu đen và chương trình tự khởi động lại: trình điều
   khiển đồ họa đã bị đặt lại hoặc được cập nhật. Chương trình khởi động lại
   một lần; hãy chọn lại máy tính trên iPhone. Nếu việc này lặp lại nhiều
@@ -360,7 +406,7 @@ khảo và sẽ khác nhau tùy từng máy tính:
   tra trình điều khiển đồ họa.
 
 
-12. Nâng cấp từ UxPlay for Windows (1.6 trở về trước)
+13. Nâng cấp từ UxPlay for Windows (1.6 trở về trước)
 -----------------------------------------------------
 - Chương trình nay có tên MirrorDock và tệp thực thi là mirror_dock.exe.
   Hãy thoát uxplay.exe cũ trước khi chạy bản mới; có thể xóa tệp thực thi

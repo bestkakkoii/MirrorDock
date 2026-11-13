@@ -30,9 +30,13 @@
 // key, except with Space: Control + Space is the phone's "next input
 // source").  Page Down / Page Up and Alt + arrow keys are not sent as keys:
 // they flick the screen (next / previous page or video), which works in
-// every app.  The window keeps F8, F11, Alt+Enter, Alt+F4,
-// Esc in fullscreen and the right button (the menu); the control bar stays
-// away, because it would cover the bottom of the phone's screen.
+// every app.  The window's own commands come first: it keeps F8, F11,
+// Alt+Enter, Alt+F4, Esc in fullscreen (the press, its auto-repeat and its
+// release), the double-click (fullscreen on / off; the first click of the pair
+// has reached the phone as a tap by then, the second does not; with Alt held
+// the pair is the phone's, a double tap) and the right button (the menu).
+// The control bar stays away, because it would cover the bottom of the
+// phone's screen.
 //
 // All public members may be called from any thread; they post messages to
 // the UI thread.  Callbacks are invoked on the UI thread and must not block.
@@ -62,6 +66,7 @@ export namespace uxplay
         toggle_remote_control, // operate the phone with mouse and keyboard on / off
         toggle_autostart, // start with Windows
         open_log,
+        check_for_updates, // ask now whether a newer release exists (shown in the About window)
         about,
         exit
     };

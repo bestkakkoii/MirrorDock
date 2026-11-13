@@ -98,6 +98,7 @@ namespace uxplay
             menu_remote_control,
             menu_autostart,
             menu_open_log,
+            menu_check_for_updates,
             menu_about,
             menu_exit
         };
@@ -231,6 +232,10 @@ namespace uxplay
         std::pair<double, double> pointer_position{}; // where it was last, as fractions of the picture
         std::vector<std::uint8_t> held_keys;    // HID usages down on the phone
         bool input_method_detached = false;     // the IME of this PC is kept out while keys go to the phone
+        // the Esc press that is down now was the window's (it left full screen
+        // or cancelled a frame): its auto-repeat and its release are not keys
+        // for the phone
+        bool escape_taken = false;
 
         [[nodiscard]] bool controlling() const;
         [[nodiscard]] std::optional<std::pair<double, double>> picture_fraction(POINT client, bool clamp) const;
@@ -461,6 +466,51 @@ namespace uxplay
     // one a phone has no use for) and the window does nothing with it.
     bool video_window::state::control_key(bool pressed, WPARAM key, LPARAM details)
     {
+        auto const scan_code = static_cast<unsigned>((details >> 16) & 0xFF);
+        bool const extended = (details & (1 << 24)) != 0;
+        std::optional<std::uint8_t> usage = keyboard_usage(scan_code, extended);
+        // Ctrl acts as Command: Ctrl+C, Ctrl+V and the like do on the phone
+        // what they do on this PC
+        if (usage && *usage == 0xE0)
+        {
+            usage = std::uint8_t{0xE3};
+        }
+        else if (usage && *usage == 0xE4)
+        {
+            usage = std::uint8_t{0xE7};
+        }
+        auto const send_held = [this]
+        {
+            if (detached || !callbacks.on_keys)
+            {
+                return;
+            }
+            // Control + Space is the phone's "next input source": while Space
+            // is down, Ctrl is sent as Control and not as Command
+            if (std::ranges::contains(held_keys, std::uint8_t{0x2C}))
+            {
+                std::vector<std::uint8_t> sent = held_keys;
+                std::ranges::replace(sent, std::uint8_t{0xE3}, std::uint8_t{0xE0});
+                std::ranges::replace(sent, std::uint8_t{0xE7}, std::uint8_t{0xE4});
+                callbacks.on_keys(sent);
+            }
+            else
+            {
+                callbacks.on_keys(held_keys);
+            }
+        };
+        // A key that is down on the phone is released there, whatever the
+        // window has become since it went down (full screen, say): no key
+        // stays held on the phone because its release turned into a window key.
+        if (!pressed && usage)
+        {
+            if (auto const held = std::ranges::find(held_keys, *usage); held != held_keys.end())
+            {
+                held_keys.erase(held);
+                send_held();
+                return true;
+            }
+        }
         bool const alt_down = (details & (1 << 29)) != 0;
         if (key == VK_F8 || key == VK_F11 || (key == VK_ESCAPE && is_fullscreen.load()) ||
             (alt_down && (key == VK_RETURN || key == VK_F4 || key == VK_SPACE)))
@@ -500,56 +550,16 @@ namespace uxplay
             }
             return true;
         }
-        auto const scan_code = static_cast<unsigned>((details >> 16) & 0xFF);
-        bool const extended = (details & (1 << 24)) != 0;
-        std::optional<std::uint8_t> usage = keyboard_usage(scan_code, extended);
-        if (!usage)
+        if (!usage || !pressed)
         {
-            return true;
+            return true; // no key of a phone, or the release of one that never went there
         }
-        // Ctrl acts as Command: Ctrl+C, Ctrl+V and the like do on the phone
-        // what they do on this PC
-        if (*usage == 0xE0)
+        if (std::ranges::contains(held_keys, *usage))
         {
-            usage = std::uint8_t{0xE3};
+            return true; // the keyboard's auto-repeat: the phone repeats by itself
         }
-        else if (*usage == 0xE4)
-        {
-            usage = std::uint8_t{0xE7};
-        }
-        auto const held = std::ranges::find(held_keys, *usage);
-        if (pressed)
-        {
-            if (held != held_keys.end())
-            {
-                return true; // the keyboard's auto-repeat: the phone repeats by itself
-            }
-            held_keys.push_back(*usage);
-        }
-        else
-        {
-            if (held == held_keys.end())
-            {
-                return true;
-            }
-            held_keys.erase(held);
-        }
-        if (!detached && callbacks.on_keys)
-        {
-            // Control + Space is the phone's "next input source": while Space
-            // is down, Ctrl is sent as Control and not as Command
-            if (std::ranges::contains(held_keys, std::uint8_t{0x2C}))
-            {
-                std::vector<std::uint8_t> sent = held_keys;
-                std::ranges::replace(sent, std::uint8_t{0xE3}, std::uint8_t{0xE0});
-                std::ranges::replace(sent, std::uint8_t{0xE7}, std::uint8_t{0xE4});
-                callbacks.on_keys(sent);
-            }
-            else
-            {
-                callbacks.on_keys(held_keys);
-            }
-        }
+        held_keys.push_back(*usage);
+        send_held();
         return true;
     }
 
@@ -1079,6 +1089,7 @@ namespace uxplay
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         item(menu_autostart, ui_text::start_with_windows, {}, autostart.load());
         item(menu_open_log, ui_text::open_log, {}, false, log_available.load());
+        item(menu_check_for_updates, ui_text::check_for_updates);
         item(menu_about, ui_text::about);
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         item(menu_exit, ui_text::exit);
@@ -1138,6 +1149,9 @@ namespace uxplay
             break;
         case menu_open_log:
             tray(tray_command::open_log);
+            break;
+        case menu_check_for_updates:
+            tray(tray_command::check_for_updates);
             break;
         case menu_about:
             tray(tray_command::about);
@@ -1350,7 +1364,7 @@ namespace uxplay
         case message_detach:
             // The function objects stay alive: one of them may be running
             // further up this very stack (a callback inside a modal loop, such
-            // as the About box, still receives sent messages).
+            // as a message box, still receives sent messages).
             end_framing();
             release_remote_input();
             detached = true;
@@ -1361,6 +1375,7 @@ namespace uxplay
         case WM_KILLFOCUS:
             // another window gets the keys: none stays down on the phone
             release_remote_input();
+            escape_taken = false; // its release goes elsewhere
             break;
         case message_title:
         {
@@ -1515,13 +1530,20 @@ namespace uxplay
             return 0;
         }
         case WM_LBUTTONDBLCLK:
-            if (!framing && !controlling())
+            // A double-click switches full screen on and off, also while the
+            // phone is controlled: the window's own command comes before the
+            // phone's input.  (The first click of the pair went to the phone
+            // as a tap when it happened; this second one does not, and
+            // neither does its release.)  With Alt held the pair belongs to
+            // the phone: a double tap.
+            if (!framing && !(controlling() && GetKeyState(VK_MENU) < 0))
             {
+                log::debug("window: double-click, full screen {}", is_fullscreen.load() ? "off" : "on");
                 set_fullscreen(!is_fullscreen.load());
                 return 0;
             }
-            // while framing, and while the phone is controlled, the second
-            // press of a double-click is a press like any other
+            // while framing, and for Alt + double-click on the controlled
+            // phone, the second press is a press like any other
             [[fallthrough]];
         case WM_LBUTTONDOWN:
             if (framing)
@@ -1637,6 +1659,10 @@ namespace uxplay
             break;
         case WM_KEYUP:
         case WM_SYSKEYUP:
+            if (wparam == VK_ESCAPE && std::exchange(escape_taken, false))
+            {
+                return 0; // the release of a press the window has used
+            }
             if (controlling() && control_key(false, wparam, lparam))
             {
                 return 0;
@@ -1651,13 +1677,29 @@ namespace uxplay
             }
             break;
         case WM_KEYDOWN:
+            if (wparam == VK_ESCAPE && escape_taken)
+            {
+                return 0; // the auto-repeat of a press the window has used
+            }
             if (framing)
             {
                 // only Esc while a frame is being drawn
                 if (wparam == VK_ESCAPE)
                 {
                     end_framing();
+                    escape_taken = true;
                 }
+                return 0;
+            }
+            // Esc leaves full screen before anything else looks at the key:
+            // while the phone is controlled it is the window's key too, and
+            // the phone gets neither this press, nor its auto-repeat, nor its
+            // release (escape_taken).
+            if (wparam == VK_ESCAPE && is_fullscreen.load())
+            {
+                log::debug("window: Esc, full screen off");
+                set_fullscreen(false);
+                escape_taken = true;
                 return 0;
             }
             if (wparam == VK_F8)

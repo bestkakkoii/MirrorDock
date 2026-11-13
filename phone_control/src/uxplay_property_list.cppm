@@ -54,6 +54,11 @@ export namespace uxplay
 
         // XML or binary
         [[nodiscard]] static outcome<property_list> parse(std::span<std::uint8_t const> bytes);
+        // A JSON object or array (UTF-8), read into the same nodes: objects
+        // are dictionaries, a null is a node without a value.  For the one
+        // JSON document the program reads (the release list it asks about
+        // updates), with the parser of the library that is linked anyway.
+        [[nodiscard]] static outcome<property_list> parse_json(std::string_view text);
 
         [[nodiscard]] property_node root() const;
 

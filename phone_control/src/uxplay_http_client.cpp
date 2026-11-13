@@ -208,6 +208,10 @@ namespace uxplay
         {
             headers += std::format(L"Content-Type: {}\r\n", utf8_to_utf16(request.content_type));
         }
+        for (std::string const &line : request.headers)
+        {
+            headers += std::format(L"{}\r\n", utf8_to_utf16(line));
+        }
         // (the body is not changed by the call; the interface has no const)
         void *const body = request.body.empty() ? nullptr : const_cast<std::uint8_t *>(request.body.data());
         BOOL const sent =

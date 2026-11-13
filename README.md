@@ -36,6 +36,8 @@ It is built on the AirPlay protocol core of [UxPlay](https://github.com/FDH2/UxP
 | 🖱️ **Control the iPhone** | Click, drag, scroll and type on the picture, and the phone does it. Built in: no helper program, no jailbreak (iOS 27, USB cable, Developer Mode). |
 | 🪟 **A proper window** | Opens at a sensible size, keeps the aspect ratio while you resize, remembers size and position, full screen with one key, always on top. |
 | 🌐 **Eleven languages** | The interface follows your Windows display language. |
+| 🩺 **Knows your PC** | The About window checks what matters for mirroring (graphics card, drivers, network, firewall, Apple's USB support), rates it and says what to fix. |
+| 🔄 **Update check** | Tells you when a newer release is out: one question to GitHub a day, off with one click. |
 | 🧳 **One file** | A single executable of about 12 MB that needs only Windows itself. |
 
 ## 🚀 Quick start
@@ -84,6 +86,7 @@ Press **F8** (or choose **Control the iPhone with mouse and keyboard** in the me
 | Left button: click, hold, drag | A finger: tap, long press, swipe |
 | Mouse wheel (with **Shift**: sideways) | Scrolls what is under the pointer |
 | Middle button | Home |
+| Double-click | Full screen on / off, as always; with **Alt** held: a double tap on the iPhone |
 | Keyboard | Types on the phone like a keyboard plugged into it; **Ctrl** is ⌘, **Ctrl+Space** switches the phone's input language |
 | **Page Down** / **Page Up**, **Alt** + arrow keys | Flick to the next or previous page or video |
 | Right button | MirrorDock's menu, as always |
@@ -97,7 +100,7 @@ What it takes:
 > [!NOTE]
 > AirPlay cannot carry input, so control goes another way: through the developer services of iOS, the ones Xcode uses to operate a real device. To install them, MirrorDock downloads Apple's image from the [DeveloperDiskImage](https://github.com/doronz88/DeveloperDiskImage) repository and asks Apple's signing service (`gs.apple.com`) to sign it for your phone, which tells Apple the phone's chip numbers, exactly as Xcode does. After that, control contacts nobody.
 
-While control is on, **F8**, **F11**, **Alt+Enter** and **Alt+F4** still belong to the window, and the control bar stays away, because it would cover the bottom of the phone's screen.
+The window's own commands come first while control is on: **F8**, **F11**, **Alt+Enter**, **Alt+F4**, **Esc** in full screen and the double-click still belong to the window. Of a double-click, the first click has already reached the phone as a tap when the second one arrives, so double-click a black bar when there is one, or press **F11**. The control bar stays away, because it would cover the bottom of the phone's screen.
 
 ## ⌨️ Keyboard and mouse
 
@@ -113,6 +116,26 @@ While control is on, **F8**, **F11**, **Alt+Enter** and **Alt+F4** still belong 
 | Menu | Right-click anywhere on the picture |
 
 While the iPhone is being controlled, the letter keys are typed on the phone; **F8** gives them back to the window.
+
+## 🔄 Updates
+
+**Check for updates…** in the menu asks GitHub for the newest release and shows the answer in the About window. When there is a newer one, **Download** opens its zip in your browser and **What's new** opens its release notes. MirrorDock installs nothing by itself.
+
+- **Automatic check.** Once a day, with a notification when a newer release is out. One switch in the About window turns it off.
+- **What is sent.** One request to `api.github.com`. GitHub sees your IP address and the client name `MirrorDock/<version>`, and nothing about you or your PC.
+- **Not on your mobile data.** No automatic check is made over a connection Windows marks as metered, nor while the PC's internet runs through the iPhone.
+
+## 🩺 About and This PC
+
+**About…** in the menu opens a window of its own, with three pages:
+
+| Page | What it shows |
+|---|---|
+| **About** | Version and release date, the update check, links to the project, the user guide and the licence texts |
+| **This PC** | What matters to MirrorDock on your PC, row by row: Windows, display, power, network, firewall, processor, memory, graphics card and its video decoding, sound, graphics driver, Apple's USB support, the iPhone on the cable |
+| **Components** | Every library and tool MirrorDock is built from, with version, date and licence, and when each version of MirrorDock was published |
+
+Every row of *This PC* is rated good, attention or problem, and a row that is not good says what to do about it. The score is the share of the rated rows that are in order, weighted by how much each matters to mirroring (hardware video decoding counts most). It says how well the PC is set up; it is not a benchmark. **Copy report** puts the page on the clipboard as plain text, for a bug report. Nothing on this page leaves your PC, and no serial number or device name is shown or stored.
 
 ## ⚙️ Options
 
@@ -169,7 +192,7 @@ Mirroring over Wi-Fi and over USB was verified with an iPhone 16 Pro Max (iOS 26
 ## ❓ FAQ
 
 **The iPhone does not list my PC.**
-Both must be on the same network, and Windows Firewall must allow `mirror_dock.exe`. Turning the iPhone's Wi-Fi off and on again refreshes the list.
+Both must be on the same network, and Windows Firewall must allow `mirror_dock.exe`. The page *This PC* of the About window says whether the firewall or a network set to *public* is in the way. Turning the iPhone's Wi-Fi off and on again refreshes the list.
 
 **The cable is plugged in but mirroring still uses Wi-Fi.**
 Personal Hotspot must be on, and the link choice must be *Prefer USB*. The second line of the menu shows the state of the USB link.
@@ -186,12 +209,15 @@ The message names the reason: the cable is not plugged in or this PC is not trus
 **Is Developer Mode safe to leave on?**
 It is Apple's own switch for people who build apps. It lets a trusted computer install and debug apps and reach the developer services; it does not jailbreak the phone, and you can switch it off again at the same place.
 
+**Does MirrorDock use the internet?**
+Mirroring is local. MirrorDock goes online for two things only: the update check (GitHub, once a day, and you can switch it off), and, the first time you control an iPhone, Apple's Developer Disk Image and Apple's signature for it.
+
 **Where is the log?**
 `%LOCALAPPDATA%\MirrorDock\mirror_dock.log`, or **Open log file** in the menu.
 
 ## 🛠️ Build from source
 
-MSYS2 CLANG64 (clang 23, libc++ with the C++26 standard library module, CMake 4.4, Ninja) and the Windows SDK shader compiler. FFmpeg, OpenSSL and libplist are built from pinned commits as static libraries.
+MSYS2 CLANG64 (clang 23, libc++ with the C++26 standard library module, CMake 4.4, Ninja) and the Windows SDK shader compiler. FFmpeg, OpenSSL and libplist are built from pinned commits as static libraries; the pins are in `win_native/build_scripts/build_inputs.tsv`, the list the About window shows.
 
 ```sh
 bash win_native/build_scripts/fetch_deps.sh <src_root>

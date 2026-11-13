@@ -1425,6 +1425,24 @@ clipboard of its own). Four things about that environment cost time:
 - the download as the installer does it (the program's HTTP client, same
   request): the 1.11 package from GitHub, 5,901,151 bytes in 1.9 s through
   the redirection, 742 progress reports, the SHA-256 of the release;
+- **the update end to end, after the release** (2026-11-13 22:54): a build
+  of the same sources numbered 1.11.9, in a folder unpacked from its own
+  package, found 1.12.0 ("signed"); "Update now" was pressed with the
+  keyboard; it fetched the 6,054,180 bytes (13 s that time; the same
+  download took 2 s and 9 s in two other tries), logged the signature as
+  fitting with the SHA-256 of the published package, unpacked 225 files
+  into `.update\new` (7.5 s, mostly the writing of the files), put the 6
+  top-level items in place, and the host ended the program and started the
+  new one 2.4 s later. The new program logged "MirrorDock 1.12.0", "this
+  is the first start of 1.12.0 after an update", and 1.2 s later that the
+  leftovers were cleared away; `.update` was gone, and "Exit" ended it with
+  code 0. The About window showed "Downloading 1.12.0..." with the bytes
+  meanwhile;
+- the start of the program with made-up leftovers in `.update`: a note
+  naming the running version (said "first start after an update", cleared
+  everything), a note naming another version (cleared, said nothing), only
+  unpacked files (cleared), and files in `old` without a note (kept, with a
+  warning in the log);
 - the About window of 1.12.0 against the published 1.11: "up to date", the
   log names the release as "not signed"; "This PC" with the button "Open
   display settings" under the display row (the monitor runs at 50 Hz); 96
@@ -1436,11 +1454,11 @@ clipboard of its own). Four things about that environment cost time:
   time).
 
 **Not observed:**
-- the update end to end (fetch, check, unpack, apply, restart, the first
-  start of the new program): it needs a published release that is signed,
-  which 1.12 is the first to be. It is tried right after the release with
-  a build of the same sources numbered below 1.12; what was seen is
-  recorded in the repository's copy of this file;
+- of the update: a release that waits for the end of a stream and is put
+  in place then, "Restart now", an "Exit" while it waits, the end of the
+  Windows session while it waits, the notification after an update (a test
+  instance on a desktop without a shell shows none), and a step that fails
+  with real files (the roll-back was read, not run);
 - the shorter delay with a phone: the timeline's arithmetic was written
   from the measurements above, and `sync delay` in the log of a control
   session will show whether it settles near -56 ms as expected;

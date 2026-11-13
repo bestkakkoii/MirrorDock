@@ -1303,7 +1303,7 @@ check and "This PC"" above and the header of `uxplay_video_window.cppm`).
 
 **How the interface was tested without touching the owner's desktop.** The
 owner worked at this PC, mirroring to and controlling the phone with the
-released 1.10, while 1.11 was written: no test window may appear on his
+released 1.10, while 1.11 was written: no test window may appear on their
 desktop, and no key or click may be injected there. A script outside the
 tree starts a test instance (`-n MirrorDockAboutCapture -p 38400`, output
 redirected to a file, so the log folder is not touched) on a second desktop
